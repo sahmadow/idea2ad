@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://idea2ad:${DB_PASSWORD}@db:5432/idea2ad
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./prompts:/app/prompts:ro
+    restart: unless-stopped
+    networks:
+      - idea2ad-network
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: idea2ad
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: idea2ad
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idea2ad"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - idea2ad-network
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks:
+      - idea2ad-network
+
+volumes:
+  postgres_data:
+
+networks:
+  idea2ad-network:
+    driver: bridge

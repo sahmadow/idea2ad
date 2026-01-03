@@ -1,0 +1,48 @@
+# Core
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+
+# Scraping
+playwright
+beautifulsoup4
+
+# AI
+google-generativeai
+google-cloud-aiplatform
+Pillow
+
+# Meta Ads
+facebook-business
+
+# Database
+prisma
+asyncpg
+
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<5.0.0
+email-validator
+
+# Rate limiting
+slowapi
+
+# AWS
+boto3
+
+# Monitoring
+sentry-sdk[fastapi]
+
+# Utils
+python-dotenv
+requests
+httpx
+
+# Testing
+pytest
+pytest-asyncio
+pytest-cov
+respx
+factory-boy

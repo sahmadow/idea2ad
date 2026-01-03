@@ -1,0 +1,111 @@
+generator client {
+  provider             = "prisma-client-py"
+  interface            = "asyncio"
+  recursive_type_depth = 5
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(uuid())
+  email         String     @unique
+  password_hash String
+  name          String?
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+  deleted_at    DateTime?
+
+  campaigns Campaign[]
+
+  @@index([email])
+}
+
+model Campaign {
+  id           String         @id @default(uuid())
+  user_id      String
+  name         String
+  project_url  String
+  status       CampaignStatus @default(DRAFT)
+  objective    String         @default("OUTCOME_SALES")
+  budget_daily Float          @default(20.0)
+
+  // Meta Ads IDs (populated after publish)
+  meta_campaign_id String?
+  meta_adset_id    String?
+  meta_ad_id       String?
+  meta_creative_id String?
+
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  deleted_at DateTime?
+
+  user         User         @relation(fields: [user_id], references: [id])
+  analysis     Analysis?
+  creatives    Creative[]
+  image_briefs ImageBrief[]
+
+  @@index([user_id])
+  @@index([status])
+}
+
+enum CampaignStatus {
+  DRAFT
+  ANALYZED
+  GENERATING_IMAGES
+  READY
+  PUBLISHED
+  PAUSED
+  ACTIVE
+  ARCHIVED
+}
+
+model Analysis {
+  id                         String   @id @default(uuid())
+  campaign_id                String   @unique
+  summary                    String
+  unique_selling_proposition String
+  pain_points                String[]
+  call_to_action             String
+  buyer_persona              Json
+  keywords                   String[]
+  styling_guide              Json
+  created_at                 DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+}
+
+model Creative {
+  id          String  @id @default(uuid())
+  campaign_id String
+  type        String
+  content     String
+  rationale   String?
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
+}
+
+model ImageBrief {
+  id                  String   @id @default(uuid())
+  campaign_id         String
+  approach            String
+  visual_description  String
+  styling_notes       String
+  text_overlays       Json
+  meta_best_practices String[]
+  rationale           String
+
+  // Generated image
+  image_url String?
+  s3_key    String?
+
+  created_at DateTime @default(now())
+
+  campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@index([campaign_id])
+}
