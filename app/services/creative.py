@@ -1,7 +1,7 @@
 
 import os
 import json
-import google.generativeai as genai
+from google import genai
 from typing import List
 from app.models import AnalysisResult, CreativeAsset, ImageBrief, TextOverlay
 
@@ -27,27 +27,26 @@ async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
         ]
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
+        client = genai.Client(api_key=api_key)
+
         prompt = f"""
         Based on the following marketing analysis, generate 4 high-performing creative assets for a Meta Ads campaign.
-        
+
         ANALYSIS:
         Summary: {analysis.summary}
         USP: {analysis.unique_selling_proposition}
         Pain Points: {analysis.pain_points}
         Keywords: {analysis.keywords}
-        
+
         CRITICAL INSTRUCTIONS:
         1. USE THE KEYWORDS: Incorporate the provided 'Keywords' naturally into the Headlines and Primary Text.
         2. BE SPECIFIC: Use the specific terminology found in the 'Keywords' and 'Summary'.
         3. ADDRESS PAIN POINTS: The copy should directly address the user's pain points.
-        
+
         REQUIRED ASSETS:
         1. 2x Headlines (Punchy, max 40 chars) - Must include a main keyword.
         2. 2x Primary Text (Persuasive, max 200 chars) - Focus on the 'Hook'.
-        
+
         OUTPUT FORMAT (JSON ARRAY):
         [
             {{ "type": "headline", "content": "...", "rationale": "Why this works..." }},
@@ -55,9 +54,10 @@ async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
         ]
         """
 
-        result = await model.generate_content_async(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        result = await client.aio.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config={'response_mime_type': 'application/json'}
         )
 
         content = result.text
@@ -97,12 +97,11 @@ async def generate_image_briefs(analysis: AnalysisResult) -> List[ImageBrief]:
         ]
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        
+        client = genai.Client(api_key=api_key)
+
         # Load prompt template
         prompt_template = load_prompt("image_brief_prompt.md")
-        
+
         # If prompt file not found, use inline fallback
         if not prompt_template:
             prompt_template = """
@@ -124,7 +123,7 @@ Mood: {mood}
 
 Return JSON array with 3 image briefs, each containing: approach, visual_description, styling_notes, text_overlays (array of objects with content, font_size, position, color, background), meta_best_practices (array), and rationale.
 """
-        
+
         # Format prompt with analysis data
         sg = analysis.styling_guide
         prompt = prompt_template.format(
@@ -141,9 +140,10 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
             mood=sg.mood
         )
 
-        result = await model.generate_content_async(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        result = await client.aio.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config={'response_mime_type': 'application/json'}
         )
 
         content = result.text

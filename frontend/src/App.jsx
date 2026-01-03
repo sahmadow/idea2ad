@@ -1,6 +1,8 @@
 
-import { useState } from 'react'
-import { analyzeUrl, publishToMeta } from './api'
+import { useState, useEffect } from 'react'
+import { analyzeUrl, publishToMeta, getCurrentUser, logout, saveCampaign } from './api'
+import Dashboard from './Dashboard'
+import AuthModal from './AuthModal'
 import './App.css'
 
 function App() {
@@ -9,11 +11,49 @@ function App() {
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
 
+  // Auth state
+  const [user, setUser] = useState(null)
+  const [showAuth, setShowAuth] = useState(false)
+  const [view, setView] = useState('home') // 'home' | 'dashboard'
+
+  // Save campaign state
+  const [saving, setSaving] = useState(false)
+  const [campaignName, setCampaignName] = useState('')
+
   // Meta Publishing state
   const [pageId, setPageId] = useState('859037077302041')
   const [publishing, setPublishing] = useState(false)
   const [publishResult, setPublishResult] = useState(null)
   const [publishError, setPublishError] = useState(null)
+
+  useEffect(() => {
+    checkAuth()
+  }, [])
+
+  const checkAuth = async () => {
+    const userData = await getCurrentUser()
+    setUser(userData)
+  }
+
+  const handleLogout = () => {
+    logout()
+    setUser(null)
+    setView('home')
+  }
+
+  const handleSaveCampaign = async () => {
+    if (!result || !campaignName.trim()) return
+    setSaving(true)
+    try {
+      await saveCampaign(campaignName, result)
+      alert('Campaign saved!')
+      setCampaignName('')
+    } catch (err) {
+      alert('Failed to save: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -127,33 +167,98 @@ function App() {
 
   return (
     <div className="container">
-      <header style={{ marginBottom: '3rem' }}>
-        <h1 style={{ fontSize: '3.5rem', marginBottom: '0.5rem', background: 'linear-gradient(to right, #fff, #9ca3af)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          Idea2Ad
-        </h1>
-        <p style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>
-          Turn your Landing Page into a Meta Ads Campaign in seconds.
-        </p>
+      {/* Auth Modal */}
+      {showAuth && (
+        <AuthModal
+          onClose={() => setShowAuth(false)}
+          onSuccess={() => { setShowAuth(false); checkAuth() }}
+        />
+      )}
+
+      {/* Navigation Header */}
+      <header style={{ marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+          <h1
+            onClick={() => { setView('home'); setResult(null) }}
+            style={{
+              fontSize: '2.5rem',
+              margin: 0,
+              background: 'linear-gradient(to right, #fff, #9ca3af)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              cursor: 'pointer'
+            }}
+          >
+            Idea2Ad
+          </h1>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+            {user ? (
+              <>
+                <button
+                  onClick={() => setView(view === 'dashboard' ? 'home' : 'dashboard')}
+                  className="btn-primary"
+                  style={{ background: 'rgba(99, 102, 241, 0.2)', border: '1px solid rgba(99, 102, 241, 0.4)' }}
+                >
+                  {view === 'dashboard' ? 'New Campaign' : 'My Campaigns'}
+                </button>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{user.email}</span>
+                <button
+                  onClick={handleLogout}
+                  style={{
+                    background: 'none',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    color: 'var(--text-muted)',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Sign Out
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setShowAuth(true)} className="btn-primary">
+                Sign In
+              </button>
+            )}
+          </div>
+        </div>
+        {view === 'home' && (
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', margin: 0 }}>
+            Turn your Landing Page into a Meta Ads Campaign in seconds.
+          </p>
+        )}
       </header>
 
-      <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', gap: '1rem' }}>
-            <input
-              type="url"
-              className="input-field"
-              placeholder="https://your-product.com"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              required
-            />
-            <button type="submit" className="btn-primary" disabled={loading}>
-              {loading ? 'Analyzing...' : 'Generate Campaign'}
-            </button>
+      {/* Dashboard View */}
+      {view === 'dashboard' && user && (
+        <Dashboard
+          onSelectCampaign={(c) => { /* TODO: Load campaign details */ }}
+          onNewCampaign={() => setView('home')}
+        />
+      )}
+
+      {/* Home View - Campaign Generator */}
+      {view === 'home' && (
+        <>
+          <div className="glass-panel" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <input
+                  type="url"
+                  className="input-field"
+                  placeholder="https://your-product.com"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  required
+                />
+                <button type="submit" className="btn-primary" disabled={loading}>
+                  {loading ? 'Analyzing...' : 'Generate Campaign'}
+                </button>
+              </div>
+              {error && <div style={{ color: '#ef4444', textAlign: 'left' }}>Error: {error}</div>}
+            </form>
           </div>
-          {error && <div style={{ color: '#ef4444', textAlign: 'left' }}>⚠️ {error}</div>}
-        </form>
-      </div>
 
       {loading && (
         <div style={{ marginTop: '3rem' }}>
@@ -164,30 +269,71 @@ function App() {
 
       {result && (
         <>
-          {/* Export Buttons */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem', marginTop: '2rem', marginBottom: '1rem' }}>
-            <button
-              onClick={() => handleExport('json')}
-              className="btn-primary"
-              style={{
-                background: 'rgba(99, 102, 241, 0.2)',
-                border: '1px solid rgba(99, 102, 241, 0.4)',
-                padding: '0.75rem 1.5rem'
-              }}
-            >
-              📥 Export JSON
-            </button>
-            <button
-              onClick={() => handleExport('txt')}
-              className="btn-primary"
-              style={{
-                background: 'rgba(236, 72, 153, 0.2)',
-                border: '1px solid rgba(236, 72, 153, 0.4)',
-                padding: '0.75rem 1.5rem'
-              }}
-            >
-              📄 Export TXT
-            </button>
+          {/* Export & Save Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '2rem', marginBottom: '1rem' }}>
+            {/* Save Campaign (requires auth) */}
+            {user ? (
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="Campaign name"
+                  value={campaignName}
+                  onChange={(e) => setCampaignName(e.target.value)}
+                  style={{ width: '200px' }}
+                />
+                <button
+                  onClick={handleSaveCampaign}
+                  className="btn-primary"
+                  disabled={saving || !campaignName.trim()}
+                  style={{
+                    background: 'rgba(34, 197, 94, 0.2)',
+                    border: '1px solid rgba(34, 197, 94, 0.4)',
+                    padding: '0.75rem 1.5rem'
+                  }}
+                >
+                  {saving ? 'Saving...' : 'Save Campaign'}
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAuth(true)}
+                className="btn-primary"
+                style={{
+                  background: 'rgba(34, 197, 94, 0.2)',
+                  border: '1px solid rgba(34, 197, 94, 0.4)',
+                  padding: '0.75rem 1.5rem'
+                }}
+              >
+                Sign in to Save
+              </button>
+            )}
+
+            {/* Export Buttons */}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button
+                onClick={() => handleExport('json')}
+                className="btn-primary"
+                style={{
+                  background: 'rgba(99, 102, 241, 0.2)',
+                  border: '1px solid rgba(99, 102, 241, 0.4)',
+                  padding: '0.75rem 1.5rem'
+                }}
+              >
+                Export JSON
+              </button>
+              <button
+                onClick={() => handleExport('txt')}
+                className="btn-primary"
+                style={{
+                  background: 'rgba(236, 72, 153, 0.2)',
+                  border: '1px solid rgba(236, 72, 153, 0.4)',
+                  padding: '0.75rem 1.5rem'
+                }}
+              >
+                Export TXT
+              </button>
+            </div>
           </div>
 
           <div className="dashboard-grid" style={{ animation: 'fadeIn 0.8s ease-out' }}>
@@ -633,6 +779,8 @@ function App() {
           </div>
 
           </div>
+        </>
+      )}
         </>
       )}
     </div>

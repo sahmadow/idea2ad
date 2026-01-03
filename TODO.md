@@ -51,7 +51,7 @@
 - [ ] Push schema to DB (requires DATABASE_URL in .env): `prisma db push`
 
 ### Test Results
-- **Backend Tests:** 30 passed
+- **Backend Tests:** 30 passed (no deprecation warnings)
 - **Frontend Tests:** 8 passed
 - **Total:** 38 tests passing
 
@@ -122,6 +122,12 @@ prisma migrate dev --name <migration_name>
 | POST | `/auth/login` | No | Get JWT |
 | GET | `/auth/me` | Yes | Current user |
 | POST | `/analyze` | No* | Analyze URL |
+| GET | `/campaigns` | Yes | List user campaigns |
+| GET | `/campaigns/{id}` | Yes | Get campaign details |
+| POST | `/campaigns` | Yes | Save campaign |
+| PATCH | `/campaigns/{id}` | Yes | Update campaign |
+| DELETE | `/campaigns/{id}` | Yes | Delete campaign |
+| POST | `/campaigns/{id}/publish` | Yes | Publish to Meta |
 | POST | `/images/generate` | Yes | Generate image from brief |
 | POST | `/images/generate-all/{id}` | Yes | Generate all campaign images |
 | POST | `/meta/publish` | No* | Publish to Meta |
@@ -153,13 +159,26 @@ docker-compose -f docker-compose.yml up -d
 
 ---
 
+## Technical Debt
+
+- [x] Migrate `google.generativeai` → `google.genai` (deprecation warning in tests)
+
+---
+
 ## Future Enhancements
 
-- [ ] Campaign history/persistence (save to DB)
-- [ ] User dashboard with past campaigns
-- [ ] Multiple ad creatives per campaign
-- [ ] A/B testing setup
-- [ ] Campaign performance analytics
-- [ ] Webhook for campaign status updates
-- [ ] Multi-platform (Google Ads, TikTok)
-- [ ] Team/organization management
+### Data Persistence
+- [x] Campaign history/persistence (save to DB) - `app/routers/campaigns.py`
+- [x] User dashboard with past campaigns - `frontend/src/Dashboard.jsx`
+
+### Campaign Features
+- [x] Multiple ad creatives per campaign (already generates 2 headlines, 2 copy, 3 image briefs)
+- [ ] A/B testing setup (COMPLEX - requires Meta Experiments API)
+- [ ] Campaign performance analytics (COMPLEX - requires Meta Insights API integration)
+- [ ] Webhook for campaign status updates (MEDIUM - add webhook endpoint + Meta webhook subscription)
+
+### Platform Expansion
+- [ ] Multi-platform (COMPLEX - Google Ads API + TikTok Marketing API integration)
+
+### Collaboration
+- [ ] Team/organization management (COMPLEX - requires org schema, RBAC, invites)

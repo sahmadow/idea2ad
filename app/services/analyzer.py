@@ -1,7 +1,7 @@
 
 import os
 import json
-import google.generativeai as genai
+from google import genai
 from app.models import AnalysisResult, StylingGuide
 
 def load_prompt(prompt_name: str) -> str:
@@ -39,12 +39,11 @@ async def analyze_landing_page_content(scraped_text: str, styling_data: dict) ->
         )
 
     try:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        client = genai.Client(api_key=api_key)
 
         # Load prompt template
         prompt_template = load_prompt("analyzer_prompt.md")
-        
+
         # If prompt file not found, use inline fallback
         if not prompt_template:
             prompt_template = """
@@ -78,7 +77,7 @@ OUTPUT FORMAT (JSON ONLY):
     }}
 }}
 """
-        
+
         # Format prompt with actual data
         prompt = prompt_template.format(
             scraped_text=scraped_text[:8000],
@@ -86,11 +85,12 @@ OUTPUT FORMAT (JSON ONLY):
             fonts=styling_data.get("fonts", [])
         )
 
-        result = await model.generate_content_async(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        result = await client.aio.models.generate_content(
+            model='gemini-2.0-flash',
+            contents=prompt,
+            config={'response_mime_type': 'application/json'}
         )
-        
+
         content = result.text
         data = json.loads(content)
         

@@ -9,7 +9,7 @@ playwright
 beautifulsoup4
 
 # AI
-google-generativeai
+google-genai
 google-cloud-aiplatform
 Pillow
 
