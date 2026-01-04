@@ -3,6 +3,8 @@ import { useState, useEffect } from 'react'
 import { analyzeUrl, publishToMeta, getCurrentUser, logout, saveCampaign } from './api'
 import Dashboard from './Dashboard'
 import AuthModal from './AuthModal'
+import MetaAdPreview from './MetaAdPreview'
+import CampaignLaunchPage from './CampaignLaunchPage'
 import './App.css'
 
 function App() {
@@ -14,7 +16,10 @@ function App() {
   // Auth state
   const [user, setUser] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
-  const [view, setView] = useState('home') // 'home' | 'dashboard'
+  const [view, setView] = useState('home') // 'home' | 'dashboard' | 'launch'
+
+  // Ad selection state
+  const [selectedAd, setSelectedAd] = useState(null)
 
   // Save campaign state
   const [saving, setSaving] = useState(false)
@@ -238,6 +243,22 @@ function App() {
         />
       )}
 
+      {/* Launch View - Campaign Settings */}
+      {view === 'launch' && selectedAd && result && (
+        <CampaignLaunchPage
+          selectedAd={selectedAd}
+          campaignData={result}
+          onBack={() => setView('home')}
+          onPublishSuccess={(publishResult) => {
+            alert('Campaign published successfully!')
+            console.log('Publish result:', publishResult)
+            setView('home')
+            setResult(null)
+            setSelectedAd(null)
+          }}
+        />
+      )}
+
       {/* Home View - Campaign Generator */}
       {view === 'home' && (
         <>
@@ -339,9 +360,8 @@ function App() {
           <div className="dashboard-grid" style={{ animation: 'fadeIn 0.8s ease-out' }}>
           {/* Analysis Card */}
           <div className="glass-panel">
-            <h2 className="card-title">📊 Strategic Analysis</h2>
+            <h2 className="card-title">📊 Summary</h2>
             <div style={{ marginBottom: '1.5rem' }}>
-              <h4 style={{ color: 'var(--text-muted)', margin: '0.5rem 0' }}>Summary</h4>
               <p>{result.analysis.summary}</p>
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
@@ -466,317 +486,61 @@ function App() {
           </div>
 
 
-          {/* Creatives Section */}
-          <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
-            <h2 className="card-title">🎨 Creative Strategy</h2>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem' }}>
-              {/* Copywriting */}
-              <div>
-                <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>✍️ Ad Copy</h4>
-                {result.suggested_creatives
-                  .filter(c => c.type === 'headline' || c.type === 'copy_primary')
-                  .map((c, i) => (
-                    <div key={i} style={{ background: 'rgba(255,255,255,0.05)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                      <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.5rem', fontWeight: 600 }}>{c.type === 'headline' ? 'Headline' : 'Primary Text'}</div>
-                      <p style={{ fontSize: '1.1rem', marginBottom: '0.5rem' }}>"{c.content}"</p>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>💡 {c.rationale}</p>
-                    </div>
-                  ))}
-              </div>
-
-              {/* Visual Concepts */}
-              <div>
-                <h4 style={{ color: 'var(--text-muted)', marginBottom: '1rem' }}>👁️ Visual Concepts</h4>
-                {result.suggested_creatives
-                  .filter(c => c.type === 'image_concept')
-                  .map((c, i) => (
-                    <div key={i} style={{ background: 'rgba(236, 72, 153, 0.1)', border: '1px solid rgba(236, 72, 153, 0.2)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                      <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.5rem', fontWeight: 600 }}>Image Prompt</div>
-
-                      {c.image_url && (
-                        <div style={{ marginBottom: '1rem', borderRadius: '8px', overflow: 'hidden' }}>
-                          <img src={c.image_url} alt="Generated Concept" style={{ width: '100%', height: 'auto', display: 'block' }} />
-                        </div>
-                      )}
-
-                      <p style={{ marginBottom: '0.5rem' }}>{c.content}</p>
-                      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>💡 {c.rationale}</p>
-                    </div>
-                  ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Image Briefs Section */}
-          {result.image_briefs && result.image_briefs.length > 0 && (
+          {/* Ad Previews Section */}
+          {result.ads && result.ads.length > 0 && (
             <div className="glass-panel" style={{ gridColumn: '1 / -1' }}>
-              <h2 className="card-title">🖼️ Detailed Image Briefs</h2>
+              <h2 className="card-title">📱 Choose Your Ad</h2>
               <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-                Production-ready creative specifications for your Meta Ads campaigns
+                Select the ad creative you want to launch. Click on an ad to select it.
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem' }}>
-                {result.image_briefs.map((brief, i) => (
-                  <div key={i} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', padding: '1.5rem', borderRadius: '12px' }}>
-                    {/* Header */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                        <span style={{ fontSize: '1.5rem' }}>
-                          {brief.approach === 'product-focused' ? '📦' : brief.approach === 'lifestyle' ? '✨' : '💡'}
-                        </span>
-                        <h3 style={{ fontSize: '1.25rem', margin: 0, textTransform: 'capitalize' }}>
-                          {brief.approach.replace('-', ' ')}
-                        </h3>
-                      </div>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        {brief.rationale}
-                      </p>
-                    </div>
-
-                    {/* Image placeholder */}
-                    {brief.image_url ? (
-                      <div style={{ marginBottom: '1.5rem', borderRadius: '8px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.1)' }}>
-                        <img src={brief.image_url} alt={brief.approach} style={{ width: '100%', height: 'auto', display: 'block' }} />
-                      </div>
-                    ) : (
-                      <div style={{
-                        marginBottom: '1.5rem',
-                        borderRadius: '8px',
-                        background: 'rgba(255,255,255,0.05)',
-                        border: '2px dashed rgba(255,255,255,0.2)',
-                        padding: '3rem 1rem',
-                        textAlign: 'center',
-                        color: 'var(--text-muted)'
-                      }}>
-                        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🎨</div>
-                        <div style={{ fontSize: '0.85rem' }}>Image will be generated here</div>
-                      </div>
-                    )}
-
-                    {/* Visual Description */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.5rem' }}>
-                        Visual Scene
-                      </h4>
-                      <p style={{ fontSize: '0.95rem', lineHeight: '1.6' }}>{brief.visual_description}</p>
-                    </div>
-
-                    {/* Text Overlays */}
-                    {brief.text_overlays && brief.text_overlays.length > 0 && (
-                      <div style={{ marginBottom: '1.5rem' }}>
-                        <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.75rem' }}>
-                          Text Overlays
-                        </h4>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                          {brief.text_overlays.map((overlay, j) => (
-                            <div key={j} style={{
-                              background: 'rgba(99, 102, 241, 0.1)',
-                              border: '1px solid rgba(99, 102, 241, 0.3)',
-                              padding: '0.75rem',
-                              borderRadius: '6px'
-                            }}>
-                              <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                                "{overlay.content}"
-                              </div>
-                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                                <span>📍 {overlay.position}</span>
-                                <span>📏 {overlay.font_size}</span>
-                                <span>🎨 <span style={{ color: overlay.color }}>{overlay.color}</span></span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Styling Notes */}
-                    <div style={{ marginBottom: '1.5rem' }}>
-                      <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--primary)', marginBottom: '0.5rem' }}>
-                        Styling Guidelines
-                      </h4>
-                      <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-                        {brief.styling_notes}
-                      </p>
-                    </div>
-
-                    {/* Best Practices */}
-                    {brief.meta_best_practices && brief.meta_best_practices.length > 0 && (
-                      <div>
-                        <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.5rem' }}>
-                          ✅ Meta Best Practices
-                        </h4>
-                        <ul style={{ margin: 0, paddingLeft: '1.2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                          {brief.meta_best_practices.map((practice, j) => (
-                            <li key={j} style={{ marginBottom: '0.25rem' }}>{practice}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
+                gap: '2rem',
+                justifyItems: 'center',
+                marginBottom: '2rem'
+              }}>
+                {result.ads.map((ad) => (
+                  <MetaAdPreview
+                    key={ad.id}
+                    ad={ad}
+                    selected={selectedAd?.id === ad.id}
+                    onSelect={() => setSelectedAd(ad)}
+                    pageName={new URL(result.project_url).hostname.replace('www.', '')}
+                    websiteUrl={result.project_url}
+                  />
                 ))}
+              </div>
+
+              {/* Launch Button */}
+              <div style={{ textAlign: 'center', marginTop: '2rem' }}>
+                <button
+                  onClick={() => setView('launch')}
+                  disabled={!selectedAd}
+                  className="btn-primary"
+                  style={{
+                    background: selectedAd
+                      ? 'linear-gradient(135deg, #1877f2, #0c63d4)'
+                      : 'rgba(255,255,255,0.1)',
+                    padding: '1rem 3rem',
+                    fontSize: '1.1rem',
+                    fontWeight: 600,
+                    opacity: selectedAd ? 1 : 0.5,
+                    cursor: selectedAd ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  🚀 Launch My Campaign
+                </button>
+                {!selectedAd && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+                    Select an ad above to continue
+                  </p>
+                )}
               </div>
             </div>
           )}
-
-          {/* Meta Publishing Section */}
-          <div className="glass-panel" style={{ gridColumn: '1 / -1', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1))' }}>
-            <h2 className="card-title">🚀 Publish to Meta Ads Manager</h2>
-            <p style={{ color: 'var(--text-muted)', marginBottom: '2rem' }}>
-              Launch your campaign directly to Meta Ads Manager in PAUSED status (no spend until you activate it).
-            </p>
-
-            {/* Publishing Form */}
-            <div style={{ maxWidth: '600px', margin: '0 auto 2rem' }}>
-              <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', alignItems: 'flex-end' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
-                    Facebook Page ID
-                  </label>
-                  <input
-                    type="text"
-                    className="input-field"
-                    placeholder="Your Facebook Page ID"
-                    value={pageId}
-                    onChange={(e) => setPageId(e.target.value)}
-                    disabled={publishing}
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <button
-                  onClick={handlePublish}
-                  className="btn-primary"
-                  disabled={publishing || !pageId}
-                  style={{
-                    background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                    padding: '0.875rem 2rem',
-                    fontSize: '1rem',
-                    fontWeight: 600,
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {publishing ? '⏳ Publishing...' : '🚀 Publish Campaign'}
-                </button>
-              </div>
-
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                💡 Campaign will be created in PAUSED status for your review before activating.
-              </div>
-            </div>
-
-            {/* Publishing Error */}
-            {publishError && (
-              <div style={{
-                background: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.3)',
-                borderRadius: '8px',
-                padding: '1rem',
-                marginBottom: '2rem',
-                maxWidth: '600px',
-                margin: '0 auto 2rem'
-              }}>
-                <div style={{ color: '#ef4444', fontWeight: 600, marginBottom: '0.5rem' }}>❌ Publishing Failed</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{publishError}</div>
-              </div>
-            )}
-
-            {/* Publishing Success */}
-            {publishResult && publishResult.success && (
-              <div style={{
-                background: 'rgba(34, 197, 94, 0.1)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                borderRadius: '12px',
-                padding: '2rem',
-                maxWidth: '800px',
-                margin: '0 auto'
-              }}>
-                <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-                  <div style={{ fontSize: '3rem', marginBottom: '0.5rem' }}>🎉</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 600, color: '#22c55e', marginBottom: '0.5rem' }}>
-                    Campaign Published Successfully!
-                  </div>
-                  <div style={{ color: 'var(--text-muted)' }}>
-                    Your campaign is now live in Meta Ads Manager (PAUSED status)
-                  </div>
-                </div>
-
-                {/* Campaign Details */}
-                {publishResult.data.campaign && (
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', fontSize: '1.1rem' }}>📊 Campaign Details</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Campaign ID</div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>{publishResult.data.campaign.campaign_id}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Objective</div>
-                        <div style={{ fontSize: '0.9rem' }}>{publishResult.data.campaign.objective}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Status</div>
-                        <span className="tag" style={{ background: 'rgba(251, 191, 36, 0.2)', border: '1px solid rgba(251, 191, 36, 0.4)', color: '#fbbf24' }}>
-                          {publishResult.data.campaign.status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Ad Sets */}
-                {publishResult.data.ad_sets && publishResult.data.ad_sets.length > 0 && (
-                  <div style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', fontSize: '1.1rem' }}>🎯 Ad Set Created</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Ad Set ID</div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>{publishResult.data.ad_sets[0].ad_set_id}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Daily Budget</div>
-                        <div style={{ fontSize: '0.9rem' }}>${(publishResult.data.ad_sets[0].daily_budget / 100).toFixed(2)}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Status</div>
-                        <span className="tag" style={{ background: 'rgba(251, 191, 36, 0.2)', border: '1px solid rgba(251, 191, 36, 0.4)', color: '#fbbf24' }}>
-                          {publishResult.data.ad_sets[0].status}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Errors/Warnings */}
-                {publishResult.data.errors && publishResult.data.errors.length > 0 && (
-                  <div style={{ background: 'rgba(251, 191, 36, 0.1)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '8px', padding: '1.5rem', marginBottom: '1.5rem' }}>
-                    <h4 style={{ color: '#fbbf24', marginBottom: '1rem', fontSize: '1rem' }}>⚠️ Partial Success</h4>
-                    <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-                      Campaign and Ad Set created, but creative/ad creation requires Meta app in Live mode.
-                    </div>
-                  </div>
-                )}
-
-                {/* View in Meta Ads Manager */}
-                <div style={{ textAlign: 'center', marginTop: '2rem' }}>
-                  <a
-                    href="https://adsmanager.facebook.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-primary"
-                    style={{
-                      display: 'inline-block',
-                      background: 'linear-gradient(135deg, #1877f2, #0c63d4)',
-                      padding: '1rem 2rem',
-                      textDecoration: 'none',
-                      fontWeight: 600
-                    }}
-                  >
-                    📱 Open Meta Ads Manager
-                  </a>
-                </div>
-              </div>
-            )}
-          </div>
 
           </div>
         </>

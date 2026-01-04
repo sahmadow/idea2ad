@@ -51,10 +51,20 @@ class AdSetTargeting(BaseModel):
     geo_locations: List[str] = ["US"]
     interests: List[str] # Detailed targeting keywords
     
+class Ad(BaseModel):
+    """Complete ad creative for Meta Ads"""
+    id: int  # 1 or 2
+    imageUrl: Optional[str] = None
+    primaryText: str
+    headline: str
+    description: str
+    imageBrief: Optional[ImageBrief] = None  # Reference to source brief
+
 class CampaignDraft(BaseModel):
     project_url: str
     analysis: AnalysisResult
     targeting: AdSetTargeting
     suggested_creatives: List[CreativeAsset]
     image_briefs: List[ImageBrief]
+    ads: Optional[List[Ad]] = None  # 2 ready-to-use ads
     status: str = "DRAFT"

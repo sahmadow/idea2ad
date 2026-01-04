@@ -6,13 +6,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.models import Project, CampaignDraft, AdSetTargeting
+from app.models import Project, CampaignDraft, AdSetTargeting, Ad
 from app.services.scraper import scrape_landing_page
 from app.services.analyzer import analyze_landing_page_content
 from app.services.creative import generate_creatives, generate_image_briefs
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
 from app.routers import auth_router, images_router, campaigns_router
+from app.routers.facebook import router as facebook_router, auth_router as facebook_auth_router
 from app.config import get_settings
 from app.logging_config import setup_logging, get_logger
 
@@ -77,6 +78,8 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(images_router)
 app.include_router(campaigns_router)
+app.include_router(facebook_router)
+app.include_router(facebook_auth_router)
 
 
 # Request models for Meta API endpoints
@@ -145,7 +148,77 @@ async def analyze_url(request: Request, project: Project):
     # 4. Generate Image Briefs (3 distinct approaches with text overlays)
     image_briefs = await generate_image_briefs(analysis_result)
 
-    # 5. Construct Campaign Draft
+    # 5. Generate 2 images from briefs (if Vertex AI configured)
+    ads = []
+    headlines = [c for c in creatives if c.type == "headline"]
+    primary_texts = [c for c in creatives if c.type == "copy_primary"]
+
+    try:
+        from app.services.image_gen import get_image_generator
+        from app.services.s3 import get_s3_service
+        import uuid
+
+        generator = get_image_generator()
+        s3_service = get_s3_service()
+
+        for i, brief in enumerate(image_briefs[:2]):  # Generate 2 images
+            try:
+                # Generate image
+                image_bytes = await generator.generate_ad_image(
+                    visual_description=brief.visual_description,
+                    styling_notes=brief.styling_notes,
+                    approach=brief.approach
+                )
+
+                # Upload to S3
+                campaign_id = str(uuid.uuid4())[:8]
+                result = s3_service.upload_image(image_bytes, campaign_id)
+                if result.get("success"):
+                    image_url = result["url"]
+                    brief.image_url = image_url
+                else:
+                    raise ValueError(result.get("error", "S3 upload failed"))
+
+                # Create Ad object
+                ad = Ad(
+                    id=i + 1,
+                    imageUrl=image_url,
+                    primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                    headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                    description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                    imageBrief=brief
+                )
+                ads.append(ad)
+                logger.info(f"Generated ad {i + 1} with image: {image_url}")
+
+            except Exception as e:
+                logger.warning(f"Image generation failed for brief {i + 1}: {e}")
+                # Create ad without image
+                ad = Ad(
+                    id=i + 1,
+                    imageUrl=None,
+                    primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                    headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                    description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                    imageBrief=brief
+                )
+                ads.append(ad)
+
+    except Exception as e:
+        logger.warning(f"Image generation service not available: {e}")
+        # Create ads without images
+        for i, brief in enumerate(image_briefs[:2]):
+            ad = Ad(
+                id=i + 1,
+                imageUrl=None,
+                primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                imageBrief=brief
+            )
+            ads.append(ad)
+
+    # 6. Construct Campaign Draft
     return CampaignDraft(
         project_url=project.url,
         analysis=analysis_result,
@@ -154,6 +227,7 @@ async def analyze_url(request: Request, project: Project):
         ),
         suggested_creatives=creatives,
         image_briefs=image_briefs,
+        ads=ads,
         status="ANALYZED"
     )
 
