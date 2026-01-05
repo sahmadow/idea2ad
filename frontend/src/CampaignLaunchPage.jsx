@@ -1,16 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import MetaAdPreview from './MetaAdPreview'
 
-const CTA_OPTIONS = [
-  { value: 'LEARN_MORE', label: 'Learn More' },
-  { value: 'SHOP_NOW', label: 'Shop Now' },
-  { value: 'SIGN_UP', label: 'Sign Up' },
-  { value: 'BOOK_NOW', label: 'Book Now' },
-  { value: 'CONTACT_US', label: 'Contact Us' },
-  { value: 'GET_QUOTE', label: 'Get Quote' },
-  { value: 'SUBSCRIBE', label: 'Subscribe' },
-  { value: 'DOWNLOAD', label: 'Download' },
-]
+// Fixed campaign settings
+const DURATION_DAYS = 3
+const CTA_VALUE = 'LEARN_MORE'
+const CTA_LABEL = 'Learn More'
 
 function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess }) {
   const [fbConnected, setFbConnected] = useState(false)
@@ -23,13 +17,67 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
 
   // Campaign settings
   const [budget, setBudget] = useState(50)
-  const [duration, setDuration] = useState(3)
-  const [cta, setCta] = useState('LEARN_MORE')
+  const [locations, setLocations] = useState([])
+  const [locationQuery, setLocationQuery] = useState('')
+  const [locationSuggestions, setLocationSuggestions] = useState([])
+  const [searchingLocations, setSearchingLocations] = useState(false)
+  const locationDropdownRef = useRef(null)
 
   // Check if Facebook SDK is loaded
   useEffect(() => {
     checkFacebookStatus()
   }, [])
+
+  // Click outside to close location dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (locationDropdownRef.current && !locationDropdownRef.current.contains(event.target)) {
+        setLocationSuggestions([])
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Debounced location search
+  useEffect(() => {
+    if (locationQuery.length < 2) {
+      setLocationSuggestions([])
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingLocations(true)
+      try {
+        const response = await fetch(
+          `http://localhost:8000/meta/location-search?q=${encodeURIComponent(locationQuery)}`,
+          { credentials: 'include' }
+        )
+        if (response.ok) {
+          const data = await response.json()
+          setLocationSuggestions(data.cities || [])
+        }
+      } catch (err) {
+        console.log('Location search failed:', err)
+      } finally {
+        setSearchingLocations(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [locationQuery])
+
+  const addLocation = (city) => {
+    if (!locations.find(l => l.key === city.key)) {
+      setLocations([...locations, city])
+    }
+    setLocationQuery('')
+    setLocationSuggestions([])
+  }
+
+  const removeLocation = (key) => {
+    setLocations(locations.filter(l => l.key !== key))
+  }
 
   const checkFacebookStatus = async () => {
     // Check if user already connected via backend session
@@ -129,8 +177,9 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           campaign_data: campaignData,
           settings: {
             budget: budget * 100, // Convert to cents
-            duration_days: duration,
-            call_to_action: cta,
+            duration_days: DURATION_DAYS,
+            call_to_action: CTA_VALUE,
+            locations: locations.map(l => ({ key: l.key, name: l.name })),
           }
         })
       })
@@ -365,60 +414,204 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
               {/* Budget */}
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
-                  Total Budget
+                  Ad Budget
                 </label>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>$</span>
-                  <input
-                    type="number"
-                    min="5"
-                    max="10000"
-                    value={budget}
-                    onChange={(e) => setBudget(Math.max(5, parseInt(e.target.value) || 0))}
-                    className="input-field"
-                    style={{ flex: 1 }}
-                  />
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>USD</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      background: budget === 50 ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                      border: budget === 50 ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="budget"
+                      checked={budget === 50}
+                      onChange={() => setBudget(50)}
+                      style={{ width: '18px', height: '18px', marginTop: '2px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>$50 <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>— Standard</span></div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Good for initial understanding</div>
+                    </div>
+                  </label>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      background: budget === 100 ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                      border: budget === 100 ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="budget"
+                      checked={budget === 100}
+                      onChange={() => setBudget(100)}
+                      style={{ width: '18px', height: '18px', marginTop: '2px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600 }}>$100 <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>— Higher Certainty</span></div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>More data for better insights</div>
+                    </div>
+                  </label>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                  Daily spend: ${(budget / duration).toFixed(2)}/day
+                <div style={{
+                  fontSize: '0.8rem',
+                  color: 'var(--text-muted)',
+                  marginTop: '0.75rem',
+                  padding: '12px',
+                  background: 'rgba(251, 191, 36, 0.1)',
+                  border: '1px solid rgba(251, 191, 36, 0.2)',
+                  borderRadius: '6px'
+                }}>
+                  <strong style={{ color: '#fbbf24' }}>Important:</strong> Meta might charge 10-20% more or less than your set budget. We do not take any commission from your Meta advertising budget. All ad costs are charged directly by Meta to the payment method linked in your Facebook account.
                 </div>
               </div>
 
-              {/* Duration */}
+              {/* Duration - Fixed */}
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
                   Duration
                 </label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(parseInt(e.target.value))}
-                  className="input-field"
-                  style={{ width: '100%' }}
-                >
-                  <option value={3}>3 days (Recommended)</option>
-                  <option value={5}>5 days</option>
-                  <option value={7}>7 days</option>
-                  <option value={14}>14 days</option>
-                  <option value={30}>30 days</option>
-                </select>
+                <div style={{
+                  padding: '12px 16px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary)'
+                }}>
+                  {DURATION_DAYS} days
+                </div>
               </div>
 
-              {/* CTA */}
+              {/* CTA - Fixed */}
               <div>
                 <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
                   Call to Action
                 </label>
-                <select
-                  value={cta}
-                  onChange={(e) => setCta(e.target.value)}
-                  className="input-field"
-                  style={{ width: '100%' }}
-                >
-                  {CTA_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
+                <div style={{
+                  padding: '12px 16px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary)'
+                }}>
+                  {CTA_LABEL}
+                </div>
+              </div>
+
+              {/* Locations */}
+              <div>
+                <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 500 }}>
+                  Target Locations
+                </label>
+
+                {/* Selected cities */}
+                {locations.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                    {locations.map(loc => (
+                      <span
+                        key={loc.key}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          background: 'rgba(59, 130, 246, 0.2)',
+                          border: '1px solid rgba(59, 130, 246, 0.3)',
+                          borderRadius: '20px',
+                          fontSize: '0.9rem'
+                        }}
+                      >
+                        {loc.name}, {loc.region || loc.country_name}
+                        <button
+                          onClick={() => removeLocation(loc.key)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            padding: 0,
+                            fontSize: '1.1rem',
+                            lineHeight: 1
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Search input */}
+                <div style={{ position: 'relative' }} ref={locationDropdownRef}>
+                  <input
+                    type="text"
+                    value={locationQuery}
+                    onChange={(e) => setLocationQuery(e.target.value)}
+                    placeholder="Search for a city..."
+                    className="input-field"
+                    style={{ width: '100%' }}
+                    disabled={!fbConnected}
+                  />
+
+                  {/* Suggestions dropdown */}
+                  {locationSuggestions.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: '#1a1a2e',
+                      border: '1px solid rgba(255,255,255,0.2)',
+                      borderRadius: '8px',
+                      marginTop: '4px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                    }}>
+                      {locationSuggestions.map(city => (
+                        <div
+                          key={city.key}
+                          onClick={() => addLocation(city)}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)'
+                          }}
+                          onMouseEnter={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                          onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                        >
+                          <div style={{ fontWeight: 500 }}>{city.name}</div>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                            {city.region ? `${city.region}, ` : ''}{city.country_name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                </div>
+
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                  {searchingLocations ? (
+                    <span style={{ color: '#3b82f6' }}>Searching cities...</span>
+                  ) : (
+                    'For this test we recommend choosing 1 to 3 cities max'
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -437,24 +630,44 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
             </div>
           )}
 
+          {/* Launch Disclaimer */}
+          <div style={{
+            fontSize: '0.85rem',
+            color: 'var(--text-muted)',
+            marginBottom: '1rem',
+            padding: '12px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: '8px',
+            lineHeight: 1.5
+          }}>
+            Clicking "Launch" charges you <strong style={{ color: 'var(--text-primary)' }}>$12</strong> immediately (non-refundable) and authorizes Meta to charge <strong style={{ color: 'var(--text-primary)' }}>${budget === 50 ? '40-60' : '80-120'}</strong> for ads over 72 hours. See{' '}
+            <a href="https://idea2ad.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>
+              Terms & Conditions
+            </a>.
+          </div>
+
           {/* Publish Button */}
           <button
             onClick={handlePublish}
-            disabled={!fbConnected || !selectedPage || publishing}
+            disabled={!fbConnected || !selectedPage || publishing || locations.length === 0}
             className="btn-primary"
             style={{
               width: '100%',
               padding: '16px',
               fontSize: '1.1rem',
               fontWeight: 600,
-              background: (fbConnected && selectedPage && !publishing)
+              background: (fbConnected && selectedPage && !publishing && locations.length > 0)
                 ? 'linear-gradient(135deg, #22c55e, #16a34a)'
                 : 'rgba(255,255,255,0.1)',
-              opacity: (fbConnected && selectedPage && !publishing) ? 1 : 0.5,
-              cursor: (fbConnected && selectedPage && !publishing) ? 'pointer' : 'not-allowed'
+              opacity: (fbConnected && selectedPage && !publishing && locations.length > 0) ? 1 : 0.5,
+              cursor: (fbConnected && selectedPage && !publishing && locations.length > 0) ? 'pointer' : 'not-allowed'
             }}
           >
-            {publishing ? '⏳ Publishing...' : '🚀 Publish Now'}
+            {publishing
+              ? '⏳ Publishing...'
+              : `Launch Campaign - Total: ~$${budget === 50 ? '57-72' : '102-132'}`
+            }
           </button>
 
           <p style={{

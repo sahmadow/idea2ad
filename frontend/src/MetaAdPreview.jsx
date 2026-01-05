@@ -27,6 +27,7 @@ function MetaAdPreview({
           : '0 1px 2px rgba(0,0,0,0.1)',
         transition: 'all 0.2s ease',
         transform: selected ? 'scale(1.02)' : 'scale(1)',
+        textAlign: 'left',
       }}
     >
       {/* Header - Page info */}
