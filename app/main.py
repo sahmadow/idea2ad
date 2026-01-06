@@ -106,7 +106,13 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint - returns 200 if app is running"""
+    return {"status": "ok"}
+
+
+@app.get("/health/detailed")
+async def health_check_detailed():
+    """Detailed health check with service status"""
     from app.db import db
     try:
         await db.execute_raw("SELECT 1")
