@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
+    # URLs (for OAuth callbacks and CORS)
+    frontend_url: str = "http://localhost:5173"
+    api_url: str = "http://localhost:8000"
+
     # Optional Meta parent business (for 2-tier mode)
     meta_parent_business_id: str = ""
 

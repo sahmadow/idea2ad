@@ -194,7 +194,7 @@ function App() {
               cursor: 'pointer'
             }}
           >
-            Idea2Ad
+            LaunchAd
           </h1>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
             {user ? (

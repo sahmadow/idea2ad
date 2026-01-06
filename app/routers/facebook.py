@@ -343,8 +343,8 @@ async def facebook_login():
     if not settings.meta_app_id:
         raise HTTPException(status_code=500, detail="META_APP_ID not configured")
 
-    # OAuth parameters
-    redirect_uri = "http://localhost:8000/auth/facebook/callback"
+    # OAuth parameters - use configurable URLs
+    redirect_uri = f"{settings.api_url}/auth/facebook/callback"
     scope = "pages_show_list,pages_read_engagement,ads_management,business_management"
 
     oauth_url = (
@@ -369,26 +369,28 @@ async def facebook_callback(
 
     if error:
         # Return error to frontend popup
+        frontend_url = settings.frontend_url
         return HTMLResponse(f"""
             <html>
             <script>
                 window.opener.postMessage({{
                     type: 'FB_AUTH_ERROR',
                     error: '{error_description or error}'
-                }}, 'http://localhost:5173');
+                }}, '{frontend_url}');
                 window.close();
             </script>
             </html>
         """)
 
     if not code:
-        return HTMLResponse("""
+        frontend_url = settings.frontend_url
+        return HTMLResponse(f"""
             <html>
             <script>
-                window.opener.postMessage({
+                window.opener.postMessage({{
                     type: 'FB_AUTH_ERROR',
                     error: 'No authorization code received'
-                }, 'http://localhost:5173');
+                }}, '{frontend_url}');
                 window.close();
             </script>
             </html>
@@ -396,7 +398,7 @@ async def facebook_callback(
 
     try:
         # Exchange code for access token
-        redirect_uri = "http://localhost:8000/auth/facebook/callback"
+        redirect_uri = f"{settings.api_url}/auth/facebook/callback"
 
         async with httpx.AsyncClient() as client:
             token_response = await client.get(
@@ -451,6 +453,7 @@ async def facebook_callback(
         logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages")
 
         # Return success to frontend popup with cookie
+        frontend_url = settings.frontend_url
         response = HTMLResponse(f"""
             <html>
             <script>
@@ -460,7 +463,7 @@ async def facebook_callback(
                         id: '{user_data.get("id")}',
                         name: '{user_data.get("name", "").replace("'", "\\'")}'
                     }}
-                }}, 'http://localhost:5173');
+                }}, '{frontend_url}');
                 window.close();
             </script>
             </html>
@@ -476,13 +479,14 @@ async def facebook_callback(
 
     except Exception as e:
         logger.error(f"Facebook OAuth error: {e}")
+        frontend_url = settings.frontend_url
         return HTMLResponse(f"""
             <html>
             <script>
                 window.opener.postMessage({{
                     type: 'FB_AUTH_ERROR',
                     error: '{str(e).replace("'", "\\'")}'
-                }}, 'http://localhost:5173');
+                }}, '{frontend_url}');
                 window.close();
             </script>
             </html>

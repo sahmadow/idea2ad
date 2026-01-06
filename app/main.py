@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Idea2Ad Concierge API",
+    title="LaunchAd Concierge API",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -64,7 +64,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS
 cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 if settings.environment == "production":
-    cors_origins = ["https://idea2ad.com"]  # Update with production domain
+    cors_origins = ["https://launchad.io", "https://www.launchad.io"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -101,7 +101,7 @@ class MetaTestRequest(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "Idea2Ad API is running", "version": "1.0.0"}
+    return {"message": "LaunchAd API is running", "version": "1.0.0"}
 
 
 @app.get("/health")

@@ -13,7 +13,7 @@ describe('App', () => {
 
   it('renders the main heading', () => {
     render(<App />)
-    expect(screen.getByText(/idea2ad/i)).toBeInTheDocument()
+    expect(screen.getByText(/launchad/i)).toBeInTheDocument()
   })
 
   it('renders the URL input field', () => {

@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import MetaAdPreview from './MetaAdPreview'
 
+// API URL from environment
+const API_URL = import.meta.env.VITE_API_URL || "${API_URL}"
+
 // Fixed campaign settings
 const DURATION_DAYS = 3
 const CTA_VALUE = 'LEARN_MORE'
@@ -50,7 +53,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
       setSearchingLocations(true)
       try {
         const response = await fetch(
-          `http://localhost:8000/meta/location-search?q=${encodeURIComponent(locationQuery)}`,
+          `${API_URL}/meta/location-search?q=${encodeURIComponent(locationQuery)}`,
           { credentials: 'include' }
         )
         if (response.ok) {
@@ -82,7 +85,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const checkFacebookStatus = async () => {
     // Check if user already connected via backend session
     try {
-      const response = await fetch('http://localhost:8000/meta/fb-status', {
+      const response = await fetch(`${API_URL}/meta/fb-status`, {
         credentials: 'include'
       })
       if (response.ok) {
@@ -110,21 +113,21 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
       const top = window.screenY + (window.outerHeight - height) / 2
 
       const popup = window.open(
-        'http://localhost:8000/auth/facebook',
+        `${API_URL}/auth/facebook`,
         'Facebook Login',
         `width=${width},height=${height},left=${left},top=${top}`
       )
 
       // Listen for OAuth callback
       const handleMessage = async (event) => {
-        if (event.origin !== 'http://localhost:8000') return
+        if (event.origin !== API_URL) return
 
         if (event.data.type === 'FB_AUTH_SUCCESS') {
           setFbConnected(true)
           setFbUser(event.data.user)
 
           // Fetch user's pages
-          const pagesResponse = await fetch('http://localhost:8000/meta/pages', {
+          const pagesResponse = await fetch(`${API_URL}/meta/pages`, {
             credentials: 'include'
           })
           if (pagesResponse.ok) {
@@ -167,7 +170,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
     setError(null)
 
     try {
-      const response = await fetch('http://localhost:8000/meta/publish-campaign', {
+      const response = await fetch(`${API_URL}/meta/publish-campaign`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -642,7 +645,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
             lineHeight: 1.5
           }}>
             Clicking "Launch" charges you <strong style={{ color: 'var(--text-primary)' }}>$12</strong> immediately (non-refundable) and authorizes Meta to charge <strong style={{ color: 'var(--text-primary)' }}>${budget === 50 ? '40-60' : '80-120'}</strong> for ads over 72 hours. See{' '}
-            <a href="https://idea2ad.com/terms" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>
+            <a href="https://launchad.io/terms-of-service" target="_blank" rel="noopener noreferrer" style={{ color: '#3b82f6' }}>
               Terms & Conditions
             </a>.
           </div>
