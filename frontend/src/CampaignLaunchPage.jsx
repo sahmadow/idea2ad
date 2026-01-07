@@ -61,7 +61,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           setLocationSuggestions(data.cities || [])
         }
       } catch (err) {
-        console.log('Location search failed:', err)
+        // Silently fail on location search
       } finally {
         setSearchingLocations(false)
       }
@@ -97,7 +97,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
         }
       }
     } catch (err) {
-      console.log('FB status check failed, user not connected')
+      // User not connected to FB - expected state
     }
   }
 

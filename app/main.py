@@ -1,10 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import uuid
 
 from app.models import Project, CampaignDraft, AdSetTargeting, Ad
 from app.services.scraper import scrape_landing_page
@@ -34,6 +37,30 @@ if settings.sentry_dsn:
     )
 
 logger = get_logger(__name__)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses"""
+    async def dispatch(self, request: Request, call_next):
+        # Add request ID for tracing
+        request_id = str(uuid.uuid4())[:8]
+        request.state.request_id = request_id
+
+        response: Response = await call_next(request)
+
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["X-Request-ID"] = request_id
+
+        # CSP for API responses
+        if settings.environment == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        return response
+
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -73,6 +100,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Security headers + request ID tracing
+app.add_middleware(SecurityHeadersMiddleware)
 
 # Include routers
 app.include_router(auth_router)

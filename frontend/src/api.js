@@ -103,7 +103,6 @@ export const analyzeUrl = async (url) => {
 
         return await response.json();
     } catch (error) {
-        console.error("API Error:", error);
         throw error;
     }
 };
@@ -128,7 +127,6 @@ export const publishToMeta = async (campaignDraft, pageId) => {
 
         return await response.json();
     } catch (error) {
-        console.error("API Error:", error);
         throw error;
     }
 };
@@ -148,7 +146,6 @@ export const getMetaConfig = async () => {
 
         return await response.json();
     } catch (error) {
-        console.error("API Error:", error);
         throw error;
     }
 };

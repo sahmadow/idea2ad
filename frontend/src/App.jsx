@@ -238,7 +238,11 @@ function App() {
       {/* Dashboard View */}
       {view === 'dashboard' && user && (
         <Dashboard
-          onSelectCampaign={(c) => { /* TODO: Load campaign details */ }}
+          onSelectCampaign={(campaign) => {
+            setResult(campaign.data)
+            setUrl(campaign.project_url || '')
+            setView('home')
+          }}
           onNewCampaign={() => setView('home')}
         />
       )}
@@ -251,7 +255,6 @@ function App() {
           onBack={() => setView('home')}
           onPublishSuccess={(publishResult) => {
             alert('Campaign published successfully!')
-            console.log('Publish result:', publishResult)
             setView('home')
             setResult(null)
             setSelectedAd(null)

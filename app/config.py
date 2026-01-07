@@ -1,6 +1,8 @@
 from pydantic_settings import BaseSettings
+from pydantic import model_validator
 from functools import lru_cache
 from typing import Optional
+import warnings
 
 
 class Settings(BaseSettings):
@@ -48,6 +50,32 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         extra = "ignore"
+
+    @model_validator(mode="after")
+    def validate_production_config(self):
+        """Validate critical env vars for production"""
+        if self.environment == "production":
+            errors = []
+
+            # JWT secret must be changed
+            if self.jwt_secret_key == "change-this-in-production":
+                errors.append("JWT_SECRET_KEY must be set in production")
+
+            # JWT secret should be strong (min 32 chars)
+            if len(self.jwt_secret_key) < 32:
+                errors.append("JWT_SECRET_KEY must be at least 32 characters")
+
+            # Database URL should not be localhost
+            if "localhost" in self.database_url or "127.0.0.1" in self.database_url:
+                errors.append("DATABASE_URL should not use localhost in production")
+
+            if errors:
+                raise ValueError(f"Production config errors: {', '.join(errors)}")
+
+        elif self.jwt_secret_key == "change-this-in-production":
+            warnings.warn("Using default JWT_SECRET_KEY - change for production!")
+
+        return self
 
 
 @lru_cache
