@@ -8,20 +8,23 @@ db = Prisma()
 
 
 async def connect_db():
-    """Connect to database"""
+    """Connect to database - non-blocking, app starts even if DB unavailable"""
     try:
         await db.connect()
         logger.info("Database connected")
+        return True
     except Exception as e:
         logger.error(f"Database connection failed: {e}")
-        raise
+        logger.warning("App starting without database - some features will be unavailable")
+        return False
 
 
 async def disconnect_db():
     """Disconnect from database"""
     try:
-        await db.disconnect()
-        logger.info("Database disconnected")
+        if db.is_connected():
+            await db.disconnect()
+            logger.info("Database disconnected")
     except Exception as e:
         logger.error(f"Database disconnect failed: {e}")
 
