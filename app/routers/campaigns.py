@@ -7,6 +7,7 @@ from app.db import db
 from app.auth.dependencies import get_current_user
 from app.models import CampaignDraft, AnalysisResult, CreativeAsset, ImageBrief
 from app.logging_config import get_logger
+from prisma.models import User
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -49,11 +50,11 @@ async def list_campaigns(
     status: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """List all campaigns for authenticated user."""
     try:
-        where_clause = {"user_id": current_user["id"], "deleted_at": None}
+        where_clause = {"user_id": current_user.id, "deleted_at": None}
         if status:
             where_clause["status"] = status
 
@@ -88,14 +89,14 @@ async def list_campaigns(
 @router.get("/{campaign_id}", response_model=CampaignDetailResponse)
 async def get_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Get campaign details with analysis, creatives, and image briefs."""
     try:
         campaign = await db.campaign.find_first(
             where={
                 "id": campaign_id,
-                "user_id": current_user["id"],
+                "user_id": current_user.id,
                 "deleted_at": None
             },
             include={
@@ -134,7 +135,7 @@ async def get_campaign(
 @router.post("", response_model=CampaignResponse)
 async def save_campaign(
     request: CampaignCreateRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Save a campaign draft to the database."""
     try:
@@ -143,7 +144,7 @@ async def save_campaign(
         # Create campaign
         campaign = await db.campaign.create(
             data={
-                "user_id": current_user["id"],
+                "user_id": current_user.id,
                 "name": request.name,
                 "project_url": draft.get("project_url", ""),
                 "status": draft.get("status", "ANALYZED"),
@@ -198,7 +199,7 @@ async def save_campaign(
                 }
             )
 
-        logger.info(f"Campaign saved: {campaign.id} by user {current_user['id']}")
+        logger.info(f"Campaign saved: {campaign.id} by user {current_user.id}")
 
         return CampaignResponse(
             id=campaign.id,
@@ -222,7 +223,7 @@ async def save_campaign(
 async def update_campaign(
     campaign_id: str,
     request: CampaignUpdateRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Update campaign metadata."""
     try:
@@ -230,7 +231,7 @@ async def update_campaign(
         campaign = await db.campaign.find_first(
             where={
                 "id": campaign_id,
-                "user_id": current_user["id"],
+                "user_id": current_user.id,
                 "deleted_at": None
             }
         )
@@ -280,7 +281,7 @@ async def update_campaign(
 @router.delete("/{campaign_id}")
 async def delete_campaign(
     campaign_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Soft delete a campaign."""
     try:
@@ -288,7 +289,7 @@ async def delete_campaign(
         campaign = await db.campaign.find_first(
             where={
                 "id": campaign_id,
-                "user_id": current_user["id"],
+                "user_id": current_user.id,
                 "deleted_at": None
             }
         )
@@ -303,7 +304,7 @@ async def delete_campaign(
             data={"deleted_at": datetime.utcnow()}
         )
 
-        logger.info(f"Campaign deleted: {campaign_id} by user {current_user['id']}")
+        logger.info(f"Campaign deleted: {campaign_id} by user {current_user.id}")
 
         return {"message": "Campaign deleted"}
     except HTTPException:
@@ -317,7 +318,7 @@ async def delete_campaign(
 async def publish_campaign(
     campaign_id: str,
     page_id: str,
-    current_user: dict = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """Publish a saved campaign to Meta Ads."""
     try:
@@ -325,7 +326,7 @@ async def publish_campaign(
         campaign = await db.campaign.find_first(
             where={
                 "id": campaign_id,
-                "user_id": current_user["id"],
+                "user_id": current_user.id,
                 "deleted_at": None
             },
             include={
