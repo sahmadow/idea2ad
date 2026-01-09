@@ -91,11 +91,18 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS
 cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 if settings.environment == "production":
-    cors_origins = ["https://launchad.io", "https://www.launchad.io"]
+    cors_origins = [
+        "https://launchad.io",
+        "https://www.launchad.io",
+        # Vercel preview deployments
+        "https://frontend-salehs-projects-f9732e89.vercel.app",
+    ]
+cors_origin_regex = r"https://frontend-[a-z0-9]+-salehs-projects-f9732e89\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
+    allow_origin_regex=cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
