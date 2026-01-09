@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from pydantic import BaseModel, EmailStr, Field
 from prisma import Prisma
 from app.db import get_db
 from app.auth.password import hash_password, verify_password
 from app.auth.jwt import create_access_token
 from app.auth.dependencies import get_current_user
+from app.auth.cookies import COOKIE_NAME, get_cookie_settings
 from prisma.models import User
 import logging
 
@@ -39,7 +40,11 @@ class UserResponse(BaseModel):
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-async def register(request: RegisterRequest, db: Prisma = Depends(get_db)):
+async def register(
+    request: RegisterRequest,
+    response: Response,
+    db: Prisma = Depends(get_db)
+):
     """Register new user account"""
     # Check if email exists
     existing = await db.user.find_unique(where={"email": request.email})
@@ -66,13 +71,20 @@ async def register(request: RegisterRequest, db: Prisma = Depends(get_db)):
             detail="Registration failed"
         )
 
-    # Return token
+    # Create token and set httpOnly cookie
     token = create_access_token(user.id)
+    cookie_settings = get_cookie_settings()
+    response.set_cookie(value=token, **cookie_settings)
+
     return TokenResponse(access_token=token)
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: Prisma = Depends(get_db)):
+async def login(
+    request: LoginRequest,
+    response: Response,
+    db: Prisma = Depends(get_db)
+):
     """Login with email and password"""
     user = await db.user.find_unique(where={"email": request.email})
 
@@ -89,7 +101,12 @@ async def login(request: LoginRequest, db: Prisma = Depends(get_db)):
         )
 
     logger.info(f"User logged in: {user.email}")
+
+    # Create token and set httpOnly cookie
     token = create_access_token(user.id)
+    cookie_settings = get_cookie_settings()
+    response.set_cookie(value=token, **cookie_settings)
+
     return TokenResponse(access_token=token)
 
 
@@ -102,3 +119,10 @@ async def get_me(current_user: User = Depends(get_current_user)):
         name=current_user.name,
         created_at=current_user.created_at.isoformat()
     )
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """Clear auth cookie"""
+    response.delete_cookie(key=COOKIE_NAME, path="/")
+    return {"message": "Logged out"}

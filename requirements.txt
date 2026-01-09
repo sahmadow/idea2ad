@@ -46,3 +46,6 @@ pytest-asyncio
 pytest-cov
 respx
 factory-boy
+
+# Load testing
+locust>=2.15.0
