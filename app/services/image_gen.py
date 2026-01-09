@@ -1,12 +1,33 @@
 import asyncio
 import io
+import json
 import logging
+import os
+import tempfile
 from typing import Optional
 from PIL import Image
 
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _setup_gcp_credentials():
+    """Setup GCP credentials from env var if needed"""
+    # If credentials file already set and exists, use it
+    creds_path = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path and os.path.exists(creds_path):
+        return
+
+    # Check for JSON credentials in env var
+    creds_json = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+    if creds_json:
+        # Write to temp file and set path
+        fd, path = tempfile.mkstemp(suffix=".json")
+        with os.fdopen(fd, "w") as f:
+            f.write(creds_json)
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = path
+        logger.info(f"GCP credentials written to {path}")
 
 
 class ImageGenerator:
@@ -25,6 +46,9 @@ class ImageGenerator:
 
         if not settings.google_cloud_project:
             raise ValueError("GOOGLE_CLOUD_PROJECT not configured")
+
+        # Setup credentials from env var if needed
+        _setup_gcp_credentials()
 
         try:
             import vertexai
