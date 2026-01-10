@@ -11,12 +11,10 @@ from pydantic import BaseModel
 import httpx
 
 from app.config import get_settings
+from app.db import db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meta", tags=["facebook"])
-
-# In-memory session store (use Redis in production)
-_fb_sessions: dict = {}
 
 
 class PublishCampaignRequest(BaseModel):
@@ -26,18 +24,34 @@ class PublishCampaignRequest(BaseModel):
     settings: dict
 
 
-def get_fb_session(request: Request) -> Optional[dict]:
-    """Get Facebook session from cookie"""
+async def get_fb_session(request: Request) -> Optional[dict]:
+    """Get Facebook session from database"""
     session_id = request.cookies.get("fb_session")
-    if session_id and session_id in _fb_sessions:
-        return _fb_sessions[session_id]
-    return None
+    if not session_id:
+        return None
+
+    try:
+        session = await db.facebooksession.find_first(
+            where={"id": session_id, "expires_at": {"gt": datetime.utcnow()}}
+        )
+        if not session:
+            return None
+
+        return {
+            "access_token": session.access_token,
+            "user_id": session.fb_user_id,
+            "user_name": session.fb_user_name,
+            "pages": session.pages
+        }
+    except Exception as e:
+        logger.error(f"Error fetching FB session: {e}")
+        return None
 
 
 @router.get("/fb-status")
 async def get_fb_status(request: Request):
     """Check if user has connected Facebook"""
-    session = get_fb_session(request)
+    session = await get_fb_session(request)
     if not session:
         return {"connected": False}
 
@@ -54,7 +68,7 @@ async def get_fb_status(request: Request):
 @router.get("/pages")
 async def get_user_pages(request: Request):
     """Get user's Facebook pages"""
-    session = get_fb_session(request)
+    session = await get_fb_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Not connected to Facebook")
 
@@ -64,7 +78,7 @@ async def get_user_pages(request: Request):
 @router.get("/location-search")
 async def search_locations(request: Request, q: str = Query(..., min_length=2)):
     """Search for cities using Meta's ad geolocation API"""
-    session = get_fb_session(request)
+    session = await get_fb_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Not connected to Facebook")
 
@@ -122,7 +136,7 @@ async def search_locations(request: Request, q: str = Query(..., min_length=2)):
 @router.post("/publish-campaign")
 async def publish_campaign(request: Request, data: PublishCampaignRequest):
     """Publish campaign using user's Facebook access token"""
-    session = get_fb_session(request)
+    session = await get_fb_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Not connected to Facebook")
 
@@ -345,15 +359,27 @@ async def facebook_login():
 
     # OAuth parameters - use configurable URLs
     redirect_uri = f"{settings.api_url}/auth/facebook/callback"
-    scope = "pages_show_list,pages_read_engagement,ads_management,business_management"
 
-    oauth_url = (
-        f"https://www.facebook.com/v18.0/dialog/oauth?"
-        f"client_id={settings.meta_app_id}"
-        f"&redirect_uri={redirect_uri}"
-        f"&scope={scope}"
-        f"&response_type=code"
-    )
+    # Use config_id if available (Facebook Login for Business)
+    # Scopes are defined in Meta Dashboard configuration
+    if settings.meta_config_id:
+        oauth_url = (
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
+            f"client_id={settings.meta_app_id}"
+            f"&config_id={settings.meta_config_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&response_type=code"
+        )
+    else:
+        # Fallback to manual scope for dev/testing
+        scope = "pages_show_list,pages_read_engagement,ads_management,business_management"
+        oauth_url = (
+            f"https://www.facebook.com/v18.0/dialog/oauth?"
+            f"client_id={settings.meta_app_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scope}"
+            f"&response_type=code"
+        )
 
     return RedirectResponse(url=oauth_url)
 
@@ -432,25 +458,29 @@ async def facebook_callback(
             pages_data = pages_response.json()
             pages = pages_data.get("data", [])
 
-        # Create session
-        import uuid
-        session_id = str(uuid.uuid4())
-        _fb_sessions[session_id] = {
-            "access_token": access_token,
-            "user_id": user_data.get("id"),
-            "user_name": user_data.get("name"),
-            "pages": [
-                {
-                    "id": p["id"],
-                    "name": p["name"],
-                    "category": p.get("category", ""),
-                    "access_token": p.get("access_token", "")
-                }
-                for p in pages
-            ]
-        }
+        # Create session in database
+        pages_json = [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "category": p.get("category", ""),
+                "access_token": p.get("access_token", "")
+            }
+            for p in pages
+        ]
 
-        logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages")
+        fb_session = await db.facebooksession.create(
+            data={
+                "fb_user_id": user_data.get("id", ""),
+                "fb_user_name": user_data.get("name", ""),
+                "access_token": access_token,
+                "pages": pages_json,
+                "expires_at": datetime.utcnow() + timedelta(hours=24)
+            }
+        )
+        session_id = fb_session.id
+
+        logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages, session {session_id}")
 
         # Return success to frontend popup with cookie
         frontend_url = settings.frontend_url
@@ -491,3 +521,18 @@ async def facebook_callback(
             </script>
             </html>
         """)
+
+
+@router.post("/disconnect")
+async def disconnect_facebook(request: Request, response: Response):
+    """Disconnect Facebook session"""
+    session_id = request.cookies.get("fb_session")
+    if session_id:
+        try:
+            await db.facebooksession.delete(where={"id": session_id})
+            logger.info(f"Facebook session {session_id} disconnected")
+        except Exception as e:
+            logger.error(f"Error deleting FB session: {e}")
+
+    response.delete_cookie("fb_session")
+    return {"message": "Disconnected"}

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     meta_app_id: str = ""
     meta_ad_account_id: str = ""
     meta_default_page_id: str = ""
+    meta_config_id: str = ""  # Facebook Login for Business config ID
 
     # AWS S3
     aws_access_key_id: str = ""
