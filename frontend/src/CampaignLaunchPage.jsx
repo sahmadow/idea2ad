@@ -174,6 +174,24 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
     }
   }
 
+  const handleDisconnect = async () => {
+    try {
+      await fetch(`${API_URL}/meta/disconnect`, {
+        method: 'POST',
+        credentials: 'include'
+      })
+      // Reset all Facebook-related state
+      setFbConnected(false)
+      setFbUser(null)
+      setPages([])
+      setAdAccounts([])
+      setSelectedPage(null)
+      setSelectedAdAccount(null)
+    } catch (err) {
+      setError('Failed to disconnect: ' + err.message)
+    }
+  }
+
   const handlePublish = async () => {
     if (!selectedPage || !selectedAd) {
       setError('Please select a Facebook Page')
@@ -341,11 +359,25 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
                 }}>
                   {fbUser?.name?.charAt(0) || 'U'}
                 </div>
-                <div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600 }}>{fbUser?.name || 'Connected'}</div>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Facebook connected</div>
                 </div>
-                <span style={{ marginLeft: 'auto', color: '#22c55e' }}>✓</span>
+                <span style={{ color: '#22c55e', marginRight: '8px' }}>✓</span>
+                <button
+                  onClick={handleDisconnect}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    padding: '6px 12px',
+                    fontSize: '0.85rem',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Disconnect
+                </button>
               </div>
             )}
           </div>

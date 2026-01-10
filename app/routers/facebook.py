@@ -43,7 +43,9 @@ async def get_fb_session(request: Request) -> Optional[dict]:
             "access_token": session.access_token,
             "user_id": session.fb_user_id,
             "user_name": session.fb_user_name,
-            "pages": session.pages
+            "pages": session.pages,
+            "adAccounts": session.adAccounts,
+            "selectedAdAccountId": session.selectedAdAccountId
         }
     except Exception as e:
         logger.error(f"Error fetching FB session: {e}")
@@ -57,14 +59,25 @@ async def get_fb_status(request: Request):
     if not session:
         return {"connected": False}
 
+    # Parse JSON strings if stored as strings (from Prisma Json field)
+    pages = session.get("pages", [])
+    ad_accounts = session.get("adAccounts", [])
+
+    if isinstance(pages, str):
+        import json
+        pages = json.loads(pages)
+    if isinstance(ad_accounts, str):
+        import json
+        ad_accounts = json.loads(ad_accounts)
+
     return {
         "connected": True,
         "user": {
             "id": session.get("user_id"),
             "name": session.get("user_name"),
         },
-        "pages": session.get("pages", []),
-        "adAccounts": session.get("adAccounts", []),
+        "pages": pages,
+        "adAccounts": ad_accounts,
         "selectedAdAccountId": session.get("selectedAdAccountId")
     }
 
