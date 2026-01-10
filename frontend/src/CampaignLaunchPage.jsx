@@ -9,6 +9,25 @@ const DURATION_DAYS = 3
 const CTA_VALUE = 'LEARN_MORE'
 const CTA_LABEL = 'Learn More'
 
+// Helper to get session token from localStorage
+const getSessionToken = () => localStorage.getItem('fb_session')
+
+// Helper to make authenticated API calls
+const apiCall = async (endpoint, options = {}) => {
+  const token = getSessionToken()
+  const headers = {
+    ...options.headers,
+  }
+  if (token) {
+    headers['X-FB-Session'] = token
+  }
+  return fetch(`${API_URL}${endpoint}`, {
+    ...options,
+    headers,
+    credentials: 'include'  // Also try cookies as fallback
+  })
+}
+
 function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess }) {
   const [fbConnected, setFbConnected] = useState(false)
   const [fbUser, setFbUser] = useState(null)
@@ -28,7 +47,23 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const [searchingLocations, setSearchingLocations] = useState(false)
   const locationDropdownRef = useRef(null)
 
-  // Check if Facebook SDK is loaded
+  // Check for session token in URL (from OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const sessionToken = params.get('fb_session')
+    if (sessionToken) {
+      console.log('[OAuth] Found session token in URL, storing...')
+      localStorage.setItem('fb_session', sessionToken)
+      // Clean up URL
+      params.delete('fb_session')
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '')
+      window.history.replaceState({}, '', newUrl)
+      // Now check status
+      checkFacebookStatus()
+    }
+  }, [])
+
+  // Check Facebook status on mount
   useEffect(() => {
     checkFacebookStatus()
   }, [])
@@ -87,11 +122,12 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const checkFacebookStatus = async () => {
     // Check if user already connected via backend session
     try {
-      const response = await fetch(`${API_URL}/meta/fb-status`, {
-        credentials: 'include'
-      })
+      console.log('[OAuth] Checking fb-status with token:', getSessionToken()?.slice(0, 8) + '...')
+      const response = await apiCall('/meta/fb-status')
+
       if (response.ok) {
         const data = await response.json()
+        console.log('[OAuth] fb-status response:', data)
         if (data.connected) {
           setFbConnected(true)
           setFbUser(data.user)
@@ -105,6 +141,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
         }
       }
     } catch (err) {
+      console.log('[OAuth] fb-status check failed:', err)
       // User not connected to FB - expected state
     }
   }

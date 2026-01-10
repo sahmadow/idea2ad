@@ -27,18 +27,28 @@ class PublishCampaignRequest(BaseModel):
 
 
 async def get_fb_session(request: Request) -> Optional[dict]:
-    """Get Facebook session from database"""
-    session_id = request.cookies.get("fb_session")
+    """Get Facebook session from database (via header or cookie)"""
+    # Try header first (for cross-origin requests where cookies don't work)
+    session_id = request.headers.get("X-FB-Session")
+    # Fall back to cookie
     if not session_id:
+        session_id = request.cookies.get("fb_session")
+
+    if not session_id:
+        logger.debug("No session ID found in header or cookie")
         return None
+
+    logger.debug(f"Looking up session: {session_id[:8]}...")
 
     try:
         session = await db.facebooksession.find_first(
             where={"id": session_id, "expires_at": {"gt": datetime.utcnow()}}
         )
         if not session:
+            logger.debug(f"Session not found or expired: {session_id[:8]}...")
             return None
 
+        logger.debug(f"Session found for user: {session.fb_user_name}")
         return {
             "access_token": session.access_token,
             "user_id": session.fb_user_id,
@@ -530,45 +540,38 @@ async def facebook_callback(
 
         logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages, {len(active_adaccounts)} ad accounts, session {session_id}")
 
-        # Return success to frontend popup with cookie
+        # Return success - redirect to frontend with session token
+        # (Cross-site cookies don't work reliably, so pass token via URL)
         frontend_url = settings.frontend_url
-        logger.info(f"OAuth callback sending postMessage to frontend_url: {frontend_url}")
+        logger.info(f"OAuth callback redirecting to frontend with session token")
+
+        # Redirect popup to frontend with token - frontend will store in localStorage
+        redirect_url = f"{frontend_url}/launch?fb_session={session_id}"
         response = HTMLResponse(f"""
             <html>
             <body>
-                <p>Completing sign in...</p>
+                <p>Sign in complete! Redirecting...</p>
                 <script>
-                    console.log('[OAuth Callback] Starting postMessage');
-                    console.log('[OAuth Callback] Target origin:', '{frontend_url}');
-                    console.log('[OAuth Callback] window.opener:', window.opener);
-                    console.log('[OAuth Callback] window.opener type:', typeof window.opener);
-
-                    if (window.opener) {{
-                        try {{
-                            window.opener.postMessage({{
-                                type: 'FB_AUTH_SUCCESS',
-                                user: {{
-                                    id: '{user_data.get("id")}',
-                                    name: '{user_data.get("name", "").replace("'", "\\'")}'
-                                }}
-                            }}, '{frontend_url}');
-                            console.log('[OAuth Callback] postMessage sent successfully');
-                            document.body.innerHTML = '<p>Sign in complete! Closing...</p>';
-                        }} catch (e) {{
-                            console.error('[OAuth Callback] postMessage failed:', e);
-                            document.body.innerHTML = '<p>Error: ' + e.message + '</p>';
-                        }}
-                    }} else {{
-                        console.error('[OAuth Callback] window.opener is NULL - popup may have lost parent reference');
-                        document.body.innerHTML = '<p>Error: Lost connection to parent window. Please close this and try again.</p>';
+                    // Store session in localStorage (accessible to frontend)
+                    try {{
+                        localStorage.setItem('fb_session', '{session_id}');
+                        console.log('[OAuth] Session stored in localStorage');
+                    }} catch (e) {{
+                        console.error('[OAuth] Failed to store session:', e);
                     }}
 
-                    // Delay close so user can see result
-                    setTimeout(() => window.close(), 1500);
+                    // Redirect to frontend (or close if opener exists)
+                    if (window.opener) {{
+                        window.opener.location.href = '{redirect_url}';
+                        window.close();
+                    }} else {{
+                        window.location.href = '{redirect_url}';
+                    }}
                 </script>
             </body>
             </html>
         """)
+        # Also set cookie as fallback
         response.set_cookie(
             key="fb_session",
             value=session_id,
