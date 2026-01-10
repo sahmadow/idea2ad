@@ -537,7 +537,8 @@ async def facebook_callback(
             key="fb_session",
             value=session_id,
             httponly=True,
-            samesite="lax",
+            samesite="none",
+            secure=True,
             max_age=3600 * 24  # 24 hours
         )
         return response

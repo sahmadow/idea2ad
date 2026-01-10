@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import MetaAdPreview from './MetaAdPreview'
 
 // API URL from environment
-const API_URL = import.meta.env.VITE_API_URL || "${API_URL}"
+const API_URL = import.meta.env.VITE_API_URL || "https://idea2ad-production.up.railway.app"
 
 // Fixed campaign settings
 const DURATION_DAYS = 3
