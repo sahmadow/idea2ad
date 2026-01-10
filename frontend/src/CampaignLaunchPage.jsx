@@ -14,6 +14,8 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const [fbUser, setFbUser] = useState(null)
   const [pages, setPages] = useState([])
   const [selectedPage, setSelectedPage] = useState(null)
+  const [adAccounts, setAdAccounts] = useState([])
+  const [selectedAdAccount, setSelectedAdAccount] = useState(null)
   const [loading, setLoading] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState(null)
@@ -94,6 +96,12 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           setFbConnected(true)
           setFbUser(data.user)
           setPages(data.pages || [])
+          setAdAccounts(data.adAccounts || [])
+          // Auto-select first ad account if available
+          if (data.adAccounts?.length > 0) {
+            const selected = data.adAccounts.find(a => a.id === data.selectedAdAccountId) || data.adAccounts[0]
+            setSelectedAdAccount(selected)
+          }
         }
       }
     } catch (err) {
@@ -126,13 +134,19 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           setFbConnected(true)
           setFbUser(event.data.user)
 
-          // Fetch user's pages
-          const pagesResponse = await fetch(`${API_URL}/meta/pages`, {
+          // Fetch user's pages and ad accounts
+          const statusResponse = await fetch(`${API_URL}/meta/fb-status`, {
             credentials: 'include'
           })
-          if (pagesResponse.ok) {
-            const pagesData = await pagesResponse.json()
-            setPages(pagesData.pages || [])
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            setPages(statusData.pages || [])
+            setAdAccounts(statusData.adAccounts || [])
+            // Auto-select first ad account if available
+            if (statusData.adAccounts?.length > 0) {
+              const selected = statusData.adAccounts.find(a => a.id === statusData.selectedAdAccountId) || statusData.adAccounts[0]
+              setSelectedAdAccount(selected)
+            }
           }
 
           popup?.close()
@@ -166,6 +180,11 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
       return
     }
 
+    if (!selectedAdAccount) {
+      setError('Please select an Ad Account')
+      return
+    }
+
     setPublishing(true)
     setError(null)
 
@@ -176,6 +195,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
         credentials: 'include',
         body: JSON.stringify({
           page_id: selectedPage.id,
+          ad_account_id: selectedAdAccount.id,
           ad: selectedAd,
           campaign_data: campaignData,
           settings: {
@@ -394,8 +414,73 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
             )}
           </div>
 
-          {/* Step 3: Campaign Settings */}
+          {/* Step 3: Ad Account Selection */}
           <div style={{ marginBottom: '2rem', opacity: selectedPage ? 1 : 0.5, pointerEvents: selectedPage ? 'auto' : 'none' }}>
+            <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                background: selectedAdAccount ? '#22c55e' : '#3b82f6',
+                color: '#fff',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px'
+              }}>
+                {selectedAdAccount ? '✓' : '3'}
+              </span>
+              Select Ad Account
+            </h3>
+
+            {adAccounts.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {adAccounts.map(account => (
+                  <label
+                    key={account.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 16px',
+                      background: selectedAdAccount?.id === account.id ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                      border: selectedAdAccount?.id === account.id ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: '8px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="adAccount"
+                      checked={selectedAdAccount?.id === account.id}
+                      onChange={() => setSelectedAdAccount(account)}
+                      style={{ width: '18px', height: '18px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 500 }}>{account.name || account.id}</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                        {account.currency} • {account.id}
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div style={{
+                padding: '1rem',
+                background: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                color: '#ef4444',
+                textAlign: 'center'
+              }}>
+                {fbConnected ? 'No ad accounts found. Please reconnect to Facebook and create an ad account during the setup.' : 'Connect Facebook to see your ad accounts'}
+              </div>
+            )}
+          </div>
+
+          {/* Step 4: Campaign Settings */}
+          <div style={{ marginBottom: '2rem', opacity: selectedAdAccount ? 1 : 0.5, pointerEvents: selectedAdAccount ? 'auto' : 'none' }}>
             <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{
                 background: '#3b82f6',
@@ -408,7 +493,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
                 justifyContent: 'center',
                 fontSize: '14px'
               }}>
-                3
+                4
               </span>
               Campaign Settings
             </h3>
@@ -653,18 +738,18 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           {/* Publish Button */}
           <button
             onClick={handlePublish}
-            disabled={!fbConnected || !selectedPage || publishing || locations.length === 0}
+            disabled={!fbConnected || !selectedPage || !selectedAdAccount || publishing || locations.length === 0}
             className="btn-primary"
             style={{
               width: '100%',
               padding: '16px',
               fontSize: '1.1rem',
               fontWeight: 600,
-              background: (fbConnected && selectedPage && !publishing && locations.length > 0)
+              background: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0)
                 ? 'linear-gradient(135deg, #22c55e, #16a34a)'
                 : 'rgba(255,255,255,0.1)',
-              opacity: (fbConnected && selectedPage && !publishing && locations.length > 0) ? 1 : 0.5,
-              cursor: (fbConnected && selectedPage && !publishing && locations.length > 0) ? 'pointer' : 'not-allowed'
+              opacity: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0) ? 1 : 0.5,
+              cursor: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0) ? 'pointer' : 'not-allowed'
             }}
           >
             {publishing

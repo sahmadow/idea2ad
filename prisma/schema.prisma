@@ -111,14 +111,16 @@ model ImageBrief {
 }
 
 model FacebookSession {
-  id           String   @id @default(uuid())
-  user_id      String?  // Optional - can link to User later
-  fb_user_id   String
-  fb_user_name String
-  access_token String
-  pages        Json     // Store pages array as JSON
-  expires_at   DateTime
-  created_at   DateTime @default(now())
+  id                  String   @id @default(uuid())
+  user_id             String?  // Optional - can link to User later
+  fb_user_id          String
+  fb_user_name        String
+  access_token        String
+  pages               Json     // Store pages array as JSON
+  adAccounts          Json?    // [{id, name, account_status, currency}]
+  selectedAdAccountId String?  // User's selected ad account
+  expires_at          DateTime
+  created_at          DateTime @default(now())
 
   @@index([id])
 }

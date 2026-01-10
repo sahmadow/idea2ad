@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 import httpx
 
+from prisma import Json
 from app.config import get_settings
 from app.db import db
 
@@ -19,6 +20,7 @@ router = APIRouter(prefix="/meta", tags=["facebook"])
 
 class PublishCampaignRequest(BaseModel):
     page_id: str
+    ad_account_id: Optional[str] = None  # User's ad account ID
     ad: dict
     campaign_data: dict
     settings: dict
@@ -61,7 +63,9 @@ async def get_fb_status(request: Request):
             "id": session.get("user_id"),
             "name": session.get("user_name"),
         },
-        "pages": session.get("pages", [])
+        "pages": session.get("pages", []),
+        "adAccounts": session.get("adAccounts", []),
+        "selectedAdAccountId": session.get("selectedAdAccountId")
     }
 
 
@@ -155,6 +159,14 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
     if not page_access_token:
         raise HTTPException(status_code=400, detail="Page not found or no access token")
 
+    # Get user's ad account ID (from request or session)
+    ad_account_id = data.ad_account_id or session.get("selectedAdAccountId")
+    if not ad_account_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No ad account selected. Please reconnect to Facebook and select an ad account."
+        )
+
     try:
         # Create campaign using Meta Marketing API
         from facebook_business.api import FacebookAdsApi
@@ -171,8 +183,6 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
             app_secret=settings.meta_app_secret,
             access_token=user_access_token,
         )
-
-        ad_account_id = settings.meta_ad_account_id
 
         # Create campaign
         campaign = AdAccount(ad_account_id).create_campaign(params={
@@ -372,7 +382,7 @@ async def facebook_login():
         )
     else:
         # Fallback to manual scope for dev/testing
-        scope = "pages_show_list,pages_read_engagement,ads_management,business_management"
+        scope = "pages_show_list,pages_read_engagement,ads_management"
         oauth_url = (
             f"https://www.facebook.com/v18.0/dialog/oauth?"
             f"client_id={settings.meta_app_id}"
@@ -458,6 +468,29 @@ async def facebook_callback(
             pages_data = pages_response.json()
             pages = pages_data.get("data", [])
 
+            # Get user's ad accounts
+            adaccounts_response = await client.get(
+                "https://graph.facebook.com/v18.0/me/adaccounts",
+                params={
+                    "access_token": access_token,
+                    "fields": "id,name,account_status,currency"
+                }
+            )
+            adaccounts_data = adaccounts_response.json()
+            adaccounts = adaccounts_data.get("data", [])
+
+        # Filter to active ad accounts only (account_status = 1)
+        active_adaccounts = [
+            {
+                "id": acc["id"],
+                "name": acc.get("name", ""),
+                "account_status": acc.get("account_status", 0),
+                "currency": acc.get("currency", "USD")
+            }
+            for acc in adaccounts
+            if acc.get("account_status") == 1
+        ]
+
         # Create session in database
         pages_json = [
             {
@@ -474,13 +507,15 @@ async def facebook_callback(
                 "fb_user_id": user_data.get("id", ""),
                 "fb_user_name": user_data.get("name", ""),
                 "access_token": access_token,
-                "pages": pages_json,
+                "pages": Json(pages_json),
+                "adAccounts": Json(active_adaccounts) if active_adaccounts else None,
+                "selectedAdAccountId": active_adaccounts[0]["id"] if active_adaccounts else None,
                 "expires_at": datetime.utcnow() + timedelta(hours=24)
             }
         )
         session_id = fb_session.id
 
-        logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages, session {session_id}")
+        logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages, {len(active_adaccounts)} ad accounts, session {session_id}")
 
         # Return success to frontend popup with cookie
         frontend_url = settings.frontend_url
