@@ -113,8 +113,63 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
     setLoading(true)
     setError(null)
 
+    console.log('[OAuth] Starting Facebook login')
+    console.log('[OAuth] API_URL:', API_URL)
+
     try {
-      // Open Facebook OAuth popup
+      // Define message handler FIRST (before opening popup to avoid race condition)
+      const handleMessage = async (event) => {
+        console.log('[OAuth] Message received from:', event.origin)
+        console.log('[OAuth] Message data:', event.data)
+        console.log('[OAuth] Expected origin (API_URL):', API_URL)
+        console.log('[OAuth] Origin match:', event.origin === API_URL)
+
+        if (event.origin !== API_URL) {
+          console.warn('[OAuth] Origin mismatch! Ignoring message.')
+          console.warn('[OAuth] Received:', event.origin)
+          console.warn('[OAuth] Expected:', API_URL)
+          return
+        }
+
+        if (event.data.type === 'FB_AUTH_SUCCESS') {
+          console.log('[OAuth] FB_AUTH_SUCCESS received!')
+          setFbConnected(true)
+          setFbUser(event.data.user)
+
+          // Fetch user's pages and ad accounts
+          console.log('[OAuth] Fetching fb-status...')
+          const statusResponse = await fetch(`${API_URL}/meta/fb-status`, {
+            credentials: 'include'
+          })
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json()
+            console.log('[OAuth] fb-status response:', statusData)
+            setPages(statusData.pages || [])
+            setAdAccounts(statusData.adAccounts || [])
+            // Auto-select first ad account if available
+            if (statusData.adAccounts?.length > 0) {
+              const selected = statusData.adAccounts.find(a => a.id === statusData.selectedAdAccountId) || statusData.adAccounts[0]
+              setSelectedAdAccount(selected)
+            }
+          } else {
+            console.error('[OAuth] fb-status failed:', statusResponse.status)
+          }
+
+          popup?.close()
+        } else if (event.data.type === 'FB_AUTH_ERROR') {
+          console.error('[OAuth] FB_AUTH_ERROR:', event.data.error)
+          setError(event.data.error || 'Facebook login failed')
+          popup?.close()
+        }
+
+        window.removeEventListener('message', handleMessage)
+      }
+
+      // Register listener BEFORE opening popup (critical for race condition)
+      window.addEventListener('message', handleMessage)
+      console.log('[OAuth] Message listener registered')
+
+      // NOW open the popup
       const width = 600
       const height = 700
       const left = window.screenX + (window.outerWidth - width) / 2
@@ -125,50 +180,19 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
         'Facebook Login',
         `width=${width},height=${height},left=${left},top=${top}`
       )
-
-      // Listen for OAuth callback
-      const handleMessage = async (event) => {
-        if (event.origin !== API_URL) return
-
-        if (event.data.type === 'FB_AUTH_SUCCESS') {
-          setFbConnected(true)
-          setFbUser(event.data.user)
-
-          // Fetch user's pages and ad accounts
-          const statusResponse = await fetch(`${API_URL}/meta/fb-status`, {
-            credentials: 'include'
-          })
-          if (statusResponse.ok) {
-            const statusData = await statusResponse.json()
-            setPages(statusData.pages || [])
-            setAdAccounts(statusData.adAccounts || [])
-            // Auto-select first ad account if available
-            if (statusData.adAccounts?.length > 0) {
-              const selected = statusData.adAccounts.find(a => a.id === statusData.selectedAdAccountId) || statusData.adAccounts[0]
-              setSelectedAdAccount(selected)
-            }
-          }
-
-          popup?.close()
-        } else if (event.data.type === 'FB_AUTH_ERROR') {
-          setError(event.data.error || 'Facebook login failed')
-          popup?.close()
-        }
-
-        window.removeEventListener('message', handleMessage)
-      }
-
-      window.addEventListener('message', handleMessage)
+      console.log('[OAuth] Popup opened:', popup ? 'success' : 'BLOCKED')
 
       // Poll for popup close
       const pollTimer = setInterval(() => {
         if (popup?.closed) {
+          console.log('[OAuth] Popup closed')
           clearInterval(pollTimer)
           setLoading(false)
         }
       }, 500)
 
     } catch (err) {
+      console.error('[OAuth] Error:', err)
       setError('Failed to initiate Facebook login: ' + err.message)
       setLoading(false)
     }

@@ -532,18 +532,41 @@ async def facebook_callback(
 
         # Return success to frontend popup with cookie
         frontend_url = settings.frontend_url
+        logger.info(f"OAuth callback sending postMessage to frontend_url: {frontend_url}")
         response = HTMLResponse(f"""
             <html>
-            <script>
-                window.opener.postMessage({{
-                    type: 'FB_AUTH_SUCCESS',
-                    user: {{
-                        id: '{user_data.get("id")}',
-                        name: '{user_data.get("name", "").replace("'", "\\'")}'
+            <body>
+                <p>Completing sign in...</p>
+                <script>
+                    console.log('[OAuth Callback] Starting postMessage');
+                    console.log('[OAuth Callback] Target origin:', '{frontend_url}');
+                    console.log('[OAuth Callback] window.opener:', window.opener);
+                    console.log('[OAuth Callback] window.opener type:', typeof window.opener);
+
+                    if (window.opener) {{
+                        try {{
+                            window.opener.postMessage({{
+                                type: 'FB_AUTH_SUCCESS',
+                                user: {{
+                                    id: '{user_data.get("id")}',
+                                    name: '{user_data.get("name", "").replace("'", "\\'")}'
+                                }}
+                            }}, '{frontend_url}');
+                            console.log('[OAuth Callback] postMessage sent successfully');
+                            document.body.innerHTML = '<p>Sign in complete! Closing...</p>';
+                        }} catch (e) {{
+                            console.error('[OAuth Callback] postMessage failed:', e);
+                            document.body.innerHTML = '<p>Error: ' + e.message + '</p>';
+                        }}
+                    }} else {{
+                        console.error('[OAuth Callback] window.opener is NULL - popup may have lost parent reference');
+                        document.body.innerHTML = '<p>Error: Lost connection to parent window. Please close this and try again.</p>';
                     }}
-                }}, '{frontend_url}');
-                window.close();
-            </script>
+
+                    // Delay close so user can see result
+                    setTimeout(() => window.close(), 1500);
+                </script>
+            </body>
             </html>
         """)
         response.set_cookie(
