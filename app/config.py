@@ -73,6 +73,10 @@ class Settings(BaseSettings):
             if errors:
                 raise ValueError(f"Production config errors: {', '.join(errors)}")
 
+            # Set production URL defaults if not explicitly configured
+            if self.frontend_url == "http://localhost:5173":
+                object.__setattr__(self, 'frontend_url', "https://launchad.io")
+
         elif self.jwt_secret_key == "change-this-in-production":
             warnings.warn("Using default JWT_SECRET_KEY - change for production!")
 
