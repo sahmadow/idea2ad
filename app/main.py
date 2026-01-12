@@ -196,47 +196,76 @@ async def analyze_url(request: Request, project: Project):
     headlines = [c for c in creatives if c.type == "headline"]
     primary_texts = [c for c in creatives if c.type == "copy_primary"]
 
-    try:
-        from app.services.image_gen import get_image_generator
-        from app.services.s3 import get_s3_service
-        import uuid
+    # Skip image generation if disabled (for testing/cost savings)
+    if settings.skip_image_generation:
+        logger.info("Image generation disabled, using placeholder")
+        for i, brief in enumerate(image_briefs[:2]):
+            brief.image_url = settings.placeholder_image_url
+            ad = Ad(
+                id=i + 1,
+                imageUrl=settings.placeholder_image_url,
+                primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                imageBrief=brief
+            )
+            ads.append(ad)
+    else:
+        try:
+            from app.services.image_gen import get_image_generator
+            from app.services.s3 import get_s3_service
+            import uuid
 
-        generator = get_image_generator()
-        s3_service = get_s3_service()
+            generator = get_image_generator()
+            s3_service = get_s3_service()
 
-        for i, brief in enumerate(image_briefs[:2]):  # Generate 2 images
-            try:
-                # Generate image
-                image_bytes = await generator.generate_ad_image(
-                    visual_description=brief.visual_description,
-                    styling_notes=brief.styling_notes,
-                    approach=brief.approach
-                )
+            for i, brief in enumerate(image_briefs[:2]):  # Generate 2 images
+                try:
+                    # Generate image
+                    image_bytes = await generator.generate_ad_image(
+                        visual_description=brief.visual_description,
+                        styling_notes=brief.styling_notes,
+                        approach=brief.approach
+                    )
 
-                # Upload to S3
-                campaign_id = str(uuid.uuid4())[:8]
-                result = s3_service.upload_image(image_bytes, campaign_id)
-                if result.get("success"):
-                    image_url = result["url"]
-                    brief.image_url = image_url
-                else:
-                    raise ValueError(result.get("error", "S3 upload failed"))
+                    # Upload to S3
+                    campaign_id = str(uuid.uuid4())[:8]
+                    result = s3_service.upload_image(image_bytes, campaign_id)
+                    if result.get("success"):
+                        image_url = result["url"]
+                        brief.image_url = image_url
+                    else:
+                        raise ValueError(result.get("error", "S3 upload failed"))
 
-                # Create Ad object
-                ad = Ad(
-                    id=i + 1,
-                    imageUrl=image_url,
-                    primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
-                    headline=headlines[i].content if i < len(headlines) else headlines[0].content,
-                    description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
-                    imageBrief=brief
-                )
-                ads.append(ad)
-                logger.info(f"Generated ad {i + 1} with image: {image_url}")
+                    # Create Ad object
+                    ad = Ad(
+                        id=i + 1,
+                        imageUrl=image_url,
+                        primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                        headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                        description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                        imageBrief=brief
+                    )
+                    ads.append(ad)
+                    logger.info(f"Generated ad {i + 1} with image: {image_url}")
 
-            except Exception as e:
-                logger.warning(f"Image generation failed for brief {i + 1}: {e}")
-                # Create ad without image
+                except Exception as e:
+                    logger.warning(f"Image generation failed for brief {i + 1}: {e}")
+                    # Create ad without image
+                    ad = Ad(
+                        id=i + 1,
+                        imageUrl=None,
+                        primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                        headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                        description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                        imageBrief=brief
+                    )
+                    ads.append(ad)
+
+        except Exception as e:
+            logger.warning(f"Image generation service not available: {e}")
+            # Create ads without images
+            for i, brief in enumerate(image_briefs[:2]):
                 ad = Ad(
                     id=i + 1,
                     imageUrl=None,
@@ -246,20 +275,6 @@ async def analyze_url(request: Request, project: Project):
                     imageBrief=brief
                 )
                 ads.append(ad)
-
-    except Exception as e:
-        logger.warning(f"Image generation service not available: {e}")
-        # Create ads without images
-        for i, brief in enumerate(image_briefs[:2]):
-            ad = Ad(
-                id=i + 1,
-                imageUrl=None,
-                primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
-                headline=headlines[i].content if i < len(headlines) else headlines[0].content,
-                description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
-                imageBrief=brief
-            )
-            ads.append(ad)
 
     # 6. Construct Campaign Draft
     return CampaignDraft(

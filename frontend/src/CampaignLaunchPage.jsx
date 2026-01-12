@@ -28,7 +28,7 @@ const apiCall = async (endpoint, options = {}) => {
   })
 }
 
-function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess }) {
+function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess, onOAuthStart }) {
   const [fbConnected, setFbConnected] = useState(false)
   const [fbUser, setFbUser] = useState(null)
   const [pages, setPages] = useState([])
@@ -47,18 +47,13 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const [searchingLocations, setSearchingLocations] = useState(false)
   const locationDropdownRef = useRef(null)
 
-  // Check for session token in URL (from OAuth redirect)
+  // Check for session token (App.jsx already stored it from URL, just verify and check status)
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const sessionToken = params.get('fb_session')
-    if (sessionToken) {
-      console.log('[OAuth] Found session token in URL, storing...')
-      localStorage.setItem('fb_session', sessionToken)
-      // Clean up URL
-      params.delete('fb_session')
-      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '')
-      window.history.replaceState({}, '', newUrl)
-      // Now check status
+    const token = localStorage.getItem('fb_session')
+    console.log('[Launch OAuth] Mounted, fb_session in localStorage:', token ? 'present' : 'absent')
+
+    if (token) {
+      console.log('[Launch OAuth] Token found, checking FB status')
       checkFacebookStatus()
     }
   }, [])
@@ -147,10 +142,12 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   }
 
   const handleFacebookLogin = async () => {
+    console.log('[Launch OAuth] Starting login, saving campaign state via onOAuthStart')
+    onOAuthStart?.() // Save state before OAuth in case redirect happens
     setLoading(true)
     setError(null)
 
-    console.log('[OAuth] Starting Facebook login')
+    console.log('[Launch OAuth] Opening Facebook login popup')
     console.log('[OAuth] API_URL:', API_URL)
 
     try {

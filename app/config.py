@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = True
 
+    # Image generation (disable for testing to save costs)
+    skip_image_generation: bool = False
+    placeholder_image_url: str = "https://placehold.co/1080x1080/1a1a2e/white?text=Ad+Preview"
+
     # URLs (for OAuth callbacks and CORS)
     frontend_url: str = "http://localhost:5173"
     api_url: str = "http://localhost:8000"

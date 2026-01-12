@@ -35,6 +35,41 @@ function App() {
     checkAuth()
   }, [])
 
+  // Restore state after OAuth redirect (when window.opener was null)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const fbSession = params.get('fb_session')
+
+    console.log('[App OAuth] Checking URL params, fb_session:', fbSession ? 'present' : 'absent')
+
+    if (fbSession) {
+      // Store fb_session FIRST (before CampaignLaunchPage mounts)
+      console.log('[App OAuth] Storing fb_session in localStorage')
+      localStorage.setItem('fb_session', fbSession)
+
+      // Restore campaign state from sessionStorage
+      const savedState = sessionStorage.getItem('oauth_campaign_state')
+      console.log('[App OAuth] Saved campaign state:', savedState ? 'found' : 'NOT FOUND')
+
+      if (savedState) {
+        const { result: savedResult, selectedAd: savedAd } = JSON.parse(savedState)
+        console.log('[App OAuth] Restoring state - result:', !!savedResult, 'selectedAd:', !!savedAd)
+        setResult(savedResult)
+        setSelectedAd(savedAd)
+        setView('launch')
+        sessionStorage.removeItem('oauth_campaign_state')
+      } else {
+        console.log('[App OAuth] No saved state - staying on home view')
+      }
+
+      // Clean URL
+      params.delete('fb_session')
+      const newUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '')
+      window.history.replaceState({}, '', newUrl)
+      console.log('[App OAuth] URL cleaned')
+    }
+  }, [])
+
   const checkAuth = async () => {
     const userData = await getCurrentUser()
     setUser(userData)
@@ -258,6 +293,14 @@ function App() {
             setView('home')
             setResult(null)
             setSelectedAd(null)
+          }}
+          onOAuthStart={() => {
+            console.log('[App OAuth] onOAuthStart called, saving state to sessionStorage')
+            console.log('[App OAuth] result:', !!result, 'selectedAd:', !!selectedAd)
+            sessionStorage.setItem('oauth_campaign_state', JSON.stringify({
+              result,
+              selectedAd
+            }))
           }}
         />
       )}
