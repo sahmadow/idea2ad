@@ -92,6 +92,56 @@ async def get_fb_status(request: Request):
     }
 
 
+@router.get("/payment-status")
+async def check_payment_status(request: Request):
+    """Check if ad account has a valid payment method"""
+    session = await get_fb_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not connected to Facebook")
+
+    ad_account_id = session.get("selectedAdAccountId")
+    if not ad_account_id:
+        return {
+            "has_payment_method": False,
+            "error": "No ad account selected",
+            "add_payment_url": "https://business.facebook.com/settings/billing/payment_methods"
+        }
+
+    try:
+        from facebook_business.api import FacebookAdsApi
+        from facebook_business.adobjects.adaccount import AdAccount
+
+        settings = get_settings()
+        FacebookAdsApi.init(
+            app_id=settings.meta_app_id,
+            app_secret=settings.meta_app_secret,
+            access_token=session["access_token"]
+        )
+
+        ad_account = AdAccount(ad_account_id)
+        account_data = ad_account.api_get(fields=['funding_source_details', 'funding_source'])
+
+        has_payment = bool(
+            account_data.get('funding_source_details') or
+            account_data.get('funding_source')
+        )
+
+        logger.info(f"Payment status check for {ad_account_id}: has_payment={has_payment}")
+
+        return {
+            "has_payment_method": has_payment,
+            "add_payment_url": f"https://business.facebook.com/settings/billing/payment_methods"
+        }
+    except Exception as e:
+        logger.error(f"Error checking payment status: {e}")
+        # If we can't check, assume no payment to be safe
+        return {
+            "has_payment_method": False,
+            "error": str(e),
+            "add_payment_url": "https://business.facebook.com/settings/billing/payment_methods"
+        }
+
+
 @router.get("/pages")
 async def get_user_pages(request: Request):
     """Get user's Facebook pages"""

@@ -47,6 +47,11 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   const [searchingLocations, setSearchingLocations] = useState(false)
   const locationDropdownRef = useRef(null)
 
+  // Payment method status
+  const [hasPaymentMethod, setHasPaymentMethod] = useState(null) // null = not checked, true/false = checked
+  const [paymentCheckLoading, setPaymentCheckLoading] = useState(false)
+  const [addPaymentUrl, setAddPaymentUrl] = useState('https://business.facebook.com/settings/billing/payment_methods')
+
   // Check for session token (App.jsx already stored it from URL, just verify and check status)
   useEffect(() => {
     const token = localStorage.getItem('fb_session')
@@ -140,6 +145,44 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
       // User not connected to FB - expected state
     }
   }
+
+  // Check payment method status for selected ad account
+  const checkPaymentStatus = async () => {
+    if (!selectedAdAccount) {
+      setHasPaymentMethod(null)
+      return
+    }
+
+    setPaymentCheckLoading(true)
+    try {
+      console.log('[Payment] Checking payment status for:', selectedAdAccount.id)
+      const response = await apiCall('/meta/payment-status')
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('[Payment] Status response:', data)
+        setHasPaymentMethod(data.has_payment_method)
+        if (data.add_payment_url) {
+          setAddPaymentUrl(data.add_payment_url)
+        }
+      } else {
+        console.log('[Payment] Check failed, response not ok')
+        setHasPaymentMethod(false)
+      }
+    } catch (err) {
+      console.log('[Payment] Check failed:', err)
+      setHasPaymentMethod(false)
+    } finally {
+      setPaymentCheckLoading(false)
+    }
+  }
+
+  // Check payment status when ad account changes
+  useEffect(() => {
+    if (selectedAdAccount) {
+      checkPaymentStatus()
+    }
+  }, [selectedAdAccount?.id])
 
   const handleFacebookLogin = async () => {
     console.log('[Launch OAuth] Starting login, saving campaign state via onOAuthStart')
@@ -806,26 +849,83 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
             </a>.
           </div>
 
+          {/* Payment Method Warning */}
+          {selectedAdAccount && hasPaymentMethod === false && (
+            <div style={{
+              padding: '16px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              marginBottom: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+                <strong style={{ color: '#ef4444' }}>Payment Method Required</strong>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: '0 0 12px 0' }}>
+                Your Meta ad account needs a payment method before you can create ads.
+              </p>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <a
+                  href={addPaymentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    background: '#3b82f6',
+                    color: 'white',
+                    borderRadius: '6px',
+                    textDecoration: 'none',
+                    fontSize: '0.9rem',
+                    fontWeight: 500
+                  }}
+                >
+                  Add Payment Method ↗
+                </a>
+                <button
+                  onClick={checkPaymentStatus}
+                  disabled={paymentCheckLoading}
+                  style={{
+                    padding: '8px 16px',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '6px',
+                    color: 'var(--text-primary)',
+                    cursor: paymentCheckLoading ? 'wait' : 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  {paymentCheckLoading ? 'Checking...' : 'Refresh'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Publish Button */}
           <button
             onClick={handlePublish}
-            disabled={!fbConnected || !selectedPage || !selectedAdAccount || publishing || locations.length === 0}
+            disabled={!fbConnected || !selectedPage || !selectedAdAccount || publishing || locations.length === 0 || hasPaymentMethod === false}
             className="btn-primary"
             style={{
               width: '100%',
               padding: '16px',
               fontSize: '1.1rem',
               fontWeight: 600,
-              background: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0)
+              background: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0 && hasPaymentMethod !== false)
                 ? 'linear-gradient(135deg, #22c55e, #16a34a)'
                 : 'rgba(255,255,255,0.1)',
-              opacity: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0) ? 1 : 0.5,
-              cursor: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0) ? 'pointer' : 'not-allowed'
+              opacity: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0 && hasPaymentMethod !== false) ? 1 : 0.5,
+              cursor: (fbConnected && selectedPage && selectedAdAccount && !publishing && locations.length > 0 && hasPaymentMethod !== false) ? 'pointer' : 'not-allowed'
             }}
           >
             {publishing
               ? '⏳ Publishing...'
-              : `Launch Campaign - Total: ~$${budget === 50 ? '57-72' : '102-132'}`
+              : hasPaymentMethod === false
+                ? 'Add Payment Method First'
+                : `Launch Campaign - Total: ~$${budget === 50 ? '57-72' : '102-132'}`
             }
           </button>
 
