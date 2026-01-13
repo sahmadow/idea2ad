@@ -57,3 +57,7 @@ prisma/*.db-journal
 *.pem
 *.key
 service-account*.json
+*-credentials.json
+gcp-credentials.json
+.mcp.json
+.vercel
