@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function MetaAdPreview({
   ad,
@@ -7,7 +7,31 @@ function MetaAdPreview({
   pageName = "Your Page",
   websiteUrl = "yourwebsite.com"
 }) {
-  const [imageLoaded, setImageLoaded] = useState(false)
+  // Use imageUrl as key to reset state when URL changes
+  const [imageState, setImageState] = useState({ loaded: false, error: false, url: ad.imageUrl })
+
+  // Derive state - reset when URL changes
+  const imageLoaded = imageState.url === ad.imageUrl ? imageState.loaded : false
+  const imageError = imageState.url === ad.imageUrl ? imageState.error : false
+
+  const setImageLoaded = (loaded) => setImageState({ loaded, error: false, url: ad.imageUrl })
+  const setImageError = (error) => setImageState({ loaded: false, error, url: ad.imageUrl })
+
+  // 30s timeout for image loading
+  useEffect(() => {
+    if (ad.imageUrl && !imageLoaded && !imageError) {
+      const timeout = setTimeout(() => {
+        if (!imageLoaded) setImageError(true)
+      }, 30000)
+      return () => clearTimeout(timeout)
+    }
+  }, [ad.imageUrl, imageLoaded, imageError])
+
+  const handleRetry = (e) => {
+    e.stopPropagation()
+    setImageError(false)
+    setImageLoaded(false)
+  }
 
   // Extract domain from URL for display
   const displayUrl = websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0]
@@ -106,11 +130,12 @@ function MetaAdPreview({
         background: '#f0f2f5',
         overflow: 'hidden'
       }}>
-        {ad.imageUrl ? (
+        {ad.imageUrl && !imageError ? (
           <img
             src={ad.imageUrl}
             alt="Ad creative"
             onLoad={() => setImageLoaded(true)}
+            onError={() => setImageError(true)}
             style={{
               position: 'absolute',
               top: 0,
@@ -122,6 +147,39 @@ function MetaAdPreview({
               transition: 'opacity 0.3s ease'
             }}
           />
+        ) : imageError ? (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#f8d7da',
+            color: '#721c24'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '32px', marginBottom: '8px' }}>⚠️</div>
+              <div style={{ fontSize: '14px', marginBottom: '12px' }}>Image failed to load</div>
+              <button
+                onClick={handleRetry}
+                style={{
+                  background: '#721c24',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  padding: '8px 16px',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         ) : (
           <div style={{
             position: 'absolute',
@@ -143,7 +201,7 @@ function MetaAdPreview({
         )}
 
         {/* Loading overlay */}
-        {ad.imageUrl && !imageLoaded && (
+        {ad.imageUrl && !imageLoaded && !imageError && (
           <div style={{
             position: 'absolute',
             top: 0,
