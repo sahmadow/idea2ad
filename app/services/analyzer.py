@@ -1,8 +1,51 @@
 
 import os
 import json
+import asyncio
+import logging
 from google import genai
 from app.models import AnalysisResult, StylingGuide
+
+logger = logging.getLogger(__name__)
+
+# Maximum retries for LLM calls
+MAX_RETRIES = 3
+RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
+
+
+class AnalysisError(Exception):
+    """Raised when landing page analysis fails after all retries."""
+    pass
+
+
+def validate_analysis_result(data: dict) -> bool:
+    """
+    Validate that analysis result contains meaningful data.
+    Returns True if valid, False if it looks like placeholder/failed data.
+    """
+    # Check required fields exist and have content
+    summary = data.get("summary", "")
+    usp = data.get("unique_selling_proposition", "")
+    keywords = data.get("keywords", [])
+
+    # Detect failure markers
+    failure_markers = ["analysis failed", "n/a", "mock", "unknown", "error", "failed"]
+
+    if not summary or len(summary) < 10:
+        return False
+    if not usp or len(usp) < 5:
+        return False
+    if not keywords or len(keywords) < 2:
+        return False
+
+    # Check for failure markers in content
+    summary_lower = summary.lower()
+    usp_lower = usp.lower()
+    for marker in failure_markers:
+        if marker in summary_lower or marker in usp_lower:
+            return False
+
+    return True
 
 def load_prompt(prompt_name: str) -> str:
     """Load a prompt template from the prompts directory."""
@@ -11,42 +54,27 @@ def load_prompt(prompt_name: str) -> str:
         with open(prompt_path, 'r') as f:
             return f.read()
     except FileNotFoundError:
-        print(f"WARNING: Prompt file {prompt_name} not found. Using fallback.")
+        logger.warning(f"Prompt file {prompt_name} not found. Using fallback.")
         return ""
 
 async def analyze_landing_page_content(scraped_text: str, styling_data: dict) -> AnalysisResult:
     """
     Analyzes the scraped text using Google Gemini to extract marketing insights and styling guide.
     Returns an AnalysisResult object.
+    Raises AnalysisError if analysis fails after all retries.
     """
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
-        print("WARNING: GOOGLE_API_KEY not found. Returning mock analysis.")
-        return AnalysisResult(
-            summary="Mock Analysis (No GOOGLE_API_KEY)",
-            unique_selling_proposition="Mock USP",
-            pain_points=["Mock Pain 1"],
-            call_to_action="Mock CTA",
-            buyer_persona={"note": "Add GOOGLE_API_KEY for real persona"},
-            keywords=["mock", "data"],
-            styling_guide=StylingGuide(
-                primary_colors=["#000000"],
-                secondary_colors=["#FFFFFF"],
-                font_families=["Arial"],
-                design_style="Mock Style",
-                mood="Mock Mood"
-            )
-        )
+        raise AnalysisError("GOOGLE_API_KEY not configured. Cannot perform analysis.")
 
-    try:
-        client = genai.Client(api_key=api_key)
+    client = genai.Client(api_key=api_key)
 
-        # Load prompt template
-        prompt_template = load_prompt("analyzer_prompt.md")
+    # Load prompt template
+    prompt_template = load_prompt("analyzer_prompt.md")
 
-        # If prompt file not found, use inline fallback
-        if not prompt_template:
-            prompt_template = """
+    # If prompt file not found, use inline fallback
+    if not prompt_template:
+        prompt_template = """
 You are a world-class performance marketer. Analyze the following landing page content and extract key insights for a Facebook Ads campaign.
 
 LANDING PAGE CONTENT:
@@ -78,53 +106,60 @@ OUTPUT FORMAT (JSON ONLY):
 }}
 """
 
-        # Format prompt with actual data
-        prompt = prompt_template.format(
-            scraped_text=scraped_text[:8000],
-            colors=styling_data.get("colors", []),
-            fonts=styling_data.get("fonts", [])
-        )
+    # Format prompt with actual data
+    prompt = prompt_template.format(
+        scraped_text=scraped_text[:8000],
+        colors=styling_data.get("colors", []),
+        fonts=styling_data.get("fonts", [])
+    )
 
-        result = await client.aio.models.generate_content(
-            model='gemini-2.0-flash',
-            contents=prompt,
-            config={'response_mime_type': 'application/json'}
-        )
+    # Log content length for debugging
+    logger.info(f"Analyzing content: {len(scraped_text)} chars, colors: {len(styling_data.get('colors', []))}, fonts: {len(styling_data.get('fonts', []))}")
 
-        content = result.text
-        data = json.loads(content)
-        
-        # Parse styling guide
-        styling_guide_data = data.get("styling_guide", {})
-        styling_guide = StylingGuide(**styling_guide_data)
-        
-        # Create AnalysisResult with styling guide
-        return AnalysisResult(
-            summary=data.get("summary", ""),
-            unique_selling_proposition=data.get("unique_selling_proposition", ""),
-            pain_points=data.get("pain_points", []),
-            call_to_action=data.get("call_to_action", ""),
-            buyer_persona=data.get("buyer_persona", {}),
-            keywords=data.get("keywords", []),
-            styling_guide=styling_guide
-        )
-        
-    except Exception as e:
-        print(f"Error in analysis with Gemini: {e}")
-        # Fallback for dev/error cases
-        return AnalysisResult(
-            summary="Analysis failed",
-            unique_selling_proposition="N/A",
-            pain_points=[],
-            call_to_action="N/A",
-            buyer_persona={},
-            keywords=[],
-            styling_guide=StylingGuide(
-                primary_colors=["#000000"],
-                secondary_colors=["#FFFFFF"],
-                font_families=["Arial"],
-                design_style="Unknown",
-                mood="Unknown"
+    last_error = None
+
+    # Retry loop with exponential backoff
+    for attempt in range(MAX_RETRIES):
+        try:
+            result = await client.aio.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config={'response_mime_type': 'application/json'}
             )
-        )
+
+            content = result.text
+            data = json.loads(content)
+
+            # Validate the analysis result
+            if not validate_analysis_result(data):
+                raise ValueError("Analysis returned invalid or incomplete data")
+
+            # Parse styling guide
+            styling_guide_data = data.get("styling_guide", {})
+            styling_guide = StylingGuide(**styling_guide_data)
+
+            # Create AnalysisResult with styling guide
+            return AnalysisResult(
+                summary=data.get("summary", ""),
+                unique_selling_proposition=data.get("unique_selling_proposition", ""),
+                pain_points=data.get("pain_points", []),
+                call_to_action=data.get("call_to_action", ""),
+                buyer_persona=data.get("buyer_persona", {}),
+                keywords=data.get("keywords", []),
+                styling_guide=styling_guide
+            )
+
+        except Exception as e:
+            last_error = e
+            logger.warning(f"Analysis attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+
+            # Don't wait after the last attempt
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.info(f"Retrying analysis in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+    # All retries exhausted
+    logger.error(f"Analysis failed after {MAX_RETRIES} attempts. Last error: {last_error}")
+    raise AnalysisError(f"Analysis failed after {MAX_RETRIES} attempts. Last error: {last_error}")
 

@@ -1,11 +1,9 @@
 import asyncio
 import io
-import json
 import logging
 import os
 import tempfile
 from typing import Optional
-from PIL import Image
 
 from app.config import get_settings
 

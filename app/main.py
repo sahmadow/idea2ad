@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
@@ -11,8 +11,8 @@ import uuid
 
 from app.models import Project, CampaignDraft, AdSetTargeting, Ad
 from app.services.scraper import scrape_landing_page
-from app.services.analyzer import analyze_landing_page_content
-from app.services.creative import generate_creatives, generate_image_briefs
+from app.services.analyzer import analyze_landing_page_content, AnalysisError
+from app.services.creative import generate_creatives, generate_image_briefs, CreativeGenerationError
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
 from app.routers import auth_router, images_router, campaigns_router
@@ -169,6 +169,9 @@ async def analyze_url(request: Request, project: Project):
     """
     Analyze landing page URL and return campaign draft with creatives.
     Rate limited: 10 requests per minute.
+
+    This endpoint will fail gracefully if analysis or creative generation fails,
+    rather than returning ads with invalid/placeholder content.
     """
     # 1. Scrape URL
     try:
@@ -180,21 +183,60 @@ async def analyze_url(request: Request, project: Project):
         raise HTTPException(status_code=400, detail="Failed to scrape URL or empty content")
 
     # 2. Analyze Content (LLM) with styling data
-    analysis_result = await analyze_landing_page_content(
-        scraped_data["full_text"],
-        scraped_data.get("styling", {"colors": [], "fonts": []})
-    )
+    # This will retry up to 3 times with exponential backoff
+    try:
+        analysis_result = await analyze_landing_page_content(
+            scraped_data["full_text"],
+            scraped_data.get("styling", {"colors": [], "fonts": []})
+        )
+    except AnalysisError as e:
+        logger.error(f"Analysis failed for URL {project.url}: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to analyze landing page content. Please try again. Error: {str(e)}"
+        )
 
     # 3. Generate Creatives (headlines, copy)
-    creatives = await generate_creatives(analysis_result)
+    # This will validate the analysis input and retry up to 3 times
+    try:
+        creatives = await generate_creatives(analysis_result)
+    except CreativeGenerationError as e:
+        logger.error(f"Creative generation failed for URL {project.url}: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to generate ad creatives. Please try again. Error: {str(e)}"
+        )
 
     # 4. Generate Image Briefs (3 distinct approaches with text overlays)
-    image_briefs = await generate_image_briefs(analysis_result)
+    # This will validate the analysis input and retry up to 3 times
+    try:
+        image_briefs = await generate_image_briefs(analysis_result)
+    except CreativeGenerationError as e:
+        logger.error(f"Image brief generation failed for URL {project.url}: {e}")
+        raise HTTPException(
+            status_code=422,
+            detail=f"Failed to generate image briefs. Please try again. Error: {str(e)}"
+        )
 
     # 5. Generate 2 images from briefs (if Vertex AI configured)
     ads = []
     headlines = [c for c in creatives if c.type == "headline"]
     primary_texts = [c for c in creatives if c.type == "copy_primary"]
+
+    # Final validation: ensure we have required creatives before proceeding
+    if not headlines or not primary_texts:
+        logger.error(f"Missing required creatives for URL {project.url}: headlines={len(headlines)}, primary_texts={len(primary_texts)}")
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to generate required ad copy (headlines and primary text). Please try again."
+        )
+
+    if len(image_briefs) < 2:
+        logger.error(f"Insufficient image briefs for URL {project.url}: count={len(image_briefs)}")
+        raise HTTPException(
+            status_code=422,
+            detail="Failed to generate sufficient image briefs. Please try again."
+        )
 
     # Skip image generation if disabled (for testing/cost savings)
     if settings.skip_image_generation:
