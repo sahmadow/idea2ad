@@ -2,9 +2,12 @@
 import os
 import json
 import asyncio
+import logging
 from google import genai
 from typing import List
 from app.models import AnalysisResult, CreativeAsset, ImageBrief, TextOverlay
+
+logger = logging.getLogger(__name__)
 
 # Maximum retries for LLM calls
 MAX_RETRIES = 3
@@ -47,7 +50,7 @@ def load_prompt(prompt_name: str) -> str:
         with open(prompt_path, 'r') as f:
             return f.read()
     except FileNotFoundError:
-        print(f"WARNING: Prompt file {prompt_name} not found. Using fallback.")
+        logger.warning(f"Prompt file {prompt_name} not found. Using fallback.")
         return ""
 
 async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
@@ -124,15 +127,16 @@ async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
 
         except Exception as e:
             last_error = e
-            print(f"Creative generation attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+            logger.warning(f"Creative generation attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
 
             # Don't wait after the last attempt
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
-                print(f"Retrying in {delay} seconds...")
+                logger.info(f"Retrying creative generation in {delay} seconds...")
                 await asyncio.sleep(delay)
 
     # All retries exhausted
+    logger.error(f"Creative generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
     raise CreativeGenerationError(f"Creative generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
 
 
@@ -239,13 +243,14 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
 
         except Exception as e:
             last_error = e
-            print(f"Image brief generation attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+            logger.warning(f"Image brief generation attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
 
             # Don't wait after the last attempt
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
-                print(f"Retrying in {delay} seconds...")
+                logger.info(f"Retrying image brief generation in {delay} seconds...")
                 await asyncio.sleep(delay)
 
     # All retries exhausted
+    logger.error(f"Image brief generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
     raise CreativeGenerationError(f"Image brief generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")

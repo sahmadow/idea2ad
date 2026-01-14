@@ -87,7 +87,8 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             })
             
-            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+            # Wait for network to be idle to ensure JavaScript content loads
+            await page.goto(url, timeout=30000, wait_until="networkidle")
             
             # Extract basic metadata
             title = await page.title()
@@ -111,13 +112,30 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
             
             # Body Text (Simplified extraction)
             # We grab all paragraph text, filtering out short/empty ones
+            # Also include divs with text content for SPA sites
             body_text = await page.evaluate('''() => {
-                return Array.from(document.querySelectorAll('p, li, span'))
-                    .map(el => el.innerText)
-                    .filter(text => text.length > 50)
-                    .slice(0, 10) // Limit to first 10 significant chunks to avoid tokens overload
-                    .join('\\n');
+                const texts = [];
+                const seen = new Set();
+
+                // Get text from various elements (SPAs often use divs)
+                const elements = document.querySelectorAll('p, li, span, div, article, section');
+                elements.forEach(el => {
+                    // Skip if element has many children (container divs)
+                    if (el.children.length > 3) return;
+
+                    const text = el.innerText?.trim();
+                    // Lower threshold for more content, deduplicate
+                    if (text && text.length > 20 && !seen.has(text)) {
+                        seen.add(text);
+                        texts.push(text);
+                    }
+                });
+
+                // Take more chunks but limit total characters
+                return texts.slice(0, 30).join('\\n').slice(0, 6000);
             }''')
+
+            logger.debug(f"Scraped body text length: {len(body_text)} chars")
             
             # Extract Styling Information
             styling_data = await page.evaluate('''() => {
@@ -186,14 +204,8 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
             }
             
         except Exception as e:
-            print(f"Error scraping {url}: {e}")
-            return {
-                "title": "Error",
-                "description": "",
-                "og_image": "",
-                "headers": [],
-                "styling": {"colors": [], "fonts": []},
-                "full_text": ""
-            }
+            logger.error(f"Error scraping {url}: {e}", exc_info=True)
+            # Re-raise so the caller knows scraping failed
+            raise ValueError(f"Failed to scrape URL: {str(e)}")
         finally:
             await browser.close()

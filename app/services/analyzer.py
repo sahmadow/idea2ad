@@ -2,8 +2,11 @@
 import os
 import json
 import asyncio
+import logging
 from google import genai
 from app.models import AnalysisResult, StylingGuide
+
+logger = logging.getLogger(__name__)
 
 # Maximum retries for LLM calls
 MAX_RETRIES = 3
@@ -51,7 +54,7 @@ def load_prompt(prompt_name: str) -> str:
         with open(prompt_path, 'r') as f:
             return f.read()
     except FileNotFoundError:
-        print(f"WARNING: Prompt file {prompt_name} not found. Using fallback.")
+        logger.warning(f"Prompt file {prompt_name} not found. Using fallback.")
         return ""
 
 async def analyze_landing_page_content(scraped_text: str, styling_data: dict) -> AnalysisResult:
@@ -110,6 +113,9 @@ OUTPUT FORMAT (JSON ONLY):
         fonts=styling_data.get("fonts", [])
     )
 
+    # Log content length for debugging
+    logger.info(f"Analyzing content: {len(scraped_text)} chars, colors: {len(styling_data.get('colors', []))}, fonts: {len(styling_data.get('fonts', []))}")
+
     last_error = None
 
     # Retry loop with exponential backoff
@@ -145,14 +151,15 @@ OUTPUT FORMAT (JSON ONLY):
 
         except Exception as e:
             last_error = e
-            print(f"Analysis attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+            logger.warning(f"Analysis attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
 
             # Don't wait after the last attempt
             if attempt < MAX_RETRIES - 1:
                 delay = RETRY_DELAYS[attempt]
-                print(f"Retrying in {delay} seconds...")
+                logger.info(f"Retrying analysis in {delay} seconds...")
                 await asyncio.sleep(delay)
 
     # All retries exhausted
+    logger.error(f"Analysis failed after {MAX_RETRIES} attempts. Last error: {last_error}")
     raise AnalysisError(f"Analysis failed after {MAX_RETRIES} attempts. Last error: {last_error}")
 
