@@ -156,7 +156,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
     setPaymentCheckLoading(true)
     try {
       console.log('[Payment] Checking payment status for:', selectedAdAccount.id)
-      const response = await apiCall('/meta/payment-status')
+      const response = await apiCall(`/meta/payment-status?ad_account_id=${selectedAdAccount.id}`)
 
       if (response.ok) {
         const data = await response.json()

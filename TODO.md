@@ -31,21 +31,6 @@ Domain: **launchad.io**
 - [x] Update OAuth callback URLs to use configurable env vars
 - [x] Make postMessage origins configurable
 
-### 6.5 Deployment Steps
-- [ ] Push changes to GitHub
-- [ ] Connect frontend/ folder to Vercel
-- [ ] Set env var: VITE_API_URL=https://api.launchad.io
-- [ ] Add custom domain: launchad.io
-- [ ] Deploy backend to api.launchad.io
-- [ ] Update Meta Developer Console OAuth URLs
-- [ ] Set production env vars: FRONTEND_URL=https://launchad.io, API_URL=https://api.launchad.io
-
-### 6.6 Testing
-- [ ] Test legal pages at /privacy-policy and /terms-of-service
-- [ ] Test SPA routing (refresh on /dashboard)
-- [ ] Test API calls with production backend
-- [ ] Test Facebook OAuth flow end-to-end
-
 ---
 
 ## Previous Phases (Completed)
@@ -61,7 +46,6 @@ Domain: **launchad.io**
 ### Phase 5: Testing
 - [x] Backend tests: 8 passed
 - [x] Frontend tests: 8 passed
-- [ ] E2E browser test (requires production deployment)
 
 ---
 

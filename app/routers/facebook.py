@@ -93,13 +93,16 @@ async def get_fb_status(request: Request):
 
 
 @router.get("/payment-status")
-async def check_payment_status(request: Request):
+async def check_payment_status(request: Request, ad_account_id: str = None):
     """Check if ad account has a valid payment method"""
     session = await get_fb_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Not connected to Facebook")
 
-    ad_account_id = session.get("selectedAdAccountId")
+    # Use provided ad_account_id, fall back to session
+    if not ad_account_id:
+        ad_account_id = session.get("selectedAdAccountId")
+
     if not ad_account_id:
         return {
             "has_payment_method": False,
