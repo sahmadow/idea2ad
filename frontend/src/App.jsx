@@ -5,21 +5,23 @@ import Dashboard from './Dashboard'
 import AuthModal from './AuthModal'
 import MetaAdPreview from './MetaAdPreview'
 import CampaignLaunchPage from './CampaignLaunchPage'
+import { useSessionState, clearAllSessionState } from './hooks/useSessionState'
 import './App.css'
 
 function App() {
-  const [url, setUrl] = useState('')
+  // Persisted state (survives refresh)
+  const [url, setUrl] = useSessionState('url', '')
+  const [result, setResult] = useSessionState('result', null)
+  const [selectedAd, setSelectedAd] = useSessionState('selectedAd', null)
+  const [view, setView] = useSessionState('view', 'home') // 'home' | 'dashboard' | 'launch'
+
+  // Non-persisted state
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
 
   // Auth state
   const [user, setUser] = useState(null)
   const [showAuth, setShowAuth] = useState(false)
-  const [view, setView] = useState('home') // 'home' | 'dashboard' | 'launch'
-
-  // Ad selection state
-  const [selectedAd, setSelectedAd] = useState(null)
 
   // Save campaign state
   const [saving, setSaving] = useState(false)
@@ -72,7 +74,11 @@ function App() {
   const handleLogout = () => {
     logout()
     setUser(null)
+    clearAllSessionState()
     setView('home')
+    setResult(null)
+    setSelectedAd(null)
+    setUrl('')
   }
 
   const handleSaveCampaign = async () => {
@@ -267,9 +273,11 @@ function App() {
           onBack={() => setView('home')}
           onPublishSuccess={() => {
             alert('Campaign published successfully!')
+            clearAllSessionState()
             setView('home')
             setResult(null)
             setSelectedAd(null)
+            setUrl('')
           }}
           onOAuthStart={() => {
             console.log('[App OAuth] onOAuthStart called, saving state to sessionStorage')

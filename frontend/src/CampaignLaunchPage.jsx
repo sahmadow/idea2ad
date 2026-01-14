@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import MetaAdPreview from './MetaAdPreview'
+import { useSessionState } from './hooks/useSessionState'
 
 // API URL from environment
 const API_URL = import.meta.env.VITE_API_URL || "https://idea2ad-production.up.railway.app"
@@ -29,19 +30,20 @@ const apiCall = async (endpoint, options = {}) => {
 }
 
 function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess, onOAuthStart }) {
+  // Non-persisted state
   const [fbConnected, setFbConnected] = useState(false)
   const [fbUser, setFbUser] = useState(null)
   const [pages, setPages] = useState([])
-  const [selectedPage, setSelectedPage] = useState(null)
   const [adAccounts, setAdAccounts] = useState([])
-  const [selectedAdAccount, setSelectedAdAccount] = useState(null)
   const [loading, setLoading] = useState(false)
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState(null)
 
-  // Campaign settings
-  const [budget, setBudget] = useState(50)
-  const [locations, setLocations] = useState([])
+  // Persisted state (survives refresh)
+  const [selectedPage, setSelectedPage] = useSessionState('launch_selectedPage', null)
+  const [selectedAdAccount, setSelectedAdAccount] = useSessionState('launch_selectedAdAccount', null)
+  const [budget, setBudget] = useSessionState('launch_budget', 50)
+  const [locations, setLocations] = useSessionState('launch_locations', [])
   const [locationQuery, setLocationQuery] = useState('')
   const [locationSuggestions, setLocationSuggestions] = useState([])
   const [searchingLocations, setSearchingLocations] = useState(false)
@@ -67,6 +69,25 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
   useEffect(() => {
     checkFacebookStatus()
   }, [])
+
+  // Validate persisted selections against fetched data
+  useEffect(() => {
+    if (pages.length > 0 && selectedPage) {
+      const pageExists = pages.find(p => p.id === selectedPage.id)
+      if (!pageExists) {
+        setSelectedPage(null)
+      }
+    }
+  }, [pages])
+
+  useEffect(() => {
+    if (adAccounts.length > 0 && selectedAdAccount) {
+      const accountExists = adAccounts.find(a => a.id === selectedAdAccount.id)
+      if (!accountExists) {
+        setSelectedAdAccount(null)
+      }
+    }
+  }, [adAccounts])
 
   // Click outside to close location dropdown
   useEffect(() => {
@@ -133,8 +154,8 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           setFbUser(data.user)
           setPages(data.pages || [])
           setAdAccounts(data.adAccounts || [])
-          // Auto-select first ad account if available
-          if (data.adAccounts?.length > 0) {
+          // Auto-select ad account only if no persisted selection
+          if (data.adAccounts?.length > 0 && !selectedAdAccount) {
             const selected = data.adAccounts.find(a => a.id === data.selectedAdAccountId) || data.adAccounts[0]
             setSelectedAdAccount(selected)
           }
@@ -232,7 +253,8 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
               setPages(data.pages || [])
               setAdAccounts(data.adAccounts || [])
 
-              if (data.adAccounts?.length > 0) {
+              // Auto-select ad account only if no persisted selection
+              if (data.adAccounts?.length > 0 && !selectedAdAccount) {
                 const selected = data.adAccounts.find(a => a.id === data.selectedAdAccountId) || data.adAccounts[0]
                 setSelectedAdAccount(selected)
               }
