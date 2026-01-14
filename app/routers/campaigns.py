@@ -5,7 +5,6 @@ from datetime import datetime
 
 from app.db import db
 from app.auth.dependencies import get_current_user
-from app.models import CampaignDraft, AnalysisResult, CreativeAsset, ImageBrief
 from app.logging_config import get_logger
 from prisma.models import User
 

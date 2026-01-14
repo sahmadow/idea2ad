@@ -142,7 +142,6 @@ async def check_payment_status(request: Request):
 
         # Check capabilities - if account can run ads, billing is likely set up
         capabilities = account_data.get('capabilities', [])
-        can_create_ads = 'CREATE_CAMPAIGNS' in capabilities or 'CREATE_ADS' in capabilities
 
         # Consider payment method present if any of these are true
         has_payment = has_funding_source or has_funding_details
@@ -628,7 +627,7 @@ async def facebook_callback(
         # Return success - use postMessage to communicate session to opener
         # Cross-domain localStorage doesn't work, so we need to use postMessage
         frontend_url = settings.frontend_url
-        logger.info(f"OAuth callback complete, sending session via postMessage")
+        logger.info("OAuth callback complete, sending session via postMessage")
 
         # Use postMessage to send session to opener (cross-domain compatible)
         # The opener window listens for 'FB_AUTH_SUCCESS' message
