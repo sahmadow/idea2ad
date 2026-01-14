@@ -97,7 +97,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
           const data = await response.json()
           setLocationSuggestions(data.cities || [])
         }
-      } catch (err) {
+      } catch {
         // Silently fail on location search
       } finally {
         setSearchingLocations(false)
@@ -182,6 +182,7 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
     if (selectedAdAccount) {
       checkPaymentStatus()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAdAccount?.id])
 
   const handleFacebookLogin = async () => {

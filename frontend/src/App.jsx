@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import { analyzeUrl, publishToMeta, getCurrentUser, logout, saveCampaign } from './api'
+import { analyzeUrl, getCurrentUser, logout, saveCampaign } from './api'
 import Dashboard from './Dashboard'
 import AuthModal from './AuthModal'
 import MetaAdPreview from './MetaAdPreview'
@@ -24,12 +24,6 @@ function App() {
   // Save campaign state
   const [saving, setSaving] = useState(false)
   const [campaignName, setCampaignName] = useState('')
-
-  // Meta Publishing state
-  const [pageId, setPageId] = useState('859037077302041')
-  const [publishing, setPublishing] = useState(false)
-  const [publishResult, setPublishResult] = useState(null)
-  const [publishError, setPublishError] = useState(null)
 
   useEffect(() => {
     checkAuth()
@@ -188,23 +182,6 @@ function App() {
     }
   }
 
-  const handlePublish = async () => {
-    if (!result || !pageId) return
-
-    setPublishing(true)
-    setPublishError(null)
-    setPublishResult(null)
-
-    try {
-      const data = await publishToMeta(result, pageId)
-      setPublishResult(data)
-    } catch (err) {
-      setPublishError(err.message)
-    } finally {
-      setPublishing(false)
-    }
-  }
-
   return (
     <div className="container">
       {/* Auth Modal */}
@@ -288,7 +265,7 @@ function App() {
           selectedAd={selectedAd}
           campaignData={result}
           onBack={() => setView('home')}
-          onPublishSuccess={(publishResult) => {
+          onPublishSuccess={() => {
             alert('Campaign published successfully!')
             setView('home')
             setResult(null)
