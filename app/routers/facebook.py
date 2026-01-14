@@ -119,22 +119,57 @@ async def check_payment_status(request: Request):
         )
 
         ad_account = AdAccount(ad_account_id)
-        account_data = ad_account.api_get(fields=['funding_source_details', 'funding_source'])
 
-        has_payment = bool(
-            account_data.get('funding_source_details') or
-            account_data.get('funding_source')
+        # Try multiple fields to detect payment methods
+        # Different account types may have different fields populated
+        account_data = ad_account.api_get(fields=[
+            'funding_source_details',
+            'funding_source',
+            'account_status',
+            'disable_reason',
+            'capabilities'
+        ])
+
+        logger.info(f"Payment check raw response for {ad_account_id}: {dict(account_data)}")
+
+        # Check various indicators of payment method presence
+        has_funding_source = bool(account_data.get('funding_source'))
+        has_funding_details = bool(account_data.get('funding_source_details'))
+
+        # Account status 1 = ACTIVE, which usually means billing is set up
+        account_status = account_data.get('account_status')
+        is_active = account_status == 1
+
+        # Check capabilities - if account can run ads, billing is likely set up
+        capabilities = account_data.get('capabilities', [])
+        can_create_ads = 'CREATE_CAMPAIGNS' in capabilities or 'CREATE_ADS' in capabilities
+
+        # Consider payment method present if any of these are true
+        has_payment = has_funding_source or has_funding_details
+
+        logger.info(
+            f"Payment status for {ad_account_id}: "
+            f"funding_source={has_funding_source}, funding_details={has_funding_details}, "
+            f"account_status={account_status}, is_active={is_active}, capabilities={capabilities}"
         )
 
-        logger.info(f"Payment status check for {ad_account_id}: has_payment={has_payment}")
+        # If we can't determine via funding fields but account is active, try to check if ads can run
+        if not has_payment and is_active:
+            # Active accounts with no disable reason usually have billing set up
+            disable_reason = account_data.get('disable_reason')
+            if disable_reason is None or disable_reason == 0:
+                logger.info(f"Account {ad_account_id} is active with no disable reason, assuming payment OK")
+                has_payment = True
 
         return {
             "has_payment_method": has_payment,
-            "add_payment_url": f"https://business.facebook.com/settings/billing/payment_methods"
+            "account_status": account_status,
+            "is_active": is_active,
+            "add_payment_url": f"https://business.facebook.com/ads/manager/account_settings/account_billing/?act={ad_account_id.replace('act_', '')}"
         }
     except Exception as e:
-        logger.error(f"Error checking payment status: {e}")
-        # If we can't check, assume no payment to be safe
+        logger.error(f"Error checking payment status for {ad_account_id}: {e}", exc_info=True)
+        # If we can't check, return error details for debugging
         return {
             "has_payment_method": False,
             "error": str(e),
