@@ -590,32 +590,40 @@ async def facebook_callback(
 
         logger.info(f"Facebook OAuth successful for user {user_data.get('name')}, found {len(pages)} pages, {len(active_adaccounts)} ad accounts, session {session_id}")
 
-        # Return success - redirect to frontend with session token
-        # (Cross-site cookies don't work reliably, so pass token via URL)
+        # Return success - use postMessage to communicate session to opener
+        # Cross-domain localStorage doesn't work, so we need to use postMessage
         frontend_url = settings.frontend_url
-        logger.info(f"OAuth callback redirecting to frontend with session token")
+        logger.info(f"OAuth callback complete, sending session via postMessage")
 
-        # Redirect popup to frontend with token - frontend will store in localStorage
-        redirect_url = f"{frontend_url}/launch?fb_session={session_id}"
+        # Use postMessage to send session to opener (cross-domain compatible)
+        # The opener window listens for 'FB_AUTH_SUCCESS' message
         response = HTMLResponse(f"""
             <html>
             <body>
-                <p>Sign in complete! Redirecting...</p>
+                <p>Sign in complete! Closing...</p>
                 <script>
-                    // Store session in localStorage (accessible to frontend)
-                    try {{
-                        localStorage.setItem('fb_session', '{session_id}');
-                        console.log('[OAuth] Session stored in localStorage');
-                    }} catch (e) {{
-                        console.error('[OAuth] Failed to store session:', e);
-                    }}
+                    const sessionId = '{session_id}';
+                    const frontendUrl = '{frontend_url}';
 
-                    // Redirect to frontend (or close if opener exists)
+                    console.log('[OAuth Callback] Session ID:', sessionId.slice(0, 8) + '...');
+
                     if (window.opener) {{
-                        window.opener.location.href = '{redirect_url}';
-                        window.close();
+                        // Send session to opener via postMessage (works cross-domain)
+                        console.log('[OAuth Callback] Sending session to opener via postMessage');
+                        window.opener.postMessage({{
+                            type: 'FB_AUTH_SUCCESS',
+                            session_id: sessionId
+                        }}, frontendUrl);
+
+                        // Close popup after a short delay to ensure message is received
+                        setTimeout(() => {{
+                            console.log('[OAuth Callback] Closing popup');
+                            window.close();
+                        }}, 500);
                     }} else {{
-                        window.location.href = '{redirect_url}';
+                        // Fallback: if no opener (e.g., direct navigation), redirect with URL param
+                        console.log('[OAuth Callback] No opener, redirecting to frontend');
+                        window.location.href = frontendUrl + '/launch?fb_session=' + sessionId;
                     }}
                 </script>
             </body>

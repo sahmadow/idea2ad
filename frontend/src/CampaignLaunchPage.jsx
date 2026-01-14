@@ -206,48 +206,93 @@ function CampaignLaunchPage({ selectedAd, campaignData, onBack, onPublishSuccess
       )
       console.log('[OAuth] Popup opened:', popup ? 'success' : 'BLOCKED')
 
-      // Poll for popup close, then check session (no postMessage needed)
+      // Helper function to handle successful session
+      const handleSessionSuccess = async (sessionId) => {
+        console.log('[OAuth] Handling session success:', sessionId?.slice(0, 8) + '...')
+        // Store session in localStorage
+        if (sessionId) {
+          localStorage.setItem('fb_session', sessionId)
+          console.log('[OAuth] Session stored in localStorage')
+        }
+
+        // Check session status via API
+        try {
+          const response = await apiCall('/meta/fb-status')
+          console.log('[OAuth] fb-status response status:', response.status)
+
+          if (response.ok) {
+            const data = await response.json()
+            console.log('[OAuth] fb-status data:', data)
+
+            if (data.connected) {
+              console.log('[OAuth] Connected! Setting state...')
+              setFbConnected(true)
+              setFbUser(data.user)
+              setPages(data.pages || [])
+              setAdAccounts(data.adAccounts || [])
+
+              if (data.adAccounts?.length > 0) {
+                const selected = data.adAccounts.find(a => a.id === data.selectedAdAccountId) || data.adAccounts[0]
+                setSelectedAdAccount(selected)
+              }
+            } else {
+              console.log('[OAuth] Not connected after OAuth flow')
+            }
+          } else {
+            console.error('[OAuth] fb-status failed:', response.status)
+          }
+        } catch (err) {
+          console.error('[OAuth] Session check failed:', err)
+          setError('Failed to verify Facebook connection')
+        }
+
+        setLoading(false)
+      }
+
+      // Listen for postMessage from OAuth callback (cross-domain)
+      const messageHandler = async (event) => {
+        // Verify message is from our API domain
+        if (event.data?.type === 'FB_AUTH_SUCCESS' && event.data?.session_id) {
+          console.log('[OAuth] Received postMessage with session')
+          window.removeEventListener('message', messageHandler)
+          clearInterval(pollTimer)
+          await handleSessionSuccess(event.data.session_id)
+        } else if (event.data?.type === 'FB_AUTH_ERROR') {
+          console.error('[OAuth] Auth error:', event.data.error)
+          window.removeEventListener('message', messageHandler)
+          clearInterval(pollTimer)
+          setError('Facebook login failed: ' + event.data.error)
+          setLoading(false)
+        }
+      }
+      window.addEventListener('message', messageHandler)
+
+      // Also poll for popup close as fallback (in case postMessage fails)
       const pollTimer = setInterval(async () => {
         if (popup?.closed) {
           clearInterval(pollTimer)
-          console.log('[OAuth] Popup closed, checking session...')
+          console.log('[OAuth] Popup closed, checking if session was received...')
 
-          // Check if session was created via cookie
-          try {
-            const response = await fetch(`${API_URL}/meta/fb-status`, {
-              credentials: 'include'
-            })
-            console.log('[OAuth] fb-status response status:', response.status)
-
-            if (response.ok) {
-              const data = await response.json()
-              console.log('[OAuth] fb-status data:', data)
-
-              if (data.connected) {
-                console.log('[OAuth] Connected! Setting state...')
-                setFbConnected(true)
-                setFbUser(data.user)
-                setPages(data.pages || [])
-                setAdAccounts(data.adAccounts || [])
-
-                if (data.adAccounts?.length > 0) {
-                  const selected = data.adAccounts.find(a => a.id === data.selectedAdAccountId) || data.adAccounts[0]
-                  setSelectedAdAccount(selected)
-                }
-              } else {
-                console.log('[OAuth] Not connected after OAuth flow')
-              }
-            } else {
-              console.error('[OAuth] fb-status failed:', response.status)
+          // Give postMessage a moment to be processed
+          setTimeout(async () => {
+            // Only check via API if we haven't already handled via postMessage
+            if (!fbConnected) {
+              window.removeEventListener('message', messageHandler)
+              console.log('[OAuth] Checking session via API fallback...')
+              await handleSessionSuccess(null) // Will use existing localStorage token if any
             }
-          } catch (err) {
-            console.error('[OAuth] Session check failed:', err)
-            setError('Failed to verify Facebook connection')
-          }
-
-          setLoading(false)
+          }, 100)
         }
       }, 500)
+
+      // Cleanup after 5 minutes (timeout)
+      setTimeout(() => {
+        window.removeEventListener('message', messageHandler)
+        clearInterval(pollTimer)
+        if (!fbConnected) {
+          setLoading(false)
+        }
+      }, 5 * 60 * 1000)
 
     } catch (err) {
       console.error('[OAuth] Error:', err)
