@@ -89,7 +89,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS
-cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+cors_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5180", "http://127.0.0.1:5180"]
 if settings.environment == "production":
     cors_origins = [
         "https://launchad.io",

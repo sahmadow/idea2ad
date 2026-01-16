@@ -1,0 +1,188 @@
+import { ArrowRight, Check, Sparkles, Target, Zap, Layout } from 'lucide-react';
+import { Navbar } from './components/layout/Navbar';
+import { Footer } from './components/layout/Footer';
+import { Button } from './components/ui/Button';
+import { Card } from './components/ui/Card';
+import { Terminal } from './components/ui/Terminal';
+
+function App() {
+  return (
+    <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-lime selection:text-brand-dark">
+      <Navbar />
+
+      {/* Hero Section */}
+      <section className="relative pt-32 pb-20 overflow-hidden">
+        {/* Background Grid */}
+        <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] pointer-events-none" />
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-lime/5 blur-[120px] rounded-full pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center relative">
+          <div className="space-y-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gray border border-white/10 text-xs font-mono text-brand-lime uppercase tracking-wider">
+              <span className="w-2 h-2 bg-brand-lime animate-pulse" />
+              AI-Powered Ad Generation
+            </div>
+
+            <h1 className="text-5xl lg:text-7xl font-display font-bold leading-[0.9] text-white">
+              SAY GOODBYE TO <span className="text-brand-lime">MANUAL</span> AD CREATION
+            </h1>
+
+            <p className="text-xl text-gray-400 max-w-lg leading-relaxed">
+              Turn any landing page into a <span className="text-white font-medium">Meta Ads campaign</span> in 60 seconds. AI analyzes your page and generates ready-to-launch creatives.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  placeholder="Paste your landing page URL..."
+                  className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
+                />
+              </div>
+              <Button size="lg" className="shrink-0 group">
+                Generate Ad
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-4 text-sm text-gray-500 font-mono">
+              <div className="flex -space-x-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="w-8 h-8 rounded-full bg-brand-gray border border-brand-dark flex items-center justify-center text-xs text-white">
+                    {i}
+                  </div>
+                ))}
+              </div>
+              <span>Join 500+ marketers shipping ads faster</span>
+            </div>
+          </div>
+
+          <div className="relative lg:pl-10">
+            <Terminal />
+            {/* Decorative elements */}
+            <div className="absolute -top-10 -right-10 w-24 h-24 border-t border-r border-brand-lime/20" />
+            <div className="absolute -bottom-10 -left-10 w-24 h-24 border-b border-l border-brand-lime/20" />
+          </div>
+        </div>
+      </section>
+
+
+      {/* Features Section */}
+      <section className="py-24 border-y border-white/5 bg-[#111]">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
+            <div className="max-w-2xl">
+              <h2 className="text-4xl font-display font-bold mb-4">ENGINEERED FOR <span className="text-brand-lime">GROWTH</span></h2>
+              <p className="text-gray-400 text-lg">Everything you need to scale your campaigns without the manual grunt work.</p>
+            </div>
+            <Button variant="outline">View All Features</Button>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              {
+                icon: Target,
+                title: "Smart Analysis",
+                desc: "Automatically extracts specific brand colors, fonts, unique selling points, and customer pain points."
+              },
+              {
+                icon: Layout,
+                title: "Brand-Matched Creatives",
+                desc: "Generates high-fidelity image and video assets that perfectly match your brand's aesthetic."
+              },
+              {
+                icon: Zap,
+                title: "One-Click Launch",
+                desc: "Direct integration with Meta Ads Manager allows you to publish campaigns instantly."
+              }
+            ].map((feature, i) => (
+              <Card key={i} className="group hover:border-brand-lime/50 transition-colors">
+                <div className="p-8 h-full flex flex-col">
+                  <div className="w-12 h-12 bg-brand-gray border border-white/10 flex items-center justify-center mb-6 text-brand-lime group-hover:bg-brand-lime group-hover:text-brand-dark transition-colors">
+                    <feature.icon className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-xl font-bold mb-3 font-display tracking-wide">{feature.title}</h3>
+                  <p className="text-gray-400 leading-relaxed">{feature.desc}</p>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Pricing Section */}
+      <section className="py-24 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-display font-bold mb-4">SIMPLE, TRANSPARENT PRICING</h2>
+            <p className="text-gray-400 text-lg">No hidden fees. Cancel anytime.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+            {/* Free/Single Tier */}
+            <Card className="hover:border-white/20 transition-colors">
+              <div className="p-8">
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold mb-2">Single Campaign</h3>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-display font-bold text-brand-lime">$29</span>
+                    <span className="text-gray-500">/one-time</span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-2">Perfect for validting a new idea.</p>
+                </div>
+
+                <ul className="space-y-4 mb-8">
+                  {['Full Landing Page Analysis', '3 Ad Creative Variations', 'Ad Copy Generation', 'Export to JSON/TXT'].map((item) => (
+                    <li key={item} className="flex items-center gap-3 text-sm text-gray-300">
+                      <Check className="w-4 h-4 text-brand-lime" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button variant="secondary" className="w-full">Get Started</Button>
+              </div>
+            </Card>
+
+            {/* Pro Tier */}
+            <Card className="border-brand-lime bg-brand-gray/30 relative">
+              <div className="absolute top-0 right-0 bg-brand-lime text-brand-dark text-xs font-bold px-3 py-1 font-mono uppercase">
+                Best Value
+              </div>
+              <div className="p-8">
+                <div className="mb-8">
+                  <h3 className="text-xl font-bold mb-2">Pro Monthly</h3>
+                  <div className="flex items-baseline gap-1">
+                    <span className="text-4xl font-display font-bold text-white">$129</span>
+                    <span className="text-gray-500">/month</span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-2">For agencies and power users.</p>
+                </div>
+
+                <ul className="space-y-4 mb-8">
+                  {['Unlimited Campaigns', 'Direct Meta Integration', 'Priority Support', 'Advanced Analytics'].map((item) => (
+                    <li key={item} className="flex items-center gap-3 text-sm text-white">
+                      <div className="w-4 h-4 rounded-full bg-brand-lime flex items-center justify-center">
+                        <Check className="w-3 h-3 text-brand-dark" />
+                      </div>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+
+                <Button variant="primary" className="w-full">
+                  Go Pro
+                  <Sparkles className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </Card>
+          </div>
+        </div>
+      </section>
+
+      <Footer />
+    </div>
+  );
+}
+
+export default App;
