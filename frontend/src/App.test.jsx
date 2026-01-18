@@ -21,13 +21,13 @@ describe('App', () => {
     expect(screen.getAllByText(/launchad/i).length).toBeGreaterThan(0)
   })
 
-  it('renders hero section', () => {
+  it('renders hero headline', () => {
     render(<App />)
-    expect(screen.getByText(/launch your first ad/i)).toBeInTheDocument()
+    expect(screen.getByText(/say goodbye to manual ad creation/i)).toBeInTheDocument()
   })
 
   it('renders CTA button', () => {
     render(<App />)
-    expect(screen.getByText(/get started free/i)).toBeInTheDocument()
+    expect(screen.getByText(/generate my first ad/i)).toBeInTheDocument()
   })
 })
