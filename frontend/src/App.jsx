@@ -5,6 +5,7 @@ import Dashboard from './Dashboard'
 import AuthModal from './AuthModal'
 import MetaAdPreview from './MetaAdPreview'
 import CampaignLaunchPage from './CampaignLaunchPage'
+import LandingPage from './LandingPage'
 import { useSessionState, clearAllSessionState } from './hooks/useSessionState'
 import './App.css'
 
@@ -13,7 +14,7 @@ function App() {
   const [url, setUrl] = useSessionState('url', '')
   const [result, setResult] = useSessionState('result', null)
   const [selectedAd, setSelectedAd] = useSessionState('selectedAd', null)
-  const [view, setView] = useSessionState('view', 'home') // 'home' | 'dashboard' | 'launch'
+  const [view, setView] = useSessionState('view', 'landing') // 'landing' | 'home' | 'dashboard' | 'launch'
 
   // Non-persisted state
   const [loading, setLoading] = useState(false)
@@ -95,16 +96,25 @@ function App() {
     }
   }
 
+  const normalizeUrl = (input) => {
+    let normalized = input.trim()
+    if (!normalized.match(/^https?:\/\//i)) {
+      normalized = 'https://' + normalized
+    }
+    return normalized
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!url) return
 
+    const normalizedUrl = normalizeUrl(url)
     setLoading(true)
     setError(null)
     setResult(null)
 
     try {
-      const data = await analyzeUrl(url)
+      const data = await analyzeUrl(normalizedUrl)
       setResult(data)
     } catch (err) {
       setError(err.message)
@@ -186,6 +196,43 @@ function App() {
       link.click()
       URL.revokeObjectURL(url)
     }
+  }
+
+  // Handler for landing page "Try Now" action
+  const handleTryNow = async (landingUrl) => {
+    setUrl(landingUrl)
+    setView('home')
+    setLoading(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const data = await analyzeUrl(landingUrl)
+      setResult(data)
+    } catch (err) {
+      setError(err.message)
+      throw err // Re-throw so HeroSection can show error
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Show landing page for non-authenticated users on landing view
+  if (!user && view === 'landing') {
+    return (
+      <>
+        {showAuth && (
+          <AuthModal
+            onClose={() => setShowAuth(false)}
+            onSuccess={() => { setShowAuth(false); checkAuth() }}
+          />
+        )}
+        <LandingPage
+          onTryNow={handleTryNow}
+          onLogin={() => setShowAuth(true)}
+        />
+      </>
+    )
   }
 
   return (
@@ -297,9 +344,9 @@ function App() {
             <form onSubmit={handleSubmit} style={{ display: 'flex', gap: '1rem', flexDirection: 'column' }}>
               <div style={{ display: 'flex', gap: '1rem' }}>
                 <input
-                  type="url"
+                  type="text"
                   className="input-field"
-                  placeholder="https://your-product.com"
+                  placeholder="your-product.com"
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   required
