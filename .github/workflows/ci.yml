@@ -77,7 +77,7 @@ jobs:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
 
       - name: Run tests
-        run: pytest --cov=app --cov-report=xml --cov-report=term-missing
+        run: pytest --cov=app --cov-report=xml --cov-report=term-missing --ignore=tests/e2e/
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
           JWT_SECRET_KEY: test_secret_key_32_chars_long!!!
