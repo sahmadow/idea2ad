@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width={{ width }}, height={{ height }}">
+
+    {# Injected @font-face rules from landing page #}
+    <style>
+    {% for rule in font_faces %}
+    {{ rule }}
+    {% endfor %}
+    </style>
+
+    {# CSS variables from landing page #}
+    <style>
+    :root {
+        {% for name, value in css_variables.items() %}
+        {{ name }}: {{ value }};
+        {% endfor %}
+        --brand-primary: {{ primary_color }};
+        --brand-accent: {{ accent_color }};
+        --brand-text: {{ text_color }};
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        width: {{ width }}px;
+        height: {{ height }}px;
+        font-family: '{{ font_family }}', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        overflow: hidden;
+    }
+    </style>
+
+    {# Load Google Font if not in font_faces #}
+    {% if font_family and font_family not in ['Arial', 'Helvetica', 'Times New Roman', 'Georgia'] %}
+    <link href="https://fonts.googleapis.com/css2?family={{ font_family | replace(' ', '+') }}:wght@400;500;600;700&display=swap" rel="stylesheet">
+    {% endif %}
+
+    {% block styles %}{% endblock %}
+</head>
+<body>
+    {% block content %}{% endblock %}
+</body>
+</html>

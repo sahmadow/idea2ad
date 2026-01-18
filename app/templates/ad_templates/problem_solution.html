@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.ad-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+.logo {
+    position: absolute;
+    top: 24px;
+    left: 24px;
+    max-width: 100px;
+    max-height: 50px;
+    object-fit: contain;
+    z-index: 10;
+}
+
+/* Top section - PROBLEM / Pain Point */
+.problem-section {
+    flex: 0.4;
+    background: {{ primary_color }};
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 40px 30px;
+    text-align: center;
+    position: relative;
+}
+
+.problem-section::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(to bottom, transparent, {{ accent_color }}30);
+}
+
+/* Problem styling */
+.problem-label {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: {{ text_color }};
+    opacity: 0.5;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+}
+
+.problem-text {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 36px;
+    font-weight: 600;
+    font-style: italic;
+    color: {{ text_color }};
+    line-height: 1.25;
+    max-width: 90%;
+    opacity: 0.85;
+}
+
+/* Divider arrow */
+.divider {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    width: 70px;
+    height: 70px;
+    background: {{ accent_color }};
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.divider-arrow {
+    width: 0;
+    height: 0;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-top: 18px solid {{ primary_color }};
+    margin-top: 4px;
+}
+
+/* Bottom section - SOLUTION */
+.solution-section {
+    flex: 0.6;
+    background: {{ gradient or accent_color }};
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 40px;
+    text-align: center;
+}
+
+/* Solution text color - ensure contrast */
+{% set solution_text = text_color if gradient else primary_color %}
+
+.solution-label {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: {{ solution_text }};
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 16px;
+}
+
+/* BIG headline */
+.headline {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 58px;
+    font-weight: 800;
+    color: {{ solution_text }};
+    line-height: 1.1;
+    margin-bottom: 32px;
+    max-width: 95%;
+    letter-spacing: -1px;
+}
+
+/* CTA - FOCAL POINT */
+.cta-button {
+    {% if button_styles.backgroundColor %}
+    background: {{ button_styles.backgroundColor }};
+    {% else %}
+    background: {{ primary_color }};
+    {% endif %}
+
+    {% if button_styles.color %}
+    color: {{ button_styles.color }};
+    {% else %}
+    color: {{ accent_color }};
+    {% endif %}
+
+    /* LARGE CTA */
+    padding: 26px 64px;
+
+    {% if button_styles.borderRadius %}
+    border-radius: {{ button_styles.borderRadius }};
+    {% else %}
+    border-radius: {{ border_radius or '12px' }};
+    {% endif %}
+
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 30px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+
+    /* Strong shadow */
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+
+    border: none;
+    cursor: pointer;
+    display: inline-block;
+    text-decoration: none;
+}
+
+/* Product image in solution section */
+.product-image-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.product-image {
+    max-width: 75%;
+    max-height: 220px;
+    object-fit: contain;
+    filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.2));
+    transform: scale(3);  /* 3x visual enlargement */
+    transform-origin: center center;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ad-container">
+    {% if logo_url %}
+    <img class="logo" src="{{ logo_url }}" alt="Logo">
+    {% endif %}
+
+    <div class="problem-section">
+        <span class="problem-label">The Problem</span>
+        <p class="problem-text">"{{ pain_point or subheadline or 'Struggling with slow, manual processes?' }}"</p>
+    </div>
+
+    {# Divider with arrow #}
+    <div class="divider" style="top: calc(40% - 35px);">
+        <div class="divider-arrow"></div>
+    </div>
+
+    <div class="solution-section">
+        <span class="solution-label">The Solution</span>
+        <h1 class="headline">{{ headline }}</h1>
+
+        {# Product Image Section #}
+        {% if product_image_url %}
+        <div class="product-image-wrapper">
+            <img class="product-image" src="{{ product_image_url }}" alt="Product">
+        </div>
+        {% endif %}
+
+        <div class="cta-button">{{ cta_text }}</div>
+    </div>
+</div>
+{% endblock %}
