@@ -94,10 +94,11 @@ if settings.environment == "production":
     cors_origins = [
         "https://launchad.io",
         "https://www.launchad.io",
+        "https://idea2ad.vercel.app",
         # Vercel preview deployments
         "https://frontend-salehs-projects-f9732e89.vercel.app",
     ]
-cors_origin_regex = r"https://frontend-[a-z0-9]+-salehs-projects-f9732e89\.vercel\.app"
+cors_origin_regex = r"https://(frontend-[a-z0-9]+-salehs-projects-f9732e89|idea2ad)\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
