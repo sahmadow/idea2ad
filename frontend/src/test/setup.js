@@ -10,4 +10,4 @@ class MockIntersectionObserver {
   disconnect() {}
 }
 
-global.IntersectionObserver = MockIntersectionObserver
+globalThis.IntersectionObserver = MockIntersectionObserver
