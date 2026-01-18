@@ -7,8 +7,10 @@ You are a world-class performance marketer and brand analyst. Analyze the follow
 **Landing Page Content:**
 {scraped_text}
 
-**Extracted Colors:**
-{colors}
+**Extracted Colors (categorized):**
+- Background colors (from body, sections, hero areas): {background_colors}
+- Text colors (from headings, paragraphs): {text_colors}
+- Accent colors (from buttons, CTAs, links): {accent_colors}
 
 **Extracted Fonts:**
 {fonts}
@@ -29,11 +31,26 @@ Extract the following information and return it in the specified JSON format:
 
 ### 2. Styling Guide
 Analyze the visual design and brand identity:
-- **primary_colors**: 2-3 main brand colors (hex codes) - these should be the most prominent colors
+- **primary_colors**: 2-3 main brand colors (hex codes) - these define the brand's visual identity
 - **secondary_colors**: 2-4 accent/supporting colors (hex codes)
 - **font_families**: Font names used for headings and body text
 - **design_style**: Overall aesthetic (e.g., "modern and minimalist", "bold and vibrant", "elegant and sophisticated")
 - **mood**: Emotional tone (e.g., "professional and trustworthy", "playful and energetic", "luxurious and exclusive")
+
+**COLOR SELECTION RULES:**
+- **Input colors are pre-sorted by visual prominence** - first colors are most dominant
+- **Vibrant/saturated colors are PRIMARY** - yellow, blue, green, etc. define brand identity
+- **Black/dark colors on vibrant backgrounds = TEXT color, not background**
+  - Example: Yellow bg (#f0fb29) + black text = Yellow is PRIMARY, black is for text overlay
+- **Primary colors should include:**
+  - The dominant background color (especially hero/banner sections)
+  - Vibrant accent colors that define the brand
+- **NEVER select as primary_colors:**
+  - Near-blacks (#000-#333) unless the brand is intentionally dark-themed with NO vibrant colors
+  - Near-whites (#eee-#fff)
+  - Neutral grays
+- **Text overlay colors (black/white for contrast) go in secondary_colors**
+- **Tie-breaker:** pick the most saturated color from backgrounds first
 
 ---
 

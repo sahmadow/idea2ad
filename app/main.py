@@ -9,7 +9,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import uuid
 
-from app.models import Project, CampaignDraft, AdSetTargeting, Ad
+from app.models import Project, CampaignDraft, AdSetTargeting, Ad, LogoInfo, DesignTokens
 from app.services.scraper import scrape_landing_page
 from app.services.analyzer import analyze_landing_page_content, AnalysisError
 from app.services.creative import generate_creatives, generate_image_briefs, CreativeGenerationError
@@ -189,6 +189,25 @@ async def analyze_url(request: Request, project: Project):
             scraped_data["full_text"],
             scraped_data.get("styling", {"colors": [], "fonts": []})
         )
+
+        # Add logo info to analysis result if detected
+        logo_data = scraped_data.get("logo")
+        if logo_data:
+            try:
+                analysis_result.logo = LogoInfo(**logo_data)
+                logger.info(f"Logo detected: {logo_data.get('source')} ({logo_data.get('confidence')})")
+            except Exception as e:
+                logger.debug(f"Failed to parse logo data: {e}")
+
+        # Add design tokens to analysis result
+        design_tokens_data = scraped_data.get("design_tokens")
+        if design_tokens_data:
+            try:
+                analysis_result.design_tokens = DesignTokens(**design_tokens_data)
+                logger.debug(f"Design tokens extracted: {len(design_tokens_data.get('gradients', []))} gradients")
+            except Exception as e:
+                logger.debug(f"Failed to parse design tokens: {e}")
+
     except AnalysisError as e:
         logger.error(f"Analysis failed for URL {project.url}: {e}")
         raise HTTPException(
@@ -254,21 +273,101 @@ async def analyze_url(request: Request, project: Project):
             ads.append(ad)
     else:
         try:
-            from app.services.image_gen import get_image_generator
+            from app.services.template_renderer import get_template_renderer
             from app.services.s3 import get_s3_service
             import uuid
 
-            generator = get_image_generator()
+            template_renderer = get_template_renderer()
             s3_service = get_s3_service()
+
+            # Build BrandCSS from scraped data
+            css_assets = scraped_data.get("css_assets", {})
+            styling_data = scraped_data.get("styling", {})
+            brand_css = {
+                "font_faces": css_assets.get("font_faces", []),
+                "css_variables": css_assets.get("css_variables", {}),
+                "button_styles": css_assets.get("button_styles", {}),
+                "primary_colors": styling_data.get("backgrounds", styling_data.get("colors", ["#ffffff"]))[:3],
+                "secondary_colors": styling_data.get("accents", styling_data.get("colors", ["#000000"]))[:3],
+                "font_families": styling_data.get("fonts", ["Inter"]),
+            }
+
+            # Get logo URL if available
+            logo_url = None
+            if analysis_result.logo:
+                logo_url = analysis_result.logo.url
+
+            # Get design tokens
+            design_tokens_dict = None
+            if analysis_result.design_tokens:
+                design_tokens_dict = analysis_result.design_tokens.model_dump()
+
+            # Get styling guide for product image generation
+            styling_guide_dict = analysis_result.styling_guide.model_dump()
 
             for i, brief in enumerate(image_briefs[:2]):  # Generate 2 images
                 try:
-                    # Generate image
-                    image_bytes = await generator.generate_ad_image(
-                        visual_description=brief.visual_description,
-                        styling_notes=brief.styling_notes,
-                        approach=brief.approach
-                    )
+                    product_image_url = None
+
+                    # Generate product image if prompt provided
+                    if brief.product_image_prompt:
+                        try:
+                            from app.services.image_gen import get_image_generator
+                            from app.services.background_remover import get_background_remover
+
+                            generator = get_image_generator()
+                            remover = get_background_remover()
+
+                            # Generate product on white bg
+                            product_bytes = await generator.generate_isolated_product(
+                                product_prompt=brief.product_image_prompt,
+                                styling_guide=styling_guide_dict
+                            )
+
+                            # Remove background
+                            transparent_bytes = await remover.remove_background(product_bytes)
+
+                            # Upload to S3
+                            product_campaign_id = str(uuid.uuid4())[:8]
+                            product_result = s3_service.upload_image(transparent_bytes, product_campaign_id)
+                            if product_result.get("success"):
+                                product_image_url = product_result["url"]
+                                brief.product_image_url = product_image_url
+                                logger.info(f"Product image generated for ad {i + 1}: {product_image_url}")
+
+                        except Exception as e:
+                            logger.warning(f"Product image generation failed for ad {i + 1}: {e}")
+                            # Continue without product image (graceful fallback)
+
+                    # Use HTML template rendering (default mode)
+                    if brief.render_mode == "template":
+                        image_bytes = await template_renderer.render_ad_from_brief(
+                            brief=brief,
+                            brand_css=brand_css,
+                            logo_url=logo_url,
+                            design_tokens=design_tokens_dict,
+                            aspect_ratio="1:1",
+                            pain_points=analysis_result.pain_points,
+                            product_image_url=product_image_url
+                        )
+                        logger.info(f"Rendered ad {i + 1} using HTML template: {brief.approach}")
+                    else:
+                        # Fallback to Imagen for complex visuals
+                        from app.services.image_gen import get_image_generator
+                        generator = get_image_generator()
+                        styling_guide_dict = analysis_result.styling_guide.model_dump()
+                        text_overlays_dicts = [overlay.model_dump() for overlay in brief.text_overlays]
+
+                        image_bytes = await generator.generate_ad_image(
+                            visual_description=brief.visual_description,
+                            styling_notes=brief.styling_notes,
+                            approach=brief.approach,
+                            styling_guide=styling_guide_dict,
+                            design_tokens=design_tokens_dict,
+                            text_overlays=text_overlays_dicts,
+                            apply_text_overlays=True
+                        )
+                        logger.info(f"Generated ad {i + 1} using Imagen: {brief.approach}")
 
                     # Upload to S3
                     campaign_id = str(uuid.uuid4())[:8]
@@ -289,10 +388,10 @@ async def analyze_url(request: Request, project: Project):
                         imageBrief=brief
                     )
                     ads.append(ad)
-                    logger.info(f"Generated ad {i + 1} with image: {image_url}")
+                    logger.info(f"Created ad {i + 1} with image: {image_url}")
 
                 except Exception as e:
-                    logger.warning(f"Image generation failed for brief {i + 1}: {e}")
+                    logger.warning(f"Image generation failed for brief {i + 1}: {e}", exc_info=True)
                     # Create ad without image
                     ad = Ad(
                         id=i + 1,
@@ -305,7 +404,7 @@ async def analyze_url(request: Request, project: Project):
                     ads.append(ad)
 
         except Exception as e:
-            logger.warning(f"Image generation service not available: {e}")
+            logger.warning(f"Image generation service not available: {e}", exc_info=True)
             # Create ads without images
             for i, brief in enumerate(image_briefs[:2]):
                 ad = Ad(

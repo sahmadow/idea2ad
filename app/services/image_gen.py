@@ -6,7 +6,7 @@ import tempfile
 from typing import List, Optional, Dict, Any
 
 from app.config import get_settings
-from app.services.color_utils import hex_to_color_name, get_color_palette_description
+from app.services.color_utils import hex_to_color_name
 
 logger = logging.getLogger(__name__)
 

@@ -45,7 +45,8 @@ def validate_analysis_input(analysis: AnalysisResult) -> None:
 
 def load_prompt(prompt_name: str) -> str:
     """Load a prompt template from the prompts directory."""
-    prompt_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "prompts", prompt_name)
+    # Go up from app/services to project root, then into prompts/
+    prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "prompts", prompt_name)
     try:
         with open(prompt_path, 'r') as f:
             return f.read()
@@ -179,21 +180,19 @@ Mood: {mood}
 Return JSON array with 3 image briefs, each containing: approach, visual_description, styling_notes, text_overlays (array of objects with content, font_size, position, color, background), meta_best_practices (array), and rationale.
 """
 
-    # Format prompt with analysis data
+    # Format prompt with analysis data using replace to avoid conflicts with JSON braces
     sg = analysis.styling_guide
-    prompt = prompt_template.format(
-        summary=analysis.summary,
-        unique_selling_proposition=analysis.unique_selling_proposition,
-        pain_points=", ".join(analysis.pain_points),
-        call_to_action=analysis.call_to_action,
-        keywords=", ".join(analysis.keywords),
-        buyer_persona=str(analysis.buyer_persona),
-        primary_colors=", ".join(sg.primary_colors),
-        secondary_colors=", ".join(sg.secondary_colors),
-        font_families=", ".join(sg.font_families),
-        design_style=sg.design_style,
-        mood=sg.mood
-    )
+    prompt = prompt_template.replace("{summary}", analysis.summary)
+    prompt = prompt.replace("{unique_selling_proposition}", analysis.unique_selling_proposition)
+    prompt = prompt.replace("{pain_points}", ", ".join(analysis.pain_points))
+    prompt = prompt.replace("{call_to_action}", analysis.call_to_action)
+    prompt = prompt.replace("{keywords}", ", ".join(analysis.keywords))
+    prompt = prompt.replace("{buyer_persona}", str(analysis.buyer_persona))
+    prompt = prompt.replace("{primary_colors}", ", ".join(sg.primary_colors))
+    prompt = prompt.replace("{secondary_colors}", ", ".join(sg.secondary_colors))
+    prompt = prompt.replace("{font_families}", ", ".join(sg.font_families))
+    prompt = prompt.replace("{design_style}", sg.design_style)
+    prompt = prompt.replace("{mood}", sg.mood)
 
     last_error = None
 
@@ -208,6 +207,7 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
 
             content = result.text
             data = json.loads(content)
+            logger.info(f"LLM returned briefs with keys: {[list(b.keys()) for b in (data if isinstance(data, list) else data.get('briefs', []))]}")
 
             # Parse image briefs
             if isinstance(data, list):
@@ -232,7 +232,8 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
                     styling_notes=brief_data.get("styling_notes", ""),
                     text_overlays=text_overlays,
                     meta_best_practices=brief_data.get("meta_best_practices", []),
-                    rationale=brief_data.get("rationale", "")
+                    rationale=brief_data.get("rationale", ""),
+                    product_image_prompt=brief_data.get("product_image_prompt")
                 )
                 image_briefs.append(image_brief)
 

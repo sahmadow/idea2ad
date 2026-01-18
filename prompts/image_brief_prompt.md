@@ -81,7 +81,8 @@ Return ONLY valid JSON with this exact structure:
       "Clear focal point on product",
       "Brand colors used for consistency"
     ],
-    "rationale": "Why this approach works for this audience and product"
+    "rationale": "Why this approach works for this audience and product",
+    "product_image_prompt": "A sleek wireless headphone in matte black finish"
   },
   {
     "approach": "lifestyle",
@@ -89,7 +90,8 @@ Return ONLY valid JSON with this exact structure:
     "styling_notes": "...",
     "text_overlays": [...],
     "meta_best_practices": [...],
-    "rationale": "..."
+    "rationale": "...",
+    "product_image_prompt": "A modern laptop displaying analytics dashboard"
   },
   {
     "approach": "problem-solution",
@@ -97,7 +99,8 @@ Return ONLY valid JSON with this exact structure:
     "styling_notes": "...",
     "text_overlays": [...],
     "meta_best_practices": [...],
-    "rationale": "..."
+    "rationale": "...",
+    "product_image_prompt": null
   }
 ]
 ```
@@ -114,6 +117,35 @@ Return ONLY valid JSON with this exact structure:
 6. **Limit text**: Maximum 2-3 text overlays per image to avoid clutter
 7. **Brand consistency**: The images should feel like they belong to the same brand as the landing page
 8. **Different approaches**: Each brief must use a distinctly different creative strategy
+9. **ALWAYS include product_image_prompt**: For each brief, you MUST provide a `product_image_prompt` field describing a single isolated product. Set to null only for abstract services with no tangible product.
+
+---
+
+## COLOR-PRECISE VISUAL DESCRIPTIONS
+
+**CRITICAL: Be explicit about colors in the visual_description field.**
+
+When specifying colors, ALWAYS include:
+- The exact hex code from the styling guide
+- A natural language color description
+
+**BAD Examples:**
+- "Use brand colors"
+- "Professional background"
+- "Matching the website style"
+
+**GOOD Examples:**
+- "The background is bright chartreuse yellow (#f0fb29)"
+- "Accent elements use vibrant turquoise cyan (#5cf0e4)"
+- "Clean white (#ffffff) background with dark navy (#1a1a2e) text"
+
+**Visual Description Format:**
+Include color specifications naturally in the scene description:
+
+"[Scene description]. The dominant background color is {primary_color} ({hex}). Key visual elements use {accent_color} ({hex}). The overall aesthetic is {design_style} with a {mood} feel."
+
+**Example:**
+"A modern workspace with a laptop displaying analytics charts. The scene has a dominant bright yellow (#f0fb29) background with cyan (#5cf0e4) accent highlights on key data points. Clean, minimal composition with the laptop as the hero element in the upper two-thirds, leaving the bottom clear for text overlay."
 
 ---
 
@@ -124,3 +156,27 @@ Return ONLY valid JSON with this exact structure:
 - **CTAs**: 28-48px, bold, high-contrast color, bottom-third or prominent position
 - **Position options**: top-left, top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, bottom-right
 - **Background options**: "semi-transparent black", "gradient from {color1} to {color2}", "solid {color}", or null for no background
+
+---
+
+## PRODUCT IMAGE PROMPT
+
+Include a `product_image_prompt` field describing a SINGLE isolated product/item to display in the ad:
+
+**Guidelines:**
+- Describe a SPECIFIC, concrete product (not abstract concepts)
+- Include material, color, and style details
+- Focus on a SINGLE object (no scenes, no people)
+- Match the brand aesthetic
+- Keep description concise (1-2 sentences)
+
+**Good Examples:**
+- SaaS: "A modern laptop displaying colorful analytics dashboard"
+- E-commerce: "A premium leather crossbody handbag in burgundy with gold hardware"
+- Food: "A glass bottle of cold-pressed green juice with condensation"
+- Fitness: "A pair of sleek running shoes in neon green and black"
+
+**When to set `product_image_prompt` to null:**
+- Abstract services (consulting, coaching, coaching)
+- Problem-solution layouts where the focus is on text/contrast
+- When no tangible product representation makes sense

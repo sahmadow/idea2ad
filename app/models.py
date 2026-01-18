@@ -1,10 +1,12 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 
+
 class Project(BaseModel):
     url: str
     objective: str = "OUTCOME_SALES"  # Default Meta Objective
     budget_daily: float = 20.0
+
 
 class StylingGuide(BaseModel):
     primary_colors: List[str]  # Hex color codes
@@ -12,6 +14,35 @@ class StylingGuide(BaseModel):
     font_families: List[str]  # Font names detected
     design_style: str  # e.g., "modern", "minimalist", "bold"
     mood: str  # e.g., "professional", "playful", "luxurious"
+
+
+class LogoInfo(BaseModel):
+    """Detected logo information from landing page."""
+    url: str  # Direct URL or data URI
+    type: str  # svg, png, jpg, ico
+    source: str  # schema, header, favicon
+    confidence: str  # high, medium, low
+    width: Optional[int] = None
+    height: Optional[int] = None
+    score: Optional[int] = None
+
+
+class DesignTokens(BaseModel):
+    """Design tokens extracted from landing page CSS."""
+    gradients: List[Dict[str, Any]] = []  # [{type, raw, colors}]
+    border_radius: Optional[str] = None  # e.g., "8px"
+    box_shadow: Optional[str] = None  # CSS box-shadow value
+
+
+class BrandCSS(BaseModel):
+    """Extracted CSS assets from landing page for HTML template rendering."""
+    font_faces: List[str] = []  # @font-face CSS rules
+    css_variables: Dict[str, str] = {}  # --var-name: value
+    button_styles: Dict[str, str] = {}  # CTA computed styles
+    primary_colors: List[str] = []  # Hex color codes
+    secondary_colors: List[str] = []  # Hex color codes
+    font_families: List[str] = []  # Font family names
+
 
 class AnalysisResult(BaseModel):
     summary: str
@@ -21,6 +52,8 @@ class AnalysisResult(BaseModel):
     buyer_persona: Dict[str, Any]  # { "age_range": [25, 45], "gender": "All", ... }
     keywords: List[str]
     styling_guide: StylingGuide
+    logo: Optional[LogoInfo] = None  # Detected logo
+    design_tokens: Optional[DesignTokens] = None  # CSS design tokens
 
 class CreativeAsset(BaseModel):
     type: str # "image", "video", "copy_primary", "copy_headline"
@@ -43,6 +76,9 @@ class ImageBrief(BaseModel):
     meta_best_practices: List[str]  # Applied best practices
     rationale: str  # Why this approach works
     image_url: Optional[str] = None  # Generated image URL
+    render_mode: str = "template"  # "template" | "imagen"
+    product_image_prompt: Optional[str] = None  # Prompt for isolated product image
+    product_image_url: Optional[str] = None  # URL after product image generation
 
 class AdSetTargeting(BaseModel):
     age_min: int = 18

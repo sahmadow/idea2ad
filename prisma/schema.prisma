@@ -74,6 +74,12 @@ model Analysis {
   styling_guide              Json
   created_at                 DateTime @default(now())
 
+  // Brand assets extracted from landing page
+  logo_url      String? // Logo URL (direct or S3)
+  logo_type     String? // svg, png, jpg, ico
+  logo_source   String? // schema, header, favicon
+  design_tokens Json?   // Gradients, shadows, border-radius
+
   campaign Campaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
 }
 

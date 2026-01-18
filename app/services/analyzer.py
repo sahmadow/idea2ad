@@ -80,8 +80,13 @@ You are a world-class performance marketer. Analyze the following landing page c
 LANDING PAGE CONTENT:
 {scraped_text}
 
-EXTRACTED COLORS: {colors}
+EXTRACTED COLORS (categorized):
+- Background colors: {background_colors}
+- Text colors: {text_colors}
+- Accent colors (CTAs/buttons): {accent_colors}
 EXTRACTED FONTS: {fonts}
+
+COLOR RULES: Background colors are typically primary brand colors. Text colors (black/white/gray) are usually NOT primary. Accent colors can be primary or secondary.
 
 OUTPUT FORMAT (JSON ONLY):
 {{
@@ -106,15 +111,28 @@ OUTPUT FORMAT (JSON ONLY):
 }}
 """
 
+    # Extract categorized colors (with backward compatibility)
+    background_colors = styling_data.get("backgrounds", [])
+    text_colors = styling_data.get("text", [])
+    accent_colors = styling_data.get("accents", [])
+
+    # Backward compatibility: if new structure not present, use legacy colors
+    if not background_colors and not text_colors and not accent_colors:
+        legacy_colors = styling_data.get("colors", [])
+        # Can't categorize legacy colors, so pass them all as backgrounds
+        background_colors = legacy_colors
+
     # Format prompt with actual data
     prompt = prompt_template.format(
         scraped_text=scraped_text[:8000],
-        colors=styling_data.get("colors", []),
+        background_colors=background_colors,
+        text_colors=text_colors,
+        accent_colors=accent_colors,
         fonts=styling_data.get("fonts", [])
     )
 
     # Log content length for debugging
-    logger.info(f"Analyzing content: {len(scraped_text)} chars, colors: {len(styling_data.get('colors', []))}, fonts: {len(styling_data.get('fonts', []))}")
+    logger.info(f"Analyzing content: {len(scraped_text)} chars, bg_colors: {len(background_colors)}, text_colors: {len(text_colors)}, accents: {len(accent_colors)}, fonts: {len(styling_data.get('fonts', []))}")
 
     last_error = None
 

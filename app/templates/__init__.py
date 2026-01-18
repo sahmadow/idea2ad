@@ -1,0 +1,1 @@
+"""HTML ad templates package."""

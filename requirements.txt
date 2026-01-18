@@ -12,6 +12,9 @@ beautifulsoup4
 google-genai
 google-cloud-aiplatform
 Pillow
+colorthief>=0.2.1  # Color extraction for validation
+rembg>=2.0.50  # Background removal for product images
+onnxruntime>=1.16.0  # Required for rembg
 
 # Meta Ads
 facebook-business
