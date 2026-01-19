@@ -22,8 +22,8 @@ export function Navbar() {
                     <a href="#" className="hover:text-brand-lime transition-colors">Docs</a>
                 </div>
 
-                {/* CTA */}
-                <div className="flex items-center gap-4">
+                {/* CTA - hidden on mobile */}
+                <div className="hidden md:flex items-center gap-4">
                     <a href="#" className="text-sm font-medium text-white hover:text-brand-lime">Sign In</a>
                     <Button size="sm" variant="primary">
                         Start Building
