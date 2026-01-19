@@ -26,3 +26,38 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #D4FF31;
 }
+
+/* Animated dotted arrow - dots appear sequentially */
+@keyframes dotAppear {
+  0% {
+    opacity: 0;
+    transform: scale(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-dot {
+  opacity: 0;
+  animation: dotAppear 0.3s ease-out forwards;
+}
+
+.animate-dot-1 { animation-delay: 0s; }
+.animate-dot-2 { animation-delay: 0.1s; }
+.animate-dot-3 { animation-delay: 0.2s; }
+.animate-dot-4 { animation-delay: 0.3s; }
+.animate-dot-5 { animation-delay: 0.4s; }
+.animate-dot-6 { animation-delay: 0.5s; }
+.animate-dot-7 { animation-delay: 0.6s; }
+.animate-dot-8 { animation-delay: 0.7s; }
+.animate-dot-9 { animation-delay: 0.8s; }
+.animate-dot-10 { animation-delay: 0.9s; }
+.animate-dot-11 { animation-delay: 1s; }
+.animate-dot-12 { animation-delay: 1.1s; }
+
+.animate-arrowhead {
+  opacity: 0;
+  animation: dotAppear 0.4s ease-out 0.8s forwards;
+}

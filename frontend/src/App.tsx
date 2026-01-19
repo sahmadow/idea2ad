@@ -174,9 +174,35 @@ function App() {
               </svg>
             </div>
 
-            {/* Mobile Arrow (vertical, shown below lg) */}
-            <div className="flex justify-center py-6 lg:hidden">
-              <ArrowRight className="w-8 h-8 text-brand-lime rotate-90" />
+            {/* Mobile Arrow - Animated dotted line (vertical, shown below lg) */}
+            <div className="flex justify-center py-4 lg:hidden">
+              <svg
+                width="20"
+                height="100"
+                viewBox="0 0 20 100"
+                fill="none"
+                className="text-brand-lime"
+              >
+                {/* Dots appearing sequentially in a straight line */}
+                <circle cx="10" cy="4" r="3" fill="currentColor" className="animate-dot animate-dot-1" />
+                <circle cx="10" cy="14" r="3" fill="currentColor" className="animate-dot animate-dot-2" />
+                <circle cx="10" cy="24" r="3" fill="currentColor" className="animate-dot animate-dot-3" />
+                <circle cx="10" cy="34" r="3" fill="currentColor" className="animate-dot animate-dot-4" />
+                <circle cx="10" cy="44" r="3" fill="currentColor" className="animate-dot animate-dot-5" />
+                <circle cx="10" cy="54" r="3" fill="currentColor" className="animate-dot animate-dot-6" />
+                <circle cx="10" cy="64" r="3" fill="currentColor" className="animate-dot animate-dot-7" />
+                <circle cx="10" cy="74" r="3" fill="currentColor" className="animate-dot animate-dot-8" />
+                {/* Arrowhead */}
+                <path
+                  d="M 3 78 L 10 92 L 17 78"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  fill="none"
+                  className="animate-arrowhead"
+                />
+              </svg>
             </div>
 
             {/* RIGHT: Ad Preview */}
