@@ -174,6 +174,11 @@ function App() {
               </svg>
             </div>
 
+            {/* Mobile Arrow (vertical, shown below lg) */}
+            <div className="flex justify-center py-6 lg:hidden">
+              <ArrowRight className="w-8 h-8 text-brand-lime rotate-90" />
+            </div>
+
             {/* RIGHT: Ad Preview */}
             <div className="relative flex justify-center lg:justify-end">
               <div className="relative transform hover:scale-105 transition-transform duration-500 z-10 w-full max-w-md">
