@@ -1,4 +1,4 @@
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 from typing import Dict, Any
 from urllib.parse import urlparse
 import re
@@ -70,6 +70,31 @@ def validate_url(url: str) -> str:
     return url
 
 
+async def navigate_with_fallback(page, url: str) -> str:
+    """Navigate with fallback for sites that never reach networkidle."""
+    try:
+        await page.goto(url, timeout=30000, wait_until="domcontentloaded")
+    except PlaywrightTimeoutError:
+        # Retry once with shorter timeout, no networkidle attempt
+        logger.warning(f"Initial load timeout for {url}, retrying...")
+        await page.goto(url, timeout=15000, wait_until="domcontentloaded")
+        return "domcontentloaded_retry"
+
+    try:
+        await page.wait_for_load_state("networkidle", timeout=10000)
+        return "networkidle"
+    except PlaywrightTimeoutError:
+        logger.debug(f"networkidle timeout for {url}, proceeding")
+
+    try:
+        await page.wait_for_load_state("load", timeout=5000)
+        return "load"
+    except PlaywrightTimeoutError:
+        pass
+
+    return "domcontentloaded"
+
+
 async def scrape_landing_page(url: str) -> Dict[str, Any]:
     """
     Scrapes a landing page URL for text content and metadata using Playwright.
@@ -88,8 +113,9 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
                 "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             })
             
-            # Wait for network to be idle to ensure JavaScript content loads
-            await page.goto(url, timeout=30000, wait_until="networkidle")
+            # Navigate with tiered fallback for sites that never reach networkidle
+            load_strategy = await navigate_with_fallback(page, url)
+            logger.info(f"Page loaded via {load_strategy} for {url}")
             
             # Extract basic metadata
             title = await page.title()
@@ -633,9 +659,11 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
                 "full_text": f"Title: {title}\nDescription: {description}\nHeaders: {headers}\nContent: {body_text}"
             }
             
+        except PlaywrightTimeoutError as e:
+            logger.error(f"Total timeout scraping {url}: {e}")
+            raise ValueError(f"Page load timeout: The URL took too long to respond")
         except Exception as e:
             logger.error(f"Error scraping {url}: {e}", exc_info=True)
-            # Re-raise so the caller knows scraping failed
             raise ValueError(f"Failed to scrape URL: {str(e)}")
         finally:
             await browser.close()

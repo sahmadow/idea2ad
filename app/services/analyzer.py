@@ -148,6 +148,13 @@ OUTPUT FORMAT (JSON ONLY):
             content = result.text
             data = json.loads(content)
 
+            # Handle case where Gemini returns a list instead of dict
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
+
+            if not isinstance(data, dict):
+                raise ValueError(f"Expected dict from Gemini, got {type(data).__name__}")
+
             # Validate the analysis result
             if not validate_analysis_result(data):
                 raise ValueError("Analysis returned invalid or incomplete data")
