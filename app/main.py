@@ -13,6 +13,8 @@ from app.models import Project, CampaignDraft, AdSetTargeting, Ad, LogoInfo, Des
 from app.services.scraper import scrape_landing_page
 from app.services.analyzer import analyze_landing_page_content, AnalysisError
 from app.services.creative import generate_creatives, generate_image_briefs, CreativeGenerationError
+from app.services.jobs import create_job, get_job, update_job, JobStatus, cleanup_old_jobs
+import asyncio
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
 from app.routers import auth_router, images_router, campaigns_router
@@ -137,6 +139,19 @@ class MetaTestRequest(BaseModel):
     page_id: str
 
 
+class JobResponse(BaseModel):
+    job_id: str
+    status: str
+    url: str
+
+
+class JobStatusResponse(BaseModel):
+    job_id: str
+    status: str
+    result: dict | None = None
+    error: str | None = None
+
+
 @app.get("/")
 async def root():
     return {"message": "LaunchAd API is running", "version": "1.0.0"}
@@ -162,6 +177,260 @@ async def health_check_detailed():
         "status": "ok" if db_status == "healthy" else "degraded",
         "services": {"database": db_status}
     }
+
+
+# =====================================
+# ASYNC JOB ENDPOINTS
+# =====================================
+
+@app.post("/analyze/async", response_model=JobResponse)
+@limiter.limit("10/minute")
+async def analyze_url_async(request: Request, project: Project):
+    """
+    Start async analysis of landing page URL.
+    Returns job_id immediately - poll /jobs/{job_id} for results.
+    """
+    # Cleanup old jobs periodically
+    cleanup_old_jobs()
+
+    # Create job
+    job_id = create_job(project.url)
+
+    # Start background task
+    asyncio.create_task(run_analysis_job(job_id, project.url))
+
+    return JobResponse(
+        job_id=job_id,
+        status=JobStatus.PENDING,
+        url=project.url
+    )
+
+
+@app.get("/jobs/{job_id}", response_model=JobStatusResponse)
+async def get_job_status(job_id: str):
+    """
+    Get status and result of an analysis job.
+    Poll this endpoint until status is 'complete' or 'failed'.
+    """
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    return JobStatusResponse(
+        job_id=job_id,
+        status=job["status"],
+        result=job.get("result"),
+        error=job.get("error")
+    )
+
+
+async def run_analysis_job(job_id: str, url: str):
+    """Background task that runs the full analysis pipeline."""
+    try:
+        update_job(job_id, JobStatus.PROCESSING)
+
+        # 1. Scrape URL
+        scraped_data = await scrape_landing_page(url)
+        if not scraped_data["full_text"]:
+            raise ValueError("Failed to scrape URL or empty content")
+
+        # 2. Analyze Content
+        analysis_result = await analyze_landing_page_content(
+            scraped_data["full_text"],
+            scraped_data.get("styling", {"colors": [], "fonts": []})
+        )
+
+        # Add logo info
+        logo_data = scraped_data.get("logo")
+        if logo_data:
+            try:
+                analysis_result.logo = LogoInfo(**logo_data)
+            except Exception:
+                pass
+
+        # Add design tokens
+        design_tokens_data = scraped_data.get("design_tokens")
+        if design_tokens_data:
+            try:
+                analysis_result.design_tokens = DesignTokens(**design_tokens_data)
+            except Exception:
+                pass
+
+        # 3. Generate Creatives
+        creatives = await generate_creatives(analysis_result)
+
+        # 4. Generate Image Briefs
+        image_briefs = await generate_image_briefs(analysis_result)
+
+        # 5. Generate images and create ads
+        ads = await generate_ads_from_briefs(
+            image_briefs, creatives, analysis_result, scraped_data
+        )
+
+        # 6. Build result
+        result = CampaignDraft(
+            project_url=url,
+            analysis=analysis_result,
+            targeting=AdSetTargeting(interests=analysis_result.keywords[:5]),
+            suggested_creatives=creatives,
+            image_briefs=image_briefs,
+            ads=ads,
+            status="ANALYZED"
+        )
+
+        update_job(job_id, JobStatus.COMPLETE, result=result.model_dump())
+        logger.info(f"Job {job_id} completed successfully")
+
+    except Exception as e:
+        logger.error(f"Job {job_id} failed: {e}", exc_info=True)
+        update_job(job_id, JobStatus.FAILED, error=str(e))
+
+
+async def generate_ads_from_briefs(image_briefs, creatives, analysis_result, scraped_data) -> list[Ad]:
+    """Generate ads with images from briefs. Extracted for reuse."""
+    ads = []
+    headlines = [c for c in creatives if c.type == "headline"]
+    primary_texts = [c for c in creatives if c.type == "copy_primary"]
+
+    if not headlines or not primary_texts or len(image_briefs) < 2:
+        raise ValueError("Insufficient creatives or image briefs")
+
+    settings = get_settings()
+
+    if settings.skip_image_generation:
+        for i, brief in enumerate(image_briefs[:2]):
+            brief.image_url = settings.placeholder_image_url
+            ad = Ad(
+                id=i + 1,
+                imageUrl=settings.placeholder_image_url,
+                primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                imageBrief=brief
+            )
+            ads.append(ad)
+        return ads
+
+    try:
+        from app.services.template_renderer import get_template_renderer
+        from app.services.s3 import get_s3_service
+
+        template_renderer = get_template_renderer()
+        s3_service = get_s3_service()
+
+        # Build BrandCSS
+        css_assets = scraped_data.get("css_assets", {})
+        styling_data = scraped_data.get("styling", {})
+        brand_css = {
+            "font_faces": css_assets.get("font_faces", []),
+            "css_variables": css_assets.get("css_variables", {}),
+            "button_styles": css_assets.get("button_styles", {}),
+            "primary_colors": styling_data.get("backgrounds", styling_data.get("colors", ["#ffffff"]))[:3],
+            "secondary_colors": styling_data.get("accents", styling_data.get("colors", ["#000000"]))[:3],
+            "font_families": styling_data.get("fonts", ["Inter"]),
+        }
+
+        logo_url = analysis_result.logo.url if analysis_result.logo else None
+        design_tokens_dict = analysis_result.design_tokens.model_dump() if analysis_result.design_tokens else None
+        styling_guide_dict = analysis_result.styling_guide.model_dump()
+
+        for i, brief in enumerate(image_briefs[:2]):
+            try:
+                product_image_url = None
+
+                # Generate product image if prompt provided
+                if brief.product_image_prompt:
+                    try:
+                        from app.services.image_gen import get_image_generator
+                        from app.services.background_remover import get_background_remover
+
+                        generator = get_image_generator()
+                        remover = get_background_remover()
+
+                        product_bytes = await generator.generate_isolated_product(
+                            product_prompt=brief.product_image_prompt,
+                            styling_guide=styling_guide_dict
+                        )
+                        transparent_bytes = await remover.remove_background(product_bytes)
+
+                        product_campaign_id = str(uuid.uuid4())[:8]
+                        product_result = s3_service.upload_image(transparent_bytes, product_campaign_id)
+                        if product_result.get("success"):
+                            product_image_url = product_result["url"]
+                            brief.product_image_url = product_image_url
+                    except Exception as e:
+                        logger.warning(f"Product image generation failed: {e}")
+
+                # Render template
+                if brief.render_mode == "template":
+                    image_bytes = await template_renderer.render_ad_from_brief(
+                        brief=brief,
+                        brand_css=brand_css,
+                        logo_url=logo_url,
+                        design_tokens=design_tokens_dict,
+                        aspect_ratio="1:1",
+                        pain_points=analysis_result.pain_points,
+                        product_image_url=product_image_url
+                    )
+                else:
+                    from app.services.image_gen import get_image_generator
+                    generator = get_image_generator()
+                    text_overlays_dicts = [overlay.model_dump() for overlay in brief.text_overlays]
+                    image_bytes = await generator.generate_ad_image(
+                        visual_description=brief.visual_description,
+                        styling_notes=brief.styling_notes,
+                        approach=brief.approach,
+                        styling_guide=styling_guide_dict,
+                        design_tokens=design_tokens_dict,
+                        text_overlays=text_overlays_dicts,
+                        apply_text_overlays=True
+                    )
+
+                # Upload to S3
+                campaign_id = str(uuid.uuid4())[:8]
+                result = s3_service.upload_image(image_bytes, campaign_id)
+                if result.get("success"):
+                    image_url = result["url"]
+                    brief.image_url = image_url
+                else:
+                    raise ValueError(result.get("error", "S3 upload failed"))
+
+                ad = Ad(
+                    id=i + 1,
+                    imageUrl=image_url,
+                    primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                    headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                    description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                    imageBrief=brief
+                )
+                ads.append(ad)
+
+            except Exception as e:
+                logger.warning(f"Image generation failed for brief {i + 1}: {e}")
+                ad = Ad(
+                    id=i + 1,
+                    imageUrl=None,
+                    primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                    headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                    description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                    imageBrief=brief
+                )
+                ads.append(ad)
+
+    except Exception as e:
+        logger.warning(f"Image generation service not available: {e}")
+        for i, brief in enumerate(image_briefs[:2]):
+            ad = Ad(
+                id=i + 1,
+                imageUrl=None,
+                primaryText=primary_texts[i].content if i < len(primary_texts) else primary_texts[0].content,
+                headline=headlines[i].content if i < len(headlines) else headlines[0].content,
+                description=analysis_result.summary[:90] + "..." if len(analysis_result.summary) > 90 else analysis_result.summary,
+                imageBrief=brief
+            )
+            ads.append(ad)
+
+    return ads
 
 
 @app.post("/analyze", response_model=CampaignDraft)
