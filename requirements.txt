@@ -53,3 +53,4 @@ factory-boy
 
 # Load testing
 locust>=2.15.0
+gunicorn>=21.0.0
