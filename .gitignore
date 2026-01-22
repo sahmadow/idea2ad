@@ -61,3 +61,4 @@ service-account*.json
 gcp-credentials.json
 .mcp.json
 .vercel
+scripts/test_output.json
