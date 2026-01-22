@@ -13,7 +13,7 @@ export function Terminal() {
     ];
 
     useEffect(() => {
-        let timeoutIds: ReturnType<typeof setTimeout>[] = [];
+        const timeoutIds: ReturnType<typeof setTimeout>[] = [];
 
         steps.forEach((step) => {
             const id = setTimeout(() => {
@@ -23,6 +23,7 @@ export function Terminal() {
         });
 
         return () => timeoutIds.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

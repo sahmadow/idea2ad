@@ -32,6 +32,7 @@ export function MetaAdPreview({
       }, 30000);
       return () => clearTimeout(timeout);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ad.imageUrl, imageLoaded, imageError]);
 
   const handleRetry = (e: React.MouseEvent) => {
