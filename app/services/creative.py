@@ -56,7 +56,9 @@ def load_prompt(prompt_name: str) -> str:
 
 async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
     """
-    Generates creative assets (headlines, copy) using Google Gemini based on analysis.
+    Generates creative assets with two styles:
+    1. Long-form 10-section testimonial ad copy
+    2. Short punchy direct-response ad copy
     Raises CreativeGenerationError if generation fails after all retries.
     """
     # Validate input analysis first
@@ -68,30 +70,49 @@ async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
 
     client = genai.Client(api_key=api_key)
 
-    prompt = f"""
-    Based on the following marketing analysis, generate 4 high-performing creative assets for a Meta Ads campaign.
+    # Generate both long-form and short-form ad copy
+    prompt = f"""You are an expert Facebook ad copywriter. Create TWO different ad copy styles for variety.
 
-    ANALYSIS:
-    Summary: {analysis.summary}
-    USP: {analysis.unique_selling_proposition}
-    Pain Points: {analysis.pain_points}
-    Keywords: {analysis.keywords}
+PRODUCT/SERVICE ANALYSIS:
+Summary: {analysis.summary}
+USP: {analysis.unique_selling_proposition}
+Pain Points: {', '.join(analysis.pain_points)}
+Keywords: {', '.join(analysis.keywords)}
+CTA: {analysis.call_to_action}
 
-    CRITICAL INSTRUCTIONS:
-    1. USE THE KEYWORDS: Incorporate the provided 'Keywords' naturally into the Headlines and Primary Text.
-    2. BE SPECIFIC: Use the specific terminology found in the 'Keywords' and 'Summary'.
-    3. ADDRESS PAIN POINTS: The copy should directly address the user's pain points.
+=== AD 1: LONG-FORM (10-SECTION TESTIMONIAL) ===
+Write using this EXACT structure:
+1. Hook: First-person result statement with specific number. "I [achieved X] from [method] I [unexpected twist]."
+2. Pattern interrupt: What WASN'T required. "No X. No Y. Just Z."
+3. Pain mirror: "I was drowning." + 3 specific pressures your audience feels daily.
+4. Dismiss old way: Why traditional solutions don't work for busy people.
+5. Solution intro: Product name + one sentence on what it does.
+6. Simple mechanism: "I [minimal input]. It [handles everything]."
+7. Benefits stack: 5-6 checkmarks covering time, effort, status, automation, quality.
+8. Depth contrast: Compare meaningful engagement vs. shallow alternative.
+9. Competitive fear: "Your competitors are doing this. Your ideal clients are listening. Will they hear you or someone else?"
+10. CTA: 👉 Action + benefit + now
 
-    REQUIRED ASSETS:
-    1. 2x Headlines (Punchy, max 40 chars) - Must include a main keyword.
-    2. 2x Primary Text (Persuasive, max 200 chars) - Focus on the 'Hook'.
+=== AD 2: SHORT-FORM (DIRECT RESPONSE) ===
+Write a punchy, concise ad (max 150 words):
+- Strong hook with benefit
+- 2-3 pain points addressed
+- Clear value proposition
+- Urgency + CTA
 
-    OUTPUT FORMAT (JSON ARRAY):
-    [
-        {{ "type": "headline", "content": "...", "rationale": "Why this works..." }},
-        {{ "type": "copy_primary", "content": "...", "rationale": "..." }}
-    ]
-    """
+Return JSON:
+{{
+    "long_form": {{
+        "ad_copy": "full 10-section ad copy",
+        "headline": "5-8 word result headline",
+        "secondary": "short follow-up line"
+    }},
+    "short_form": {{
+        "ad_copy": "punchy short ad copy (max 150 words)",
+        "headline": "punchy headline (max 40 chars)",
+        "secondary": "benefit line"
+    }}
+}}"""
 
     last_error = None
 
@@ -107,23 +128,52 @@ async def generate_creatives(analysis: AnalysisResult) -> List[CreativeAsset]:
             content = result.text
             data = json.loads(content)
 
-            if isinstance(data, list):
-                assets_data = data
-            else:
-                assets_data = data.get("assets", []) if "assets" in data else []
+            # Handle case where Gemini returns a list
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
 
-            if not assets_data:
-                raise ValueError("Empty creatives response from LLM")
+            if not isinstance(data, dict):
+                raise ValueError(f"Expected dict from Gemini, got {type(data).__name__}")
 
-            assets = [CreativeAsset(**item) for item in assets_data]
+            # Extract both ad styles
+            long_form = data.get("long_form", {})
+            short_form = data.get("short_form", {})
 
-            # Validate we have required asset types
-            headlines = [a for a in assets if a.type == "headline"]
-            primary_texts = [a for a in assets if a.type == "copy_primary"]
+            long_copy = long_form.get("ad_copy", "")
+            short_copy = short_form.get("ad_copy", "")
+            long_headline = long_form.get("headline", "")
+            short_headline = short_form.get("headline", "")
 
-            if not headlines or not primary_texts:
-                raise ValueError("Missing required headline or primary text assets")
+            if not long_copy or len(long_copy) < 100:
+                raise ValueError("Long-form ad copy is too short or empty")
+            if not short_copy or len(short_copy) < 50:
+                raise ValueError("Short-form ad copy is too short or empty")
 
+            # Build CreativeAssets - one of each style
+            assets = [
+                CreativeAsset(
+                    type="headline",
+                    content=long_headline or "Transform Your Results Today",
+                    rationale="10-section testimonial headline"
+                ),
+                CreativeAsset(
+                    type="headline",
+                    content=short_headline or "Get Started Now",
+                    rationale="Short-form direct response headline"
+                ),
+                CreativeAsset(
+                    type="copy_primary",
+                    content=long_copy,
+                    rationale="10-section testimonial ad copy"
+                ),
+                CreativeAsset(
+                    type="copy_primary",
+                    content=short_copy,
+                    rationale="Short-form direct response ad copy"
+                )
+            ]
+
+            logger.info(f"Generated ads: long={len(long_copy)} chars, short={len(short_copy)} chars")
             return assets
 
         except Exception as e:
