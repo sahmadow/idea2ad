@@ -1,112 +1,190 @@
-# idea2ad
+# LaunchAd (idea2ad)
 
 AI-powered landing page to Meta ad campaign generator. Paste a URL, get ready-to-launch ad creatives.
+
+## Quick Start
+
+```bash
+# 1. Setup (first time only)
+cp .env.example .env
+# Edit .env with your API keys
+
+# 2. Generate SSL certs (required for Facebook OAuth)
+./scripts/generate-certs.sh
+
+# 3. Start both backend and frontend
+./start_app.sh
+```
+
+Open https://localhost:5173 (accept the self-signed cert warning).
 
 ## Architecture
 
 ```
-Frontend (Vercel)          Backend (Railway)
-    │                           │
-    ├─ POST /analyze/async ────►│ Create job, return job_id
-    │                           │
-    │◄─ { job_id } ─────────────┤
-    │                           │
-    ├─ GET /jobs/{id} ─────────►│ Poll status (pending/processing)
-    │    (every 2s)             │
-    │                           │ Background: scrape → analyze → generate
-    │◄─ { status: complete } ───┤
-```
-
-## API Endpoints
-
-### `POST /analyze/async`
-Start async analysis job.
-
-**Request:**
-```json
-{ "url": "https://example.com" }
-```
-
-**Response:**
-```json
-{ "job_id": "abc12345", "status": "pending", "url": "https://example.com" }
-```
-
-### `GET /jobs/{job_id}`
-Poll job status.
-
-**Response (processing):**
-```json
-{ "job_id": "abc12345", "status": "processing" }
-```
-
-**Response (complete):**
-```json
-{
-  "job_id": "abc12345",
-  "status": "complete",
-  "result": { /* CampaignDraft */ }
-}
-```
-
-**Response (failed):**
-```json
-{ "job_id": "abc12345", "status": "failed", "error": "Error message" }
-```
-
-### `GET /health`
-Health check endpoint.
-
-## Tech Stack
-
-**Backend:**
-- FastAPI + Python 3.13
-- Playwright (web scraping)
-- Google Gemini (AI analysis)
-- Ideogram API (image generation)
-- AWS S3 (image storage)
-- Gunicorn + Uvicorn workers
-
-**Frontend:**
-- React + TypeScript + Vite
-- TailwindCSS
-
-**Infrastructure:**
-- Railway (backend)
-- Vercel (frontend)
-
-## Environment Variables
-
-### Backend
-```
-GEMINI_API_KEY=         # Google AI API key
-IDEOGRAM_API_KEY=       # Ideogram image generation
-AWS_ACCESS_KEY_ID=      # S3 access
-AWS_SECRET_ACCESS_KEY=  # S3 secret
-AWS_S3_BUCKET=          # S3 bucket name
-DATABASE_URL=           # PostgreSQL connection string
-```
-
-### Frontend
-```
-VITE_API_URL=           # Backend API URL
+Frontend (React/Vite)          Backend (FastAPI)
+    │                               │
+    ├─ POST /analyze/async ────────►│ Create job, return job_id
+    │                               │
+    │◄─ { job_id } ─────────────────┤
+    │                               │
+    ├─ GET /jobs/{id} ─────────────►│ Poll status
+    │    (every 2s)                 │
+    │                               │ Background: scrape → analyze → generate
+    │◄─ { status: complete } ───────┤
+    │                               │
+    ├─ Facebook OAuth ─────────────►│ /auth/facebook (popup flow)
+    │◄─ Session ID ─────────────────┤
+    │                               │
+    ├─ POST /facebook/campaign ────►│ Create Meta ad campaign
 ```
 
 ## Local Development
 
-### Backend
+### Prerequisites
+- Python 3.11+
+- Node.js 18+
+- PostgreSQL
+- Meta Developer App (for Facebook OAuth)
+
+### Setup
+
+1. **Clone and install:**
 ```bash
-cd app
+git clone <repo>
+cd idea2ad
+
+# Backend
+python -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
-uvicorn app.main:app --reload
+
+# Frontend
+cd frontend && npm install && cd ..
+
+# Database
+npx prisma generate
+npx prisma db push
 ```
 
-### Frontend
+2. **Configure environment:**
 ```bash
-cd frontend
-npm install
-npm run dev
+cp .env.example .env
+# Edit .env with your credentials
+```
+
+3. **Generate SSL certificates** (required for Facebook OAuth):
+```bash
+mkdir -p certs
+openssl req -x509 -newkey rsa:4096 -nodes \
+  -out certs/cert.pem -keyout certs/key.pem \
+  -days 365 -subj '/CN=localhost'
+```
+
+4. **Start development servers:**
+```bash
+./start_app.sh
+```
+
+Or manually:
+```bash
+# Terminal 1: Backend
+source venv/bin/activate
+uvicorn app.main:app --reload --ssl-keyfile=./certs/key.pem --ssl-certfile=./certs/cert.pem
+
+# Terminal 2: Frontend
+cd frontend && npm run dev
+```
+
+### URLs
+- Frontend: https://localhost:5173
+- Backend: https://localhost:8000
+- API Docs: https://localhost:8000/docs
+
+## Environment Variables
+
+### Required
+```bash
+# Database
+DATABASE_URL=postgresql://user:pass@localhost:5432/idea2ad
+
+# Google AI (content analysis)
+GOOGLE_API_KEY=your_key
+GOOGLE_CLOUD_PROJECT=your_project
+GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+
+# Meta/Facebook
+META_APP_ID=your_app_id
+META_APP_SECRET=your_app_secret
+META_AD_ACCOUNT_ID=act_XXXXXXXXX
+
+# AWS S3 (image storage)
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_S3_BUCKET=your_bucket
+```
+
+### URLs (HTTPS required for OAuth)
+```bash
+api_url=https://localhost:8000
+frontend_url=https://localhost:5173
+```
+
+See `.env.example` for all options.
+
+## Facebook OAuth Setup
+
+Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.md` for detailed instructions.
+
+**Quick setup:**
+1. Create Meta App at developers.facebook.com
+2. Add Facebook Login product
+3. Add redirect URI: `https://localhost:8000/auth/facebook/callback`
+4. Copy App ID and Secret to `.env`
+
+## API Endpoints
+
+### Analysis
+- `POST /analyze/async` - Start URL analysis job
+- `GET /jobs/{job_id}` - Poll job status
+
+### Facebook Integration
+- `GET /auth/facebook` - Start OAuth flow
+- `GET /auth/facebook/callback` - OAuth callback
+- `GET /facebook/status` - Check connection status
+- `POST /facebook/campaign` - Create ad campaign
+- `POST /facebook/disconnect` - Disconnect account
+
+### Health
+- `GET /health` - Health check
+
+## Tech Stack
+
+**Backend:** FastAPI, Python 3.13, Prisma, Playwright, Google Gemini
+
+**Frontend:** React, TypeScript, Vite, TailwindCSS
+
+**Infrastructure:** PostgreSQL, AWS S3, Railway (prod), Vercel (prod)
+
+## Project Structure
+
+```
+.
+├── app/                 # Backend FastAPI app
+│   ├── routers/        # API routes
+│   ├── services/       # Business logic
+│   └── main.py         # App entry
+├── frontend/           # React frontend
+│   └── src/
+│       ├── api/        # API client
+│       ├── hooks/      # React hooks
+│       ├── pages/      # Page components
+│       └── types/      # TypeScript types
+├── certs/              # SSL certificates (gitignored)
+├── docs/               # Documentation
+├── prisma/             # Database schema
+├── scripts/            # Utility scripts
+└── tests/              # Backend tests
 ```
 
 ## Deployment
@@ -114,14 +192,12 @@ npm run dev
 ### Railway (Backend)
 - Deploys from Dockerfile
 - Auto-deploys on push to main
-- Uses gunicorn with 180s timeout
+- Set all env vars in Railway dashboard
 
 ### Vercel (Frontend)
 - Deploys from frontend/ directory
-- Auto-deploys on push to main
+- Set `VITE_API_URL` to production backend URL
 
-## Notes
+## License
 
-- Async polling bypasses Railway's 60s proxy timeout
-- Jobs stored in-memory with 2hr TTL
-- Scraper uses tiered wait strategy for sites with endless trackers
+MIT

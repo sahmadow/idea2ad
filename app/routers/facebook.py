@@ -27,7 +27,10 @@ class PublishCampaignRequest(BaseModel):
 
 
 async def get_fb_session(request: Request) -> Optional[dict]:
-    """Get Facebook session from database (via header or cookie)"""
+    """
+    Get Facebook session from database (via header or cookie).
+    Also performs cleanup of expired sessions to prevent DB bloat.
+    """
     # Try header first (for cross-origin requests where cookies don't work)
     session_id = request.headers.get("X-FB-Session")
     # Fall back to cookie
@@ -41,6 +44,18 @@ async def get_fb_session(request: Request) -> Optional[dict]:
     logger.debug(f"Looking up session: {session_id[:8]}...")
 
     try:
+        # Cleanup: Delete expired sessions periodically to prevent DB bloat
+        # This runs on every session lookup, but with WHERE clause it's efficient
+        try:
+            deleted = await db.facebooksession.delete_many(
+                where={"expires_at": {"lt": datetime.utcnow()}}
+            )
+            if deleted > 0:
+                logger.debug(f"Cleaned up {deleted} expired FB session(s)")
+        except Exception as cleanup_error:
+            logger.warning(f"Session cleanup error: {cleanup_error}")
+
+        # Fetch the requested session (only if not expired)
         session = await db.facebooksession.find_first(
             where={"id": session_id, "expires_at": {"gt": datetime.utcnow()}}
         )
@@ -336,6 +351,9 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
                 "geo_locations": geo_locations,
                 "age_min": data.campaign_data.get("targeting", {}).get("age_min", 18),
                 "age_max": data.campaign_data.get("targeting", {}).get("age_max", 65),
+                "targeting_automation": {
+                    "advantage_audience": 0  # 0=disabled (manual targeting), 1=enabled (Meta's automation)
+                }
             },
             AdSet.Field.end_time: end_time_str,
             AdSet.Field.status: AdSet.Status.paused,
@@ -601,6 +619,18 @@ async def facebook_callback(
             if acc.get("account_status") == 1
         ]
 
+        # Clean up: Delete any existing sessions for this Facebook user
+        # This prevents session conflicts when user reconnects or switches accounts
+        fb_user_id = user_data.get("id", "")
+        try:
+            deleted_sessions = await db.facebooksession.delete_many(
+                where={"fb_user_id": fb_user_id}
+            )
+            if deleted_sessions > 0:
+                logger.info(f"Deleted {deleted_sessions} old session(s) for FB user {fb_user_id}")
+        except Exception as e:
+            logger.warning(f"Error cleaning old sessions for FB user {fb_user_id}: {e}")
+
         # Create session in database
         pages_json = [
             {
@@ -695,14 +725,27 @@ async def facebook_callback(
 
 @router.post("/disconnect")
 async def disconnect_facebook(request: Request, response: Response):
-    """Disconnect Facebook session"""
-    session_id = request.cookies.get("fb_session")
+    """Disconnect Facebook session - clears from DB, cookie, and instructs frontend to clear localStorage"""
+    # Check both header (primary) and cookie (fallback) for session ID
+    # Frontend sends via X-FB-Session header, but cookie may exist from older flow
+    session_id = request.headers.get("X-FB-Session")
+    if not session_id:
+        session_id = request.cookies.get("fb_session")
+
     if session_id:
         try:
             await db.facebooksession.delete(where={"id": session_id})
-            logger.info(f"Facebook session {session_id} disconnected")
+            logger.info(f"Facebook session {session_id} disconnected and deleted from DB")
         except Exception as e:
-            logger.error(f"Error deleting FB session: {e}")
+            logger.error(f"Error deleting FB session {session_id}: {e}")
+    else:
+        logger.debug("No session ID found in header or cookie for disconnect")
 
+    # Clear cookie regardless (cleanup)
     response.delete_cookie("fb_session")
-    return {"message": "Disconnected"}
+
+    return {
+        "message": "Disconnected",
+        "cleared_session": session_id,
+        "note": "Frontend should clear localStorage fb_session_id"
+    }

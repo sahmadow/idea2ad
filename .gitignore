@@ -53,7 +53,8 @@ frontend/public/generated/
 prisma/*.db
 prisma/*.db-journal
 
-# Secrets
+# Secrets & Certificates
+certs/
 *.pem
 *.key
 service-account*.json

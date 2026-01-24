@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { ArrowRight, Check, Sparkles, Target, Zap, Layout } from 'lucide-react';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
@@ -8,10 +8,30 @@ import { Terminal } from './components/ui/Terminal';
 import { AdPreview } from './components/ui/AdPreview';
 import { ResultsView } from './components/ResultsView';
 import { analyzeUrl, type CampaignDraft, type Ad } from './api';
+import { FBAuthTest } from './pages/FBAuthTest';
 
 type View = 'landing' | 'loading' | 'results';
 
+// Hash-based routing for test pages
+function useHashRoute() {
+  const [hash, setHash] = useState(window.location.hash);
+
+  useEffect(() => {
+    const handleHashChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  return hash;
+}
+
 function App() {
+  const hash = useHashRoute();
+
+  // Route to test pages
+  if (hash === '#/test/fb-auth') {
+    return <FBAuthTest />;
+  }
   const [url, setUrl] = useState('');
   const [view, setView] = useState<View>('landing');
   const [result, setResult] = useState<CampaignDraft | null>(null);
