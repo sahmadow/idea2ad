@@ -81,6 +81,19 @@ class Settings(BaseSettings):
             if self.frontend_url == "http://localhost:5173":
                 object.__setattr__(self, 'frontend_url', "https://launchad.io")
 
+        elif self.environment == "staging":
+            errors = []
+            if "localhost" in self.database_url or "127.0.0.1" in self.database_url:
+                errors.append("DATABASE_URL should not use localhost in staging")
+            if len(self.jwt_secret_key) < 32:
+                errors.append("JWT_SECRET_KEY must be at least 32 characters in staging")
+            if errors:
+                raise ValueError(f"Staging config errors: {', '.join(errors)}")
+
+            # Set staging URL defaults if not explicitly configured
+            if self.frontend_url == "http://localhost:5173":
+                object.__setattr__(self, 'frontend_url', "https://idea2ad-staging.vercel.app")
+
         elif self.jwt_secret_key == "change-this-in-production":
             warnings.warn("Using default JWT_SECRET_KEY - change for production!")
 

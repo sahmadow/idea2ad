@@ -26,7 +26,7 @@ from app.logging_config import setup_logging, get_logger
 settings = get_settings()
 setup_logging(
     level="DEBUG" if settings.debug else "INFO",
-    json_format=settings.environment == "production"
+    json_format=settings.environment in ("production", "staging")
 )
 
 # Initialize Sentry if configured
@@ -58,7 +58,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Request-ID"] = request_id
 
         # CSP for API responses
-        if settings.environment == "production":
+        if settings.environment in ("production", "staging"):
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
         return response
@@ -105,7 +105,13 @@ if settings.environment == "production":
         # Vercel preview deployments
         "https://frontend-salehs-projects-f9732e89.vercel.app",
     ]
-cors_origin_regex = r"https://(frontend-[a-z0-9]+-salehs-projects-f9732e89|idea2ad)\.vercel\.app"
+elif settings.environment == "staging":
+    cors_origins = [
+        "https://idea2ad-staging.vercel.app",
+        # Vercel preview deployments for staging
+        "https://frontend-salehs-projects-f9732e89.vercel.app",
+    ]
+cors_origin_regex = r"https://(frontend-[a-z0-9]+-salehs-projects-f9732e89|idea2ad(-staging)?)\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
