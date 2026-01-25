@@ -661,7 +661,7 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
             
         except PlaywrightTimeoutError as e:
             logger.error(f"Total timeout scraping {url}: {e}")
-            raise ValueError(f"Page load timeout: The URL took too long to respond")
+            raise ValueError("Page load timeout: The URL took too long to respond")
         except Exception as e:
             logger.error(f"Error scraping {url}: {e}", exc_info=True)
             raise ValueError(f"Failed to scrape URL: {str(e)}")

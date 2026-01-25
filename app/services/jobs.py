@@ -3,7 +3,6 @@ In-memory job storage for async analysis tasks.
 Simple dict-based storage - works for single instance deployments.
 """
 import uuid
-import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from enum import Enum
