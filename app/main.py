@@ -111,7 +111,7 @@ elif settings.environment == "staging":
         # Vercel preview deployments for staging
         "https://frontend-salehs-projects-f9732e89.vercel.app",
     ]
-cors_origin_regex = r"https://(frontend-[a-z0-9]+-salehs-projects-f9732e89|idea2ad(-staging)?)\.vercel\.app"
+cors_origin_regex = r"https://(frontend(-[a-z0-9]+)*-salehs-projects-f9732e89|idea2ad(-staging)?)\.vercel\.app"
 
 app.add_middleware(
     CORSMiddleware,
