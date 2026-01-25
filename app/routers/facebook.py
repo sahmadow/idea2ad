@@ -318,9 +318,9 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
             "is_adset_budget_sharing_enabled": False,
         })
 
-        # Calculate daily budget from total budget and duration
+        # Daily budget is sent from frontend in cents
         duration_days = data.settings.get("duration_days", 3)
-        daily_budget = data.settings.get("budget", 5000) // duration_days
+        daily_budget = data.settings.get("budget", 5000)  # Already daily budget in cents
 
         # Calculate end time (72 hours = 3 days from now)
         end_time = datetime.now() + timedelta(days=duration_days)

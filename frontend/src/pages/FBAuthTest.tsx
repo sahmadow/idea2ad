@@ -1,6 +1,10 @@
 /**
- * FB OAuth Test Page
+ * FB OAuth Test Page (DEV ONLY)
  * Test page for Facebook OAuth + ad publishing flow
+ * Access at: #/test/fb-auth
+ *
+ * NOTE: This is a development/debugging tool only.
+ * Production publish flow uses PublishView component.
  */
 import { useState, useEffect } from 'react';
 import {

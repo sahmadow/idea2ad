@@ -7,10 +7,13 @@ import { Card } from './components/ui/Card';
 import { Terminal } from './components/ui/Terminal';
 import { AdPreview } from './components/ui/AdPreview';
 import { ResultsView } from './components/ResultsView';
+import { PublishView } from './components/PublishView';
+import { SuccessView } from './components/SuccessView';
 import { analyzeUrl, type CampaignDraft, type Ad } from './api';
 import { FBAuthTest } from './pages/FBAuthTest';
+import type { PublishCampaignResponse } from './types/facebook';
 
-type View = 'landing' | 'loading' | 'results';
+type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
 
 // Hash-based routing for test pages
 function useHashRoute() {
@@ -27,16 +30,17 @@ function useHashRoute() {
 
 function App() {
   const hash = useHashRoute();
-
-  // Route to test pages
-  if (hash === '#/test/fb-auth') {
-    return <FBAuthTest />;
-  }
   const [url, setUrl] = useState('');
   const [view, setView] = useState<View>('landing');
   const [result, setResult] = useState<CampaignDraft | null>(null);
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [publishResult, setPublishResult] = useState<PublishCampaignResponse | null>(null);
+
+  // Route to test pages
+  if (hash === '#/test/fb-auth') {
+    return <FBAuthTest />;
+  }
 
   const normalizeUrl = (input: string): string => {
     let normalized = input.trim();
@@ -70,6 +74,7 @@ function App() {
     setView('landing');
     setResult(null);
     setSelectedAd(null);
+    setPublishResult(null);
   };
 
   // Loading View
@@ -98,6 +103,38 @@ function App() {
         selectedAd={selectedAd}
         onSelectAd={setSelectedAd}
         onBack={handleBack}
+        onNext={() => selectedAd && setView('publish')}
+      />
+    );
+  }
+
+  // Publish View
+  if (view === 'publish' && result && selectedAd) {
+    return (
+      <PublishView
+        campaignData={result}
+        selectedAd={selectedAd}
+        onBack={() => setView('results')}
+        onSuccess={(res) => {
+          setPublishResult(res);
+          setView('success');
+        }}
+      />
+    );
+  }
+
+  // Success View
+  if (view === 'success' && publishResult) {
+    return (
+      <SuccessView
+        result={publishResult}
+        onNewCampaign={() => {
+          setUrl('');
+          setView('landing');
+          setResult(null);
+          setSelectedAd(null);
+          setPublishResult(null);
+        }}
       />
     );
   }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Download, Target, Palette, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, Target, Palette, Sparkles } from 'lucide-react';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
@@ -9,9 +9,10 @@ interface ResultsViewProps {
   selectedAd: Ad | null;
   onSelectAd: (ad: Ad) => void;
   onBack: () => void;
+  onNext?: () => void;
 }
 
-export function ResultsView({ result, selectedAd, onSelectAd, onBack }: ResultsViewProps) {
+export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: ResultsViewProps) {
   const pageName = new URL(result.project_url).hostname.replace('www.', '');
 
   const handleExportJson = () => {
@@ -37,10 +38,22 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack }: ResultsV
             <ArrowLeft className="w-5 h-5" />
             <span className="font-mono text-sm">Try Another URL</span>
           </button>
-          <Button variant="outline" onClick={handleExportJson}>
-            <Download className="w-4 h-4 mr-2" />
-            Export JSON
-          </Button>
+          <div className="flex items-center gap-3">
+            <Button variant="outline" onClick={handleExportJson}>
+              <Download className="w-4 h-4 mr-2" />
+              Export JSON
+            </Button>
+            {onNext && (
+              <Button
+                variant="primary"
+                onClick={onNext}
+                disabled={!selectedAd}
+              >
+                Next: Publish
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Title */}
