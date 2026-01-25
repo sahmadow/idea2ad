@@ -15,6 +15,14 @@ import type { PublishCampaignResponse } from './types/facebook';
 
 type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
 
+// LocalStorage keys for state persistence
+const STORAGE_KEYS = {
+  VIEW: 'idea2ad_view',
+  RESULT: 'idea2ad_result',
+  SELECTED_AD: 'idea2ad_selectedAd',
+  URL: 'idea2ad_url',
+};
+
 // Hash-based routing for test pages
 function useHashRoute() {
   const [hash, setHash] = useState(window.location.hash);
@@ -30,12 +38,79 @@ function useHashRoute() {
 
 function App() {
   const hash = useHashRoute();
-  const [url, setUrl] = useState('');
-  const [view, setView] = useState<View>('landing');
-  const [result, setResult] = useState<CampaignDraft | null>(null);
-  const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
+
+  // Initialize state from localStorage for persistence across refreshes
+  const [url, setUrl] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEYS.URL) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [view, setView] = useState<View>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.VIEW) as View;
+      // Don't restore 'loading' view - start at landing or results
+      if (stored === 'loading') return 'landing';
+      return stored || 'landing';
+    } catch {
+      return 'landing';
+    }
+  });
+  const [result, setResult] = useState<CampaignDraft | null>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.RESULT);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [selectedAd, setSelectedAd] = useState<Ad | null>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.SELECTED_AD);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
   const [error, setError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishCampaignResponse | null>(null);
+
+  // Persist state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.URL, url);
+    } catch { /* ignore */ }
+  }, [url]);
+
+  useEffect(() => {
+    try {
+      // Don't persist 'loading' state
+      if (view !== 'loading') {
+        localStorage.setItem(STORAGE_KEYS.VIEW, view);
+      }
+    } catch { /* ignore */ }
+  }, [view]);
+
+  useEffect(() => {
+    try {
+      if (result) {
+        localStorage.setItem(STORAGE_KEYS.RESULT, JSON.stringify(result));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.RESULT);
+      }
+    } catch { /* ignore */ }
+  }, [result]);
+
+  useEffect(() => {
+    try {
+      if (selectedAd) {
+        localStorage.setItem(STORAGE_KEYS.SELECTED_AD, JSON.stringify(selectedAd));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
+      }
+    } catch { /* ignore */ }
+  }, [selectedAd]);
 
   // Route to test pages
   if (hash === '#/test/fb-auth') {
@@ -75,6 +150,12 @@ function App() {
     setResult(null);
     setSelectedAd(null);
     setPublishResult(null);
+    // Clear persisted state
+    try {
+      localStorage.removeItem(STORAGE_KEYS.VIEW);
+      localStorage.removeItem(STORAGE_KEYS.RESULT);
+      localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
+    } catch { /* ignore */ }
   };
 
   // Loading View
@@ -134,6 +215,10 @@ function App() {
           setResult(null);
           setSelectedAd(null);
           setPublishResult(null);
+          // Clear persisted state
+          try {
+            Object.values(STORAGE_KEYS).forEach(key => localStorage.removeItem(key));
+          } catch { /* ignore */ }
         }}
       />
     );

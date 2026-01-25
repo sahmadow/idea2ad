@@ -92,8 +92,35 @@ export function useFacebookAuth(): UseFacebookAuthReturn {
     return () => window.removeEventListener('message', handleMessage);
   }, [refreshStatus]);
 
+  // Extract session from URL (cross-domain OAuth redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionFromUrl = params.get('fb_session');
+
+    if (sessionFromUrl) {
+      console.log('[useFacebookAuth] Session from URL:', sessionFromUrl.slice(0, 8) + '...');
+
+      // Clear old session and store new one
+      clearSessionId();
+      storeSessionId(sessionFromUrl);
+      setSessionId(sessionFromUrl);
+
+      // Clean URL (remove fb_session param)
+      const cleanUrl = window.location.pathname +
+        (params.toString() ? '?' + (() => { params.delete('fb_session'); return params.toString(); })() : '');
+      window.history.replaceState({}, '', cleanUrl || window.location.pathname);
+
+      // Refresh status with new session
+      refreshStatus(sessionFromUrl);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Initial status check
   useEffect(() => {
+    // Skip if session was just set from URL
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('fb_session')) return;
+
     const storedId = getStoredSessionId();
     if (storedId) {
       setSessionId(storedId);
