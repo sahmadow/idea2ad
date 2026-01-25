@@ -189,14 +189,38 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 
 ## Deployment
 
-### Railway (Backend)
-- Deploys from Dockerfile
-- Auto-deploys on push to main
+### Production
+**Backend (Railway):** Auto-deploys on push to `main`
+- URL: `https://idea2ad-production.up.railway.app`
 - Set all env vars in Railway dashboard
 
-### Vercel (Frontend)
-- Deploys from frontend/ directory
+**Frontend (Vercel):** Auto-deploys on push to `main`
+- URL: `https://launchad.io`
 - Set `VITE_API_URL` to production backend URL
+
+### Staging
+**Backend (Railway):** Auto-deploys on push to `staging`
+- URL: `https://idea2ad-staging-staging.up.railway.app`
+- API Docs: `https://idea2ad-staging-staging.up.railway.app/docs`
+- Health: `https://idea2ad-staging-staging.up.railway.app/health`
+
+**Frontend (Vercel):** Auto-deploys on push to `staging`
+- URL: `https://frontend-git-staging-salehs-projects-f9732e89.vercel.app`
+- Set `VITE_API_URL` in Vercel env vars (Preview scope) to staging backend URL
+
+### Deploying to Staging
+```bash
+git checkout staging
+git merge <your-branch>
+git push origin staging
+# CI runs → Railway + Vercel auto-deploy
+```
+
+### Environment Setup
+| Environment | Backend URL | Frontend URL | Vercel Env Scope |
+|-------------|-------------|--------------|------------------|
+| Production  | idea2ad-production.up.railway.app | launchad.io | Production |
+| Staging     | idea2ad-staging-staging.up.railway.app | frontend-git-staging-*.vercel.app | Preview |
 
 ## License
 
