@@ -81,9 +81,9 @@ function App() {
   const [businessType, setBusinessType] = useState<BusinessType>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.BUSINESS_TYPE);
-      return (stored === 'saas' ? 'saas' : 'commerce') as BusinessType;
+      return (stored === 'commerce' ? 'commerce' : 'saas') as BusinessType;
     } catch {
-      return 'commerce';
+      return 'saas';
     }
   });
 
@@ -333,17 +333,6 @@ function App() {
             <div className="flex justify-center gap-2 mb-2">
               <button
                 type="button"
-                onClick={() => setBusinessType('commerce')}
-                className={`px-6 py-2 text-sm font-mono transition-all border ${
-                  businessType === 'commerce'
-                    ? 'bg-brand-lime text-brand-dark border-brand-lime'
-                    : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
-                }`}
-              >
-                Commerce
-              </button>
-              <button
-                type="button"
                 onClick={() => setBusinessType('saas')}
                 className={`px-6 py-2 text-sm font-mono transition-all border ${
                   businessType === 'saas'
@@ -352,6 +341,17 @@ function App() {
                 }`}
               >
                 SaaS
+              </button>
+              <button
+                type="button"
+                onClick={() => setBusinessType('commerce')}
+                className={`px-6 py-2 text-sm font-mono transition-all border ${
+                  businessType === 'commerce'
+                    ? 'bg-brand-lime text-brand-dark border-brand-lime'
+                    : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
+                }`}
+              >
+                Commerce
               </button>
             </div>
             <p className="text-xs text-gray-500 font-mono">
