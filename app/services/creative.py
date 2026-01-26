@@ -191,14 +191,192 @@ Return JSON:
     raise CreativeGenerationError(f"Creative generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
 
 
-async def generate_image_briefs(analysis: AnalysisResult) -> List[ImageBrief]:
+async def generate_image_briefs(
+    analysis: AnalysisResult,
+    business_type: str = "commerce",
+    product_description: str = None,
+    product_image_url: str = None
+) -> List[ImageBrief]:
     """
-    Generates 3 distinct image briefs with explicit text overlay specifications.
+    Generates image briefs based on business type:
+    - commerce: Product-focused briefs (product, lifestyle, problem-solution)
+    - saas: Person-centric + Brand-centric briefs
+
     Raises CreativeGenerationError if generation fails after all retries.
     """
     # Validate input analysis first
     validate_analysis_input(analysis)
 
+    if business_type == "saas":
+        return await generate_saas_briefs(analysis)
+    else:
+        return await generate_commerce_briefs(
+            analysis,
+            product_description=product_description,
+            product_image_url=product_image_url
+        )
+
+
+async def generate_saas_briefs(analysis: AnalysisResult) -> List[ImageBrief]:
+    """
+    Generates 2 SaaS-specific image briefs:
+    1. Person-centric: Imagen generates happy person, text above/below
+    2. Brand-centric: Pure HTML template, no Imagen
+
+    Raises CreativeGenerationError if generation fails after all retries.
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise CreativeGenerationError("GOOGLE_API_KEY not configured. Cannot generate image briefs.")
+
+    client = genai.Client(api_key=api_key)
+
+    # Load SaaS-specific prompt template
+    prompt_template = load_prompt("image_brief_saas_prompt.md")
+
+    # If prompt file not found, use inline fallback
+    if not prompt_template:
+        prompt_template = """
+Generate 2 distinct image briefs for a SaaS product Meta Ad campaign.
+
+ANALYSIS:
+Summary: {summary}
+USP: {unique_selling_proposition}
+Pain Points: {pain_points}
+CTA: {call_to_action}
+Keywords: {keywords}
+Buyer Persona: {buyer_persona}
+
+STYLING GUIDE:
+Primary Colors: {primary_colors}
+Secondary Colors: {secondary_colors}
+Fonts: {font_families}
+Design Style: {design_style}
+Mood: {mood}
+
+Create exactly 2 briefs:
+
+BRIEF 1 - PERSON-CENTRIC:
+- approach: "person-centric"
+- creative_type: "person-centric"
+- Headline text at top, subheadline + CTA at bottom
+- Center space for a happy professional person image (will be AI-generated)
+- Focus on emotional connection and transformation
+- Visual description should describe the PERSON to generate (age, gender matching buyer persona, professional attire, happy/confident expression)
+
+BRIEF 2 - BRAND-CENTRIC:
+- approach: "brand-centric"
+- creative_type: "brand-centric"
+- Pure text/logo design (no AI image generation needed)
+- Logo as focal point
+- Main headline prominently displayed
+- Brand gradient background
+- CTA button
+
+Return JSON array with exactly 2 briefs. Each brief must have:
+- approach: string
+- creative_type: string ("person-centric" or "brand-centric")
+- visual_description: string (for person-centric, describe the person; for brand-centric, describe the layout)
+- styling_notes: string
+- text_overlays: array of objects with content, font_size, position, color, background
+- meta_best_practices: array of strings
+- rationale: string
+- render_mode: "template"
+- product_image_prompt: null for brand-centric, person description for person-centric
+
+IMPORTANT: Keep text overlays SHORT. Headlines max 5-7 words. Subheadlines max 10 words.
+"""
+
+    # Format prompt with analysis data
+    sg = analysis.styling_guide
+    prompt = prompt_template.replace("{summary}", analysis.summary)
+    prompt = prompt.replace("{unique_selling_proposition}", analysis.unique_selling_proposition)
+    prompt = prompt.replace("{pain_points}", ", ".join(analysis.pain_points))
+    prompt = prompt.replace("{call_to_action}", analysis.call_to_action)
+    prompt = prompt.replace("{keywords}", ", ".join(analysis.keywords))
+    prompt = prompt.replace("{buyer_persona}", str(analysis.buyer_persona))
+    prompt = prompt.replace("{primary_colors}", ", ".join(sg.primary_colors))
+    prompt = prompt.replace("{secondary_colors}", ", ".join(sg.secondary_colors))
+    prompt = prompt.replace("{font_families}", ", ".join(sg.font_families))
+    prompt = prompt.replace("{design_style}", sg.design_style)
+    prompt = prompt.replace("{mood}", sg.mood)
+
+    last_error = None
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            result = await client.aio.models.generate_content(
+                model='gemini-2.0-flash',
+                contents=prompt,
+                config={'response_mime_type': 'application/json'}
+            )
+
+            content = result.text
+            data = json.loads(content)
+            logger.info(f"SaaS briefs LLM returned: {type(data)}")
+
+            # Parse image briefs
+            if isinstance(data, list):
+                briefs_data = data
+            else:
+                briefs_data = data.get("briefs", []) if "briefs" in data else []
+
+            if not briefs_data:
+                raise ValueError("Empty image briefs response from LLM")
+
+            image_briefs = []
+            for brief_data in briefs_data:
+                text_overlays = [
+                    TextOverlay(**overlay)
+                    for overlay in brief_data.get("text_overlays", [])
+                ]
+
+                image_brief = ImageBrief(
+                    approach=brief_data.get("approach", ""),
+                    visual_description=brief_data.get("visual_description", ""),
+                    styling_notes=brief_data.get("styling_notes", ""),
+                    text_overlays=text_overlays,
+                    meta_best_practices=brief_data.get("meta_best_practices", []),
+                    rationale=brief_data.get("rationale", ""),
+                    product_image_prompt=brief_data.get("product_image_prompt"),
+                    render_mode=brief_data.get("render_mode", "template"),
+                    creative_type=brief_data.get("creative_type", brief_data.get("approach", ""))
+                )
+                image_briefs.append(image_brief)
+
+            if len(image_briefs) < 2:
+                raise ValueError("Insufficient SaaS image briefs generated (need at least 2)")
+
+            logger.info(f"Generated {len(image_briefs)} SaaS briefs: {[b.creative_type for b in image_briefs]}")
+            return image_briefs
+
+        except Exception as e:
+            last_error = e
+            logger.warning(f"SaaS brief generation attempt {attempt + 1}/{MAX_RETRIES} failed: {e}")
+
+            if attempt < MAX_RETRIES - 1:
+                delay = RETRY_DELAYS[attempt]
+                logger.info(f"Retrying SaaS brief generation in {delay} seconds...")
+                await asyncio.sleep(delay)
+
+    logger.error(f"SaaS brief generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
+    raise CreativeGenerationError(f"SaaS brief generation failed after {MAX_RETRIES} attempts. Last error: {last_error}")
+
+
+async def generate_commerce_briefs(
+    analysis: AnalysisResult,
+    product_description: str = None,
+    product_image_url: str = None
+) -> List[ImageBrief]:
+    """
+    Generates 3 commerce-specific image briefs:
+    - product-focused, lifestyle, problem-solution
+
+    If user provided product_description, uses it for product_image_prompt.
+    If user provided product_image_url, sets it directly on brief.
+
+    Raises CreativeGenerationError if generation fails after all retries.
+    """
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         raise CreativeGenerationError("GOOGLE_API_KEY not configured. Cannot generate image briefs.")
@@ -276,6 +454,11 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
                     for overlay in brief_data.get("text_overlays", [])
                 ]
 
+                # Use user-provided product description if available
+                product_prompt = brief_data.get("product_image_prompt")
+                if product_description:
+                    product_prompt = product_description
+
                 image_brief = ImageBrief(
                     approach=brief_data.get("approach", ""),
                     visual_description=brief_data.get("visual_description", ""),
@@ -283,13 +466,20 @@ Return JSON array with 3 image briefs, each containing: approach, visual_descrip
                     text_overlays=text_overlays,
                     meta_best_practices=brief_data.get("meta_best_practices", []),
                     rationale=brief_data.get("rationale", ""),
-                    product_image_prompt=brief_data.get("product_image_prompt")
+                    product_image_prompt=product_prompt,
+                    creative_type="product"  # Commerce briefs are product-focused
                 )
+
+                # Set user-provided product image URL directly
+                if product_image_url:
+                    image_brief.product_image_url = product_image_url
+
                 image_briefs.append(image_brief)
 
             if len(image_briefs) < 2:
                 raise ValueError("Insufficient image briefs generated (need at least 2)")
 
+            logger.info(f"Generated {len(image_briefs)} commerce briefs")
             return image_briefs
 
         except Exception as e:

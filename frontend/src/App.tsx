@@ -1,5 +1,5 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { ArrowRight, Check, Sparkles, Target, Zap, Layout } from 'lucide-react';
+import { useState, useEffect, useRef, type FormEvent, type ChangeEvent } from 'react';
+import { ArrowRight, Check, Sparkles, Target, Zap, Layout, Upload, X } from 'lucide-react';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { Button } from './components/ui/Button';
@@ -9,7 +9,7 @@ import { AdPreview } from './components/ui/AdPreview';
 import { ResultsView } from './components/ResultsView';
 import { PublishView } from './components/PublishView';
 import { SuccessView } from './components/SuccessView';
-import { analyzeUrl, type CampaignDraft, type Ad } from './api';
+import { analyzeUrl, uploadProductImage, type CampaignDraft, type Ad, type BusinessType } from './api';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
 
@@ -21,6 +21,7 @@ const STORAGE_KEYS = {
   RESULT: 'idea2ad_result',
   SELECTED_AD: 'idea2ad_selectedAd',
   URL: 'idea2ad_url',
+  BUSINESS_TYPE: 'idea2ad_businessType',
 };
 
 // Hash-based routing for test pages
@@ -76,6 +77,24 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishCampaignResponse | null>(null);
 
+  // Business type state
+  const [businessType, setBusinessType] = useState<BusinessType>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.BUSINESS_TYPE);
+      return (stored === 'saas' ? 'saas' : 'commerce') as BusinessType;
+    } catch {
+      return 'commerce';
+    }
+  });
+
+  // Commerce-specific product state
+  const [productDescription, setProductDescription] = useState('');
+  const [productImageFile, setProductImageFile] = useState<File | null>(null);
+  const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Persist state to localStorage
   useEffect(() => {
     try {
@@ -112,6 +131,57 @@ function App() {
     } catch { /* ignore */ }
   }, [selectedAd]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.BUSINESS_TYPE, businessType);
+    } catch { /* ignore */ }
+  }, [businessType]);
+
+  // Handle product image selection
+  const handleImageSelect = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      setError('Please upload a JPEG, PNG, or WebP image');
+      return;
+    }
+
+    // Validate file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('Image must be smaller than 10MB');
+      return;
+    }
+
+    setProductImageFile(file);
+    setProductImagePreview(URL.createObjectURL(file));
+    setError(null);
+
+    // Upload immediately
+    setIsUploading(true);
+    try {
+      const imageUrl = await uploadProductImage(file);
+      setUploadedImageUrl(imageUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload image');
+      setProductImageFile(null);
+      setProductImagePreview(null);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const clearProductImage = () => {
+    setProductImageFile(null);
+    setProductImagePreview(null);
+    setUploadedImageUrl(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Route to test pages
   if (hash === '#/test/fb-auth') {
     return <FBAuthTest />;
@@ -136,7 +206,11 @@ function App() {
 
     try {
       const normalizedUrl = normalizeUrl(url);
-      const data = await analyzeUrl(normalizedUrl);
+      const data = await analyzeUrl(normalizedUrl, undefined, {
+        businessType,
+        productDescription: businessType === 'commerce' ? productDescription || undefined : undefined,
+        productImageUrl: businessType === 'commerce' ? uploadedImageUrl || undefined : undefined,
+      });
       setResult(data);
       setView('results');
     } catch (err) {
@@ -150,6 +224,9 @@ function App() {
     setResult(null);
     setSelectedAd(null);
     setPublishResult(null);
+    // Clear product state
+    setProductDescription('');
+    clearProductImage();
     // Clear persisted state
     try {
       localStorage.removeItem(STORAGE_KEYS.VIEW);
@@ -252,6 +329,37 @@ function App() {
               Turn any landing page into a <span className="text-white font-medium">Meta Ads campaign</span> in 60 seconds.
             </p>
 
+            {/* Business Type Toggle */}
+            <div className="flex justify-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={() => setBusinessType('commerce')}
+                className={`px-6 py-2 text-sm font-mono transition-all border ${
+                  businessType === 'commerce'
+                    ? 'bg-brand-lime text-brand-dark border-brand-lime'
+                    : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
+                }`}
+              >
+                Commerce
+              </button>
+              <button
+                type="button"
+                onClick={() => setBusinessType('saas')}
+                className={`px-6 py-2 text-sm font-mono transition-all border ${
+                  businessType === 'saas'
+                    ? 'bg-brand-lime text-brand-dark border-brand-lime'
+                    : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
+                }`}
+              >
+                SaaS
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 font-mono">
+              {businessType === 'commerce'
+                ? 'Generate product-focused ad creatives'
+                : 'Generate person-centric and brand-centric ad creatives'}
+            </p>
+
             <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
               <div className="flex-1 relative">
                 <input
@@ -271,6 +379,71 @@ function App() {
             {error && (
               <div className="text-red-400 text-sm font-mono bg-red-500/10 border border-red-500/20 px-4 py-2 rounded">
                 {error}
+              </div>
+            )}
+
+            {/* Commerce Product Section */}
+            {businessType === 'commerce' && (
+              <div className="max-w-lg mx-auto space-y-4 pt-4 border-t border-white/10">
+                <p className="text-xs text-gray-500 font-mono text-center">
+                  Optional: Provide product details for better creatives
+                </p>
+
+                {/* Product Description */}
+                <div>
+                  <input
+                    type="text"
+                    value={productDescription}
+                    onChange={(e) => setProductDescription(e.target.value)}
+                    placeholder="Describe your product (e.g., &quot;Premium leather wallet with RFID protection&quot;)"
+                    className="w-full h-12 bg-brand-gray border border-white/10 px-4 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
+                  />
+                </div>
+
+                {/* Product Image Upload */}
+                <div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                    id="product-image-upload"
+                  />
+
+                  {!productImagePreview ? (
+                    <label
+                      htmlFor="product-image-upload"
+                      className="flex items-center justify-center gap-2 w-full h-12 bg-brand-gray border border-dashed border-white/20 hover:border-brand-lime/50 cursor-pointer transition-colors"
+                    >
+                      <Upload className="w-4 h-4 text-gray-400" />
+                      <span className="text-sm font-mono text-gray-400">Upload product image</span>
+                    </label>
+                  ) : (
+                    <div className="flex items-center gap-4 p-3 bg-brand-gray border border-white/10">
+                      <img
+                        src={productImagePreview}
+                        alt="Product preview"
+                        className="w-12 h-12 object-cover rounded"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-mono text-white truncate">
+                          {productImageFile?.name}
+                        </p>
+                        <p className="text-xs text-gray-500 font-mono">
+                          {isUploading ? 'Uploading...' : uploadedImageUrl ? 'Uploaded' : 'Ready'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearProductImage}
+                        className="p-1 hover:bg-white/10 rounded transition-colors"
+                      >
+                        <X className="w-4 h-4 text-gray-400" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

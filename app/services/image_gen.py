@@ -249,6 +249,73 @@ QUALITY: Professional advertising photography, studio lighting, 4K quality"""
 
         return prompt
 
+    async def generate_person_image(
+        self,
+        buyer_persona: Dict[str, Any],
+        styling_guide: Optional[Dict[str, Any]] = None,
+    ) -> bytes:
+        """
+        Generate a person image for SaaS person-centric ads based on buyer persona.
+
+        Args:
+            buyer_persona: Dict with age_range, gender, profession, etc.
+            styling_guide: Brand styling for aesthetic consistency
+
+        Returns:
+            PNG image bytes
+        """
+        self._ensure_initialized()
+
+        # Extract persona details with defaults
+        age_range = buyer_persona.get("age_range", [30, 45])
+        gender = buyer_persona.get("gender", "All")
+        profession = buyer_persona.get("profession", "professional")
+
+        # Calculate target age
+        if isinstance(age_range, list) and len(age_range) >= 2:
+            target_age = (age_range[0] + age_range[1]) // 2
+        else:
+            target_age = 35
+
+        # Map gender
+        if gender == "All" or gender == "all":
+            # Alternate or pick one
+            gender_desc = "professional"
+        elif gender.lower() in ["male", "men"]:
+            gender_desc = "man"
+        elif gender.lower() in ["female", "women"]:
+            gender_desc = "woman"
+        else:
+            gender_desc = "person"
+
+        # Get mood from styling guide
+        mood = "professional"
+        if styling_guide:
+            mood = styling_guide.get("mood", "professional")
+
+        prompt = f"""Professional portrait photography for business advertising.
+
+SUBJECT: A confident, happy {target_age}-year-old {gender_desc}, {profession}
+
+REQUIREMENTS:
+- Professional business casual attire
+- Genuine, warm smile showing confidence and success
+- Clean, minimal background (soft gray or white studio)
+- Chest-up or waist-up framing
+- Professional studio lighting
+- High-end commercial photography style
+- Diverse, authentic representation
+- {mood} mood and energy
+
+STYLE: Modern corporate photography, lifestyle brand imagery
+HIGH QUALITY: 4K resolution, sharp focus, professional retouching"""
+
+        return await self.generate_image(
+            prompt=prompt,
+            aspect_ratio="1:1",
+            negative_prompt="awkward pose, fake smile, busy background, unflattering angle, amateur, low quality, distorted features"
+        )
+
     async def generate_ad_image(
         self,
         visual_description: str,

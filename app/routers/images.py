@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 import logging
@@ -12,6 +12,10 @@ from prisma.models import User
 
 router = APIRouter(prefix="/images", tags=["images"])
 logger = logging.getLogger(__name__)
+
+# Max file size: 10MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 
 class ImageGenerateRequest(BaseModel):
@@ -31,6 +35,81 @@ class ImageGenerateResponse(BaseModel):
     image_url: Optional[str] = None
     s3_key: Optional[str] = None
     error: Optional[str] = None
+
+
+class ImageUploadResponse(BaseModel):
+    url: str
+    filename: str
+    size: int
+
+
+@router.post("/upload", response_model=ImageUploadResponse)
+async def upload_product_image(
+    file: UploadFile = File(...)
+):
+    """
+    Upload a product image for use in ad creatives.
+
+    - Accepts JPEG, PNG, WebP
+    - Max file size: 10MB
+    - Returns S3 URL for use in analysis
+    """
+    # Validate content type
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid file type. Allowed: JPEG, PNG, WebP"
+        )
+
+    # Read file and validate size
+    content = await file.read()
+
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size: 10MB"
+        )
+
+    if len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty file not allowed"
+        )
+
+    try:
+        s3 = get_s3_service()
+        result = s3.upload_product_image(
+            image_bytes=content,
+            content_type=file.content_type,
+            original_filename=file.filename or "product.png"
+        )
+
+        if not result["success"]:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Upload failed: {result.get('error')}"
+            )
+
+        logger.info(f"Product image uploaded: {result['url']}")
+
+        return ImageUploadResponse(
+            url=result["url"],
+            filename=result["filename"],
+            size=result["size"]
+        )
+
+    except ValueError as e:
+        logger.error(f"S3 config error: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Image storage not configured"
+        )
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Upload failed"
+        )
 
 
 @router.post("/generate", response_model=ImageGenerateResponse)

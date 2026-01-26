@@ -21,6 +21,9 @@ TEMPLATE_MAP = {
     "problem-solution": "problem_solution.html",
     "testimonial": "product_focused.html",  # Fallback
     "benefit-driven": "product_focused.html",  # Fallback
+    # SaaS-specific templates
+    "person-centric": "person_centric.html",
+    "brand-centric": "brand_centric.html",
 }
 
 
@@ -113,9 +116,15 @@ class TemplateRenderer:
         Returns:
             PNG image bytes
         """
-        # Select template based on approach
-        template_name = TEMPLATE_MAP.get(brief.approach, "product_focused.html")
+        # Select template based on creative_type first, then approach
+        creative_type = getattr(brief, 'creative_type', None)
+        approach = brief.approach
+
+        # Try creative_type first, then approach, then default
+        template_name = TEMPLATE_MAP.get(creative_type) or TEMPLATE_MAP.get(approach, "product_focused.html")
         dimensions = AD_DIMENSIONS.get(aspect_ratio, (1080, 1080))
+
+        logger.info(f"Rendering ad: creative_type={creative_type}, approach={approach}, template={template_name}")
 
         # Extract colors with fallbacks
         primary_colors = brand_css.get("primary_colors", ["#ffffff"])

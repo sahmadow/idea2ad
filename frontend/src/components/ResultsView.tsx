@@ -188,6 +188,32 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             ))}
           </div>
         </div>
+
+        {/* Bottom Action Bar */}
+        <div className="mt-16 pt-8 border-t border-white/10">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button variant="outline" onClick={handleExportJson}>
+              <Download className="w-4 h-4 mr-2" />
+              Export JSON
+            </Button>
+            {onNext && (
+              <Button
+                variant="primary"
+                onClick={onNext}
+                disabled={!selectedAd}
+                className="min-w-[180px]"
+              >
+                {selectedAd ? 'Publish to Meta' : 'Select an Ad First'}
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            )}
+          </div>
+          {!selectedAd && (
+            <p className="text-center text-gray-500 text-sm mt-3">
+              Click on an ad above to select it for publishing
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

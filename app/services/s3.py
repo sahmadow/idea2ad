@@ -120,6 +120,67 @@ class S3Service:
         except ClientError:
             return False
 
+    def upload_product_image(
+        self,
+        image_bytes: bytes,
+        content_type: str,
+        original_filename: str
+    ) -> dict:
+        """
+        Upload user product image to S3
+
+        Args:
+            image_bytes: Image file bytes
+            content_type: MIME type (image/jpeg, image/png, image/webp)
+            original_filename: Original filename for extension
+
+        Returns:
+            dict with s3_key, url, success, filename, size
+        """
+        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        unique_id = uuid.uuid4().hex[:8]
+
+        # Get extension from content type
+        ext_map = {
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+        }
+        ext = ext_map.get(content_type, ".png")
+
+        s3_key = f"product-uploads/{timestamp}_{unique_id}{ext}"
+
+        try:
+            self.s3.upload_fileobj(
+                BytesIO(image_bytes),
+                self.bucket,
+                s3_key,
+                ExtraArgs={
+                    "ContentType": content_type,
+                    "CacheControl": "max-age=31536000",
+                }
+            )
+
+            # Public URL
+            url = f"https://{self.bucket}.s3.{self.region}.amazonaws.com/{s3_key}"
+
+            logger.info(f"Product image uploaded to S3: {s3_key}")
+
+            return {
+                "success": True,
+                "s3_key": s3_key,
+                "url": url,
+                "filename": original_filename,
+                "size": len(image_bytes),
+            }
+
+        except ClientError as e:
+            logger.error(f"S3 product upload failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
 
 # Singleton instance
 _s3_service: Optional[S3Service] = None

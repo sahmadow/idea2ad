@@ -2,6 +2,15 @@ const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
 // Types matching backend Pydantic models
 
+export type BusinessType = "commerce" | "saas";
+
+export interface AnalyzeRequest {
+  url: string;
+  business_type?: BusinessType;
+  product_description?: string;
+  product_image_url?: string;
+}
+
 export interface StylingGuide {
   primary_colors: string[];
   secondary_colors: string[];
@@ -36,6 +45,7 @@ export interface ImageBrief {
   meta_best_practices: string[];
   rationale: string;
   image_url?: string;
+  creative_type?: string; // "product" | "person-centric" | "brand-centric"
 }
 
 export interface CreativeAsset {
@@ -130,13 +140,25 @@ const pollJobStatus = async (
 
 export const analyzeUrl = async (
   url: string,
-  onProgress?: (status: string) => void
+  onProgress?: (status: string) => void,
+  options?: {
+    businessType?: BusinessType;
+    productDescription?: string;
+    productImageUrl?: string;
+  }
 ): Promise<CampaignDraft> => {
   // Start async job
+  const requestBody: AnalyzeRequest = {
+    url,
+    business_type: options?.businessType,
+    product_description: options?.productDescription,
+    product_image_url: options?.productImageUrl,
+  };
+
   const startResponse = await fetch(`${API_URL}/analyze/async`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!startResponse.ok) {
@@ -152,4 +174,28 @@ export const analyzeUrl = async (
 
   // Poll for results
   return pollJobStatus(job.job_id, onProgress);
+};
+
+interface UploadResponse {
+  url: string;
+  filename: string;
+  size: number;
+}
+
+export const uploadProductImage = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const response = await fetch(`${API_URL}/images/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to upload image");
+  }
+
+  const result: UploadResponse = await response.json();
+  return result.url;
 };

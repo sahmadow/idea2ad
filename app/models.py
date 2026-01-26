@@ -1,11 +1,18 @@
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
+
+
+# Business type determines creative generation strategy
+BusinessType = Literal["commerce", "saas"]
 
 
 class Project(BaseModel):
     url: str
     objective: str = "OUTCOME_SALES"  # Default Meta Objective
     budget_daily: float = 20.0
+    business_type: BusinessType = "commerce"
+    product_description: Optional[str] = None  # Optional product description for commerce
+    product_image_url: Optional[str] = None  # Optional user-uploaded product image URL
 
 
 class StylingGuide(BaseModel):
@@ -79,6 +86,7 @@ class ImageBrief(BaseModel):
     render_mode: str = "template"  # "template" | "imagen"
     product_image_prompt: Optional[str] = None  # Prompt for isolated product image
     product_image_url: Optional[str] = None  # URL after product image generation
+    creative_type: Optional[str] = None  # "product" | "person-centric" | "brand-centric" (for SaaS)
 
 class AdSetTargeting(BaseModel):
     age_min: int = 18

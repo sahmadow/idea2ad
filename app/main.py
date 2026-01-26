@@ -207,8 +207,14 @@ async def analyze_url_async(request: Request, project: Project):
     # Create job
     job_id = create_job(project.url)
 
-    # Start background task
-    asyncio.create_task(run_analysis_job(job_id, project.url))
+    # Start background task with business type and product data
+    asyncio.create_task(run_analysis_job(
+        job_id,
+        project.url,
+        business_type=project.business_type,
+        product_description=project.product_description,
+        product_image_url=project.product_image_url
+    ))
 
     return JobResponse(
         job_id=job_id,
@@ -235,7 +241,13 @@ async def get_job_status(job_id: str):
     )
 
 
-async def run_analysis_job(job_id: str, url: str):
+async def run_analysis_job(
+    job_id: str,
+    url: str,
+    business_type: str = "commerce",
+    product_description: str = None,
+    product_image_url: str = None
+):
     """Background task that runs the full analysis pipeline."""
     try:
         update_job(job_id, JobStatus.PROCESSING)
@@ -270,12 +282,19 @@ async def run_analysis_job(job_id: str, url: str):
         # 3. Generate Creatives
         creatives = await generate_creatives(analysis_result)
 
-        # 4. Generate Image Briefs
-        image_briefs = await generate_image_briefs(analysis_result)
+        # 4. Generate Image Briefs (with business type branching)
+        image_briefs = await generate_image_briefs(
+            analysis_result,
+            business_type=business_type,
+            product_description=product_description,
+            product_image_url=product_image_url
+        )
 
         # 5. Generate images and create ads
         ads = await generate_ads_from_briefs(
-            image_briefs, creatives, analysis_result, scraped_data
+            image_briefs, creatives, analysis_result, scraped_data,
+            business_type=business_type,
+            user_product_image_url=product_image_url
         )
 
         # 6. Build result
@@ -297,7 +316,14 @@ async def run_analysis_job(job_id: str, url: str):
         update_job(job_id, JobStatus.FAILED, error=str(e))
 
 
-async def generate_ads_from_briefs(image_briefs, creatives, analysis_result, scraped_data) -> list[Ad]:
+async def generate_ads_from_briefs(
+    image_briefs,
+    creatives,
+    analysis_result,
+    scraped_data,
+    business_type: str = "commerce",
+    user_product_image_url: str = None
+) -> list[Ad]:
     """Generate ads with images from briefs. Extracted for reuse."""
     ads = []
     headlines = [c for c in creatives if c.type == "headline"]
@@ -348,32 +374,13 @@ async def generate_ads_from_briefs(image_briefs, creatives, analysis_result, scr
         for i, brief in enumerate(image_briefs[:2]):
             try:
                 product_image_url = None
+                person_image_url = None
 
-                # Generate product image if prompt provided
-                if brief.product_image_prompt:
-                    try:
-                        from app.services.image_gen import get_image_generator
-                        from app.services.background_remover import get_background_remover
+                # Get creative type from brief (for SaaS branching)
+                creative_type = getattr(brief, 'creative_type', None) or brief.approach
 
-                        generator = get_image_generator()
-                        remover = get_background_remover()
-
-                        product_bytes = await generator.generate_isolated_product(
-                            product_prompt=brief.product_image_prompt,
-                            styling_guide=styling_guide_dict
-                        )
-                        transparent_bytes = await remover.remove_background(product_bytes)
-
-                        product_campaign_id = str(uuid.uuid4())[:8]
-                        product_result = s3_service.upload_image(transparent_bytes, product_campaign_id)
-                        if product_result.get("success"):
-                            product_image_url = product_result["url"]
-                            brief.product_image_url = product_image_url
-                    except Exception as e:
-                        logger.warning(f"Product image generation failed: {e}")
-
-                # Render template
-                if brief.render_mode == "template":
+                # Brand-centric: Pure HTML template, no Imagen needed
+                if creative_type == "brand-centric":
                     image_bytes = await template_renderer.render_ad_from_brief(
                         brief=brief,
                         brand_css=brand_css,
@@ -381,21 +388,99 @@ async def generate_ads_from_briefs(image_briefs, creatives, analysis_result, scr
                         design_tokens=design_tokens_dict,
                         aspect_ratio="1:1",
                         pain_points=analysis_result.pain_points,
-                        product_image_url=product_image_url
+                        product_image_url=None
                     )
-                else:
-                    from app.services.image_gen import get_image_generator
-                    generator = get_image_generator()
-                    text_overlays_dicts = [overlay.model_dump() for overlay in brief.text_overlays]
-                    image_bytes = await generator.generate_ad_image(
-                        visual_description=brief.visual_description,
-                        styling_notes=brief.styling_notes,
-                        approach=brief.approach,
-                        styling_guide=styling_guide_dict,
+                    logger.info(f"Rendered brand-centric ad {i + 1} using HTML template")
+
+                # Person-centric: Generate person image via Imagen
+                elif creative_type == "person-centric":
+                    try:
+                        from app.services.image_gen import get_image_generator
+                        generator = get_image_generator()
+
+                        # Generate person image based on buyer persona
+                        person_bytes = await generator.generate_person_image(
+                            buyer_persona=analysis_result.buyer_persona,
+                            styling_guide=styling_guide_dict
+                        )
+
+                        # Upload person image to S3
+                        person_campaign_id = str(uuid.uuid4())[:8]
+                        person_result = s3_service.upload_image(person_bytes, person_campaign_id)
+                        if person_result.get("success"):
+                            person_image_url = person_result["url"]
+                            logger.info(f"Person image generated for ad {i + 1}")
+
+                    except Exception as e:
+                        logger.warning(f"Person image generation failed: {e}")
+
+                    # Render template with person image
+                    image_bytes = await template_renderer.render_ad_from_brief(
+                        brief=brief,
+                        brand_css=brand_css,
+                        logo_url=logo_url,
                         design_tokens=design_tokens_dict,
-                        text_overlays=text_overlays_dicts,
-                        apply_text_overlays=True
+                        aspect_ratio="1:1",
+                        pain_points=analysis_result.pain_points,
+                        product_image_url=person_image_url  # Use person image in product slot
                     )
+                    logger.info(f"Rendered person-centric ad {i + 1}")
+
+                # Commerce / Default: Product-focused flow
+                else:
+                    # Use user-provided product image if available
+                    if user_product_image_url:
+                        product_image_url = user_product_image_url
+                        brief.product_image_url = user_product_image_url
+                        logger.info(f"Using user-provided product image for ad {i + 1}")
+
+                    # Otherwise generate product image if prompt provided
+                    elif brief.product_image_prompt:
+                        try:
+                            from app.services.image_gen import get_image_generator
+                            from app.services.background_remover import get_background_remover
+
+                            generator = get_image_generator()
+                            remover = get_background_remover()
+
+                            product_bytes = await generator.generate_isolated_product(
+                                product_prompt=brief.product_image_prompt,
+                                styling_guide=styling_guide_dict
+                            )
+                            transparent_bytes = await remover.remove_background(product_bytes)
+
+                            product_campaign_id = str(uuid.uuid4())[:8]
+                            product_result = s3_service.upload_image(transparent_bytes, product_campaign_id)
+                            if product_result.get("success"):
+                                product_image_url = product_result["url"]
+                                brief.product_image_url = product_image_url
+                        except Exception as e:
+                            logger.warning(f"Product image generation failed: {e}")
+
+                    # Render template
+                    if brief.render_mode == "template":
+                        image_bytes = await template_renderer.render_ad_from_brief(
+                            brief=brief,
+                            brand_css=brand_css,
+                            logo_url=logo_url,
+                            design_tokens=design_tokens_dict,
+                            aspect_ratio="1:1",
+                            pain_points=analysis_result.pain_points,
+                            product_image_url=product_image_url
+                        )
+                    else:
+                        from app.services.image_gen import get_image_generator
+                        generator = get_image_generator()
+                        text_overlays_dicts = [overlay.model_dump() for overlay in brief.text_overlays]
+                        image_bytes = await generator.generate_ad_image(
+                            visual_description=brief.visual_description,
+                            styling_notes=brief.styling_notes,
+                            approach=brief.approach,
+                            styling_guide=styling_guide_dict,
+                            design_tokens=design_tokens_dict,
+                            text_overlays=text_overlays_dicts,
+                            apply_text_overlays=True
+                        )
 
                 # Upload to S3
                 campaign_id = str(uuid.uuid4())[:8]
