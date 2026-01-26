@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.ad-container {
+    width: 100%;
+    height: 100%;
+    background: {{ primary_color }};
+    display: flex;
+    flex-direction: column;
+    padding: 40px;
+    position: relative;
+}
+
+/* Logo */
+.logo {
+    max-width: 120px;
+    max-height: 60px;
+    object-fit: contain;
+    margin-bottom: 30px;
+}
+
+/* Comparison section */
+.comparison {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    justify-content: center;
+}
+
+/* Before/After cards */
+.comparison-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    padding: 25px 30px;
+    border-radius: 16px;
+    position: relative;
+}
+
+/* Before card - muted/negative */
+.card-before {
+    background: rgba(0, 0, 0, 0.05);
+    border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+/* After card - highlighted/positive */
+.card-after {
+    background: {{ accent_color }}15;
+    border: 2px solid {{ accent_color }}40;
+}
+
+/* Label badge */
+.card-label {
+    position: absolute;
+    top: -12px;
+    left: 25px;
+    padding: 4px 16px;
+    border-radius: 20px;
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.label-before {
+    background: #666;
+    color: #fff;
+}
+
+.label-after {
+    background: {{ accent_color }};
+    color: {{ primary_color }};
+}
+
+/* Icon/emoji container */
+.card-icon {
+    font-size: 48px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+/* Card content */
+.card-content {
+    flex: 1;
+}
+
+.card-title {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: {{ text_color }};
+    margin-bottom: 8px;
+    line-height: 1.2;
+}
+
+.card-before .card-title {
+    opacity: 0.7;
+    text-decoration: line-through;
+    text-decoration-color: rgba(0, 0, 0, 0.3);
+}
+
+.card-description {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 20px;
+    font-weight: 400;
+    color: {{ text_color }};
+    opacity: 0.8;
+    line-height: 1.4;
+}
+
+/* Arrow connector */
+.arrow-connector {
+    display: flex;
+    justify-content: center;
+    margin: -10px 0;
+    position: relative;
+    z-index: 1;
+}
+
+.arrow-icon {
+    width: 50px;
+    height: 50px;
+    background: {{ accent_color }};
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px {{ accent_color }}40;
+}
+
+.arrow-icon::after {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 14px solid {{ primary_color }};
+}
+
+/* CTA Button */
+.cta-wrapper {
+    margin-top: auto;
+    display: flex;
+    justify-content: center;
+    padding-top: 20px;
+}
+
+.cta-button {
+    {% if cta_styles.backgroundColor %}
+    background: {{ cta_styles.backgroundColor }};
+    {% else %}
+    background: {{ accent_color }};
+    {% endif %}
+
+    {% if cta_styles.color %}
+    color: {{ cta_styles.color }};
+    {% else %}
+    color: {{ primary_color }};
+    {% endif %}
+
+    padding: 20px 50px;
+
+    {% if cta_styles.borderRadius %}
+    border-radius: {{ cta_styles.borderRadius }};
+    {% else %}
+    border-radius: {{ border_radius or '12px' }};
+    {% endif %}
+
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    border: none;
+    cursor: pointer;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ad-container">
+    {# Logo #}
+    {% if logo_url %}
+    <img class="logo" src="{{ logo_url }}" alt="Logo">
+    {% endif %}
+
+    {# Comparison section #}
+    <div class="comparison">
+        {# Before card #}
+        <div class="comparison-card card-before">
+            <span class="card-label label-before">Before</span>
+            <div class="card-icon">{{ before_emoji or '😩' }}</div>
+            <div class="card-content">
+                <h3 class="card-title">{{ before_title or 'The Old Way' }}</h3>
+                {% if before_description %}
+                <p class="card-description">{{ before_description }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Arrow connector #}
+        <div class="arrow-connector">
+            <div class="arrow-icon"></div>
+        </div>
+
+        {# After card #}
+        <div class="comparison-card card-after">
+            <span class="card-label label-after">After</span>
+            <div class="card-icon">{{ after_emoji or '🎉' }}</div>
+            <div class="card-content">
+                <h3 class="card-title">{{ after_title or 'The Better Way' }}</h3>
+                {% if after_description %}
+                <p class="card-description">{{ after_description }}</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# CTA Button #}
+    <div class="cta-wrapper">
+        <div class="cta-button">{{ cta_text }}</div>
+    </div>
+</div>
+{% endblock %}

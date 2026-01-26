@@ -17,7 +17,7 @@ from app.services.jobs import create_job, get_job, update_job, JobStatus, cleanu
 import asyncio
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
-from app.routers import auth_router, images_router, campaigns_router
+from app.routers import auth_router, images_router, campaigns_router, replica_router
 from app.routers.facebook import router as facebook_router, auth_router as facebook_auth_router
 from app.config import get_settings
 from app.logging_config import setup_logging, get_logger
@@ -131,6 +131,7 @@ app.include_router(images_router)
 app.include_router(campaigns_router)
 app.include_router(facebook_router)
 app.include_router(facebook_auth_router)
+app.include_router(replica_router)
 
 
 # Request models for Meta API endpoints

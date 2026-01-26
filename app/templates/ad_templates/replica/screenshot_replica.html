@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.ad-container {
+    width: 100%;
+    height: 100%;
+    background: {{ gradient or primary_color }};
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Header with logo */
+.header {
+    padding: 30px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.logo {
+    max-width: 120px;
+    max-height: 60px;
+    object-fit: contain;
+}
+
+/* Minimal headline */
+.headline-minimal {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: {{ text_color }};
+    opacity: 0.9;
+}
+
+/* Screenshot container */
+.screenshot-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px 40px;
+    position: relative;
+}
+
+/* Device frame mockup */
+.device-frame {
+    position: relative;
+    width: 85%;
+    max-width: 900px;
+    background: #1a1a1a;
+    border-radius: 20px;
+    padding: 12px;
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.3),
+        0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Browser chrome */
+.browser-chrome {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #2a2a2a;
+    border-radius: 12px 12px 0 0;
+}
+
+.browser-dots {
+    display: flex;
+    gap: 6px;
+}
+
+.browser-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.browser-dot.red { background: #ff5f57; }
+.browser-dot.yellow { background: #febc2e; }
+.browser-dot.green { background: #28c840; }
+
+.browser-url {
+    flex: 1;
+    background: #1a1a1a;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #888;
+    font-family: monospace;
+}
+
+/* Screenshot image */
+.screenshot-content {
+    width: 100%;
+    border-radius: 0 0 12px 12px;
+    overflow: hidden;
+}
+
+.screenshot-content img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+/* CTA footer */
+.cta-footer {
+    padding: 30px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cta-button {
+    {% if cta_styles.backgroundColor %}
+    background: {{ cta_styles.backgroundColor }};
+    {% else %}
+    background: {{ accent_color }};
+    {% endif %}
+
+    {% if cta_styles.color %}
+    color: {{ cta_styles.color }};
+    {% else %}
+    color: {{ primary_color }};
+    {% endif %}
+
+    padding: 18px 45px;
+
+    {% if cta_styles.borderRadius %}
+    border-radius: {{ cta_styles.borderRadius }};
+    {% else %}
+    border-radius: {{ border_radius or '12px' }};
+    {% endif %}
+
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    border: none;
+    cursor: pointer;
+}
+
+/* Decorative elements */
+.decoration-glow {
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: {{ accent_color }};
+    opacity: 0.1;
+    filter: blur(100px);
+}
+
+.decoration-glow.top { top: -100px; right: -50px; }
+.decoration-glow.bottom { bottom: -100px; left: -50px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ad-container">
+    {# Decorative glows #}
+    <div class="decoration-glow top"></div>
+    <div class="decoration-glow bottom"></div>
+
+    {# Header #}
+    <div class="header">
+        {% if logo_url %}
+        <img class="logo" src="{{ logo_url }}" alt="Logo">
+        {% else %}
+        <div></div>
+        {% endif %}
+        {% if headline %}
+        <span class="headline-minimal">{{ headline }}</span>
+        {% endif %}
+    </div>
+
+    {# Screenshot with device frame #}
+    <div class="screenshot-wrapper">
+        <div class="device-frame">
+            <div class="browser-chrome">
+                <div class="browser-dots">
+                    <div class="browser-dot red"></div>
+                    <div class="browser-dot yellow"></div>
+                    <div class="browser-dot green"></div>
+                </div>
+                <div class="browser-url">{{ url_display or 'app.example.com' }}</div>
+            </div>
+            <div class="screenshot-content">
+                {% if screenshot %}
+                <img src="data:image/png;base64,{{ screenshot }}" alt="Product">
+                {% elif screenshot_url %}
+                <img src="{{ screenshot_url }}" alt="Product">
+                {% else %}
+                {# Placeholder if no screenshot #}
+                <div style="background: #f0f0f0; height: 400px; display: flex; align-items: center; justify-content: center;">
+                    <span style="color: #999; font-size: 24px;">Product Screenshot</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    {# CTA Footer #}
+    <div class="cta-footer">
+        <div class="cta-button">{{ cta_text }}</div>
+    </div>
+</div>
+{% endblock %}

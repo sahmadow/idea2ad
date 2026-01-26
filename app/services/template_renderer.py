@@ -26,6 +26,15 @@ TEMPLATE_MAP = {
     "brand-centric": "brand_centric.html",
 }
 
+# Replica template map
+REPLICA_TEMPLATE_MAP = {
+    "hero": "replica/hero_replica.html",
+    "features": "replica/features_replica.html",
+    "screenshot": "replica/screenshot_replica.html",
+    "before_after": "replica/before_after_replica.html",
+    "testimonial": "replica/testimonial_replica.html",
+}
+
 
 class TemplateRenderer:
     """Render HTML ad templates to PNG using Playwright."""
@@ -229,6 +238,57 @@ class TemplateRenderer:
             return "#000000" if luminance > 0.5 else "#ffffff"
         except Exception:
             return "#ffffff"
+
+    async def render_replica_creative(
+        self,
+        template_type: str,
+        replica_data: Any,  # ReplicaData
+        variation_data: Dict[str, Any],
+        aspect_ratio: str = "1:1",
+    ) -> bytes:
+        """
+        Render replica creative from extracted landing page data.
+
+        Args:
+            template_type: "hero", "features", "screenshot", "before_after", "testimonial"
+            replica_data: ReplicaData object with extracted elements
+            variation_data: Specific content for this variation
+            aspect_ratio: "1:1", "4:5", or "9:16"
+
+        Returns:
+            PNG image bytes
+        """
+        template_name = REPLICA_TEMPLATE_MAP.get(template_type, "replica/hero_replica.html")
+        dimensions = AD_DIMENSIONS.get(aspect_ratio, (1080, 1080))
+
+        logger.info(f"Rendering replica creative: type={template_type}, aspect={aspect_ratio}")
+
+        # Build base context from replica_data
+        context = {
+            # CSS injection
+            "font_faces": replica_data.font_faces,
+            "css_variables": replica_data.css_variables,
+            # Colors
+            "primary_color": replica_data.primary_color,
+            "secondary_color": replica_data.secondary_color,
+            "accent_color": replica_data.accent_color,
+            "text_color": self._get_text_color(replica_data.primary_color),
+            "gradient": None,
+            # Typography
+            "font_family": replica_data.font_family,
+            # Logo
+            "logo_url": replica_data.logo_url,
+            # Border radius
+            "border_radius": "12px",
+            # CTA defaults from hero
+            "cta_text": replica_data.hero.cta_text,
+            "cta_styles": replica_data.hero.cta_styles,
+        }
+
+        # Merge variation-specific data
+        context.update(variation_data)
+
+        return await self.render_template(template_name, context, dimensions)
 
     async def close(self):
         """Clean up browser resources."""

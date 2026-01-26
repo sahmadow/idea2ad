@@ -112,3 +112,66 @@ class CampaignDraft(BaseModel):
     image_briefs: List[ImageBrief]
     ads: Optional[List[Ad]] = None  # 2 ready-to-use ads
     status: str = "DRAFT"
+
+
+# =====================================
+# REPLICA AD CREATIVE MODELS
+# =====================================
+
+class HeroData(BaseModel):
+    """Extracted hero section data from landing page."""
+    headline: str
+    subheadline: Optional[str] = None
+    background_color: Optional[str] = None  # Hex color of hero background
+    background_url: Optional[str] = None
+    background_screenshot: Optional[str] = None  # base64
+    cta_text: str = "Learn More"
+    cta_styles: Dict[str, Any] = {}
+
+
+class FeatureItem(BaseModel):
+    """Individual feature/benefit extracted from landing page."""
+    title: str
+    description: Optional[str] = None
+    icon_url: Optional[str] = None
+    screenshot: Optional[str] = None  # base64
+
+
+class TestimonialItem(BaseModel):
+    """Customer testimonial/review from landing page."""
+    quote: str
+    author: Optional[str] = None
+    company: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class ReplicaData(BaseModel):
+    """Complete extracted data for replica ad creatives."""
+    url: str
+    hero: HeroData
+    logo_url: Optional[str] = None
+    primary_color: str = "#ffffff"
+    secondary_color: str = "#000000"
+    accent_color: str = "#0066ff"
+    font_family: str = "Inter"
+    font_faces: List[str] = []
+    css_variables: Dict[str, str] = {}
+    features: List[FeatureItem] = []
+    testimonials: List[TestimonialItem] = []
+    product_screenshots: List[str] = []  # base64 list
+    before_after: Optional[Dict[str, str]] = None  # {before: str, after: str}
+
+
+class ReplicaCreative(BaseModel):
+    """Single generated replica creative."""
+    variation_type: str  # "hero", "features", "screenshot", "before_after", "testimonial"
+    aspect_ratio: str  # "1:1", "4:5", "9:16"
+    image_url: str  # S3 URL
+    extracted_content: Dict[str, Any] = {}  # What was used from ReplicaData
+
+
+class ReplicaResponse(BaseModel):
+    """Response from replica creative generation."""
+    url: str
+    creatives: List[ReplicaCreative]
+    replica_data: ReplicaData  # Full extracted data
