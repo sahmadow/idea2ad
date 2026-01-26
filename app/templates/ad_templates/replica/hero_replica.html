@@ -115,61 +115,16 @@
 }
 
 .cta-button {
-    {% if cta_styles.backgroundColor %}
-    background: {{ cta_styles.backgroundColor }};
-    {% else %}
-    background: {{ accent_color }};
-    {% endif %}
-
-    {% if cta_styles.color %}
-    color: {{ cta_styles.color }};
-    {% else %}
-    color: #ffffff;
-    {% endif %}
-
-    {% if cta_styles.padding %}
-    padding: {{ cta_styles.padding }};
-    {% else %}
-    padding: 28px 64px;
-    {% endif %}
-
-    {% if cta_styles.borderRadius %}
-    border-radius: {{ cta_styles.borderRadius }};
-    {% else %}
-    border-radius: {{ border_radius or '12px' }};
-    {% endif %}
-
+    background: {{ cta_styles.backgroundColor or accent_color or '#1a1a1a' }};
+    color: {{ cta_styles.color or '#ffffff' }};
+    padding: 18px 40px;
+    border-radius: {{ cta_styles.borderRadius or border_radius or '12px' }};
     font-family: '{{ font_family }}', sans-serif;
-
-    {% if cta_styles.fontSize %}
-    font-size: {{ cta_styles.fontSize }};
-    {% else %}
-    font-size: 32px;
-    {% endif %}
-
-    min-width: 280px;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
     text-align: center;
-
-    {% if cta_styles.fontWeight %}
-    font-weight: {{ cta_styles.fontWeight }};
-    {% else %}
-    font-weight: 700;
-    {% endif %}
-
-    {% if cta_styles.textTransform %}
-    text-transform: {{ cta_styles.textTransform }};
-    {% else %}
-    text-transform: uppercase;
-    {% endif %}
-
-    letter-spacing: 1px;
-
-    {% if cta_styles.boxShadow %}
-    box-shadow: {{ cta_styles.boxShadow }};
-    {% else %}
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-    {% endif %}
-
     border: none;
     cursor: pointer;
     display: inline-block;
