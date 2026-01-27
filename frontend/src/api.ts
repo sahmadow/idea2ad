@@ -182,6 +182,41 @@ interface UploadResponse {
   size: number;
 }
 
+// Quick Mode types
+export type ToneOption = "professional" | "casual" | "playful" | "urgent" | "friendly";
+
+export interface QuickAd {
+  imageUrl?: string;
+  primaryText: string;
+  headline: string;
+  description: string;
+  cta: string;
+}
+
+export interface QuickAdResponse {
+  ads: QuickAd[];
+  targeting: string;
+  campaignName: string;
+}
+
+export const generateQuickAd = async (
+  idea: string,
+  tone: ToneOption
+): Promise<QuickAdResponse> => {
+  const response = await fetch(`${API_URL}/quick/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idea, tone }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Quick mode generation failed");
+  }
+
+  return response.json();
+};
+
 export const uploadProductImage = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append("file", file);

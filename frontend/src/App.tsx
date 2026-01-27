@@ -9,11 +9,12 @@ import { AdPreview } from './components/ui/AdPreview';
 import { ResultsView } from './components/ResultsView';
 import { PublishView } from './components/PublishView';
 import { SuccessView } from './components/SuccessView';
-import { analyzeUrl, uploadProductImage, type CampaignDraft, type Ad, type BusinessType } from './api';
+import { analyzeUrl, uploadProductImage, generateQuickAd, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse } from './api';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
 
 type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
+type GenerationMode = 'full' | 'quick';
 
 // LocalStorage keys for state persistence
 const STORAGE_KEYS = {
@@ -22,6 +23,7 @@ const STORAGE_KEYS = {
   SELECTED_AD: 'idea2ad_selectedAd',
   URL: 'idea2ad_url',
   BUSINESS_TYPE: 'idea2ad_businessType',
+  GENERATION_MODE: 'idea2ad_generationMode',
 };
 
 // Hash-based routing for test pages
@@ -87,6 +89,21 @@ function App() {
     }
   });
 
+  // Generation mode state
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.GENERATION_MODE);
+      return (stored === 'quick' ? 'quick' : 'full') as GenerationMode;
+    } catch {
+      return 'full';
+    }
+  });
+
+  // Quick mode state
+  const [quickIdea, setQuickIdea] = useState('');
+  const [quickTone, setQuickTone] = useState<ToneOption>('professional');
+  const [quickResult, setQuickResult] = useState<QuickAdResponse | null>(null);
+
   // Commerce-specific product state
   const [productDescription, setProductDescription] = useState('');
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
@@ -136,6 +153,12 @@ function App() {
       localStorage.setItem(STORAGE_KEYS.BUSINESS_TYPE, businessType);
     } catch { /* ignore */ }
   }, [businessType]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.GENERATION_MODE, generationMode);
+    } catch { /* ignore */ }
+  }, [generationMode]);
 
   // Handle product image selection
   const handleImageSelect = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -197,6 +220,62 @@ function App() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (generationMode === 'quick') {
+      if (!quickIdea.trim() || quickIdea.trim().length < 10) {
+        setError('Please describe your idea (at least 10 characters)');
+        return;
+      }
+      setView('loading');
+      setError(null);
+      setResult(null);
+      setSelectedAd(null);
+      setQuickResult(null);
+
+      try {
+        const data = await generateQuickAd(quickIdea.trim(), quickTone);
+        setQuickResult(data);
+        // Convert to CampaignDraft shape for ResultsView compatibility
+        const ads: Ad[] = data.ads.map((a, i) => ({
+          id: i + 1,
+          imageUrl: a.imageUrl || undefined,
+          primaryText: a.primaryText,
+          headline: a.headline,
+          description: a.description,
+        }));
+        const campaignDraft: CampaignDraft = {
+          project_url: '',
+          analysis: {
+            summary: quickIdea,
+            unique_selling_proposition: data.ads[0]?.headline || '',
+            pain_points: [],
+            call_to_action: data.ads[0]?.cta || 'Learn More',
+            buyer_persona: {},
+            keywords: [],
+            styling_guide: {
+              primary_colors: [], secondary_colors: [],
+              font_families: [], design_style: '', mood: '',
+            },
+          },
+          targeting: {
+            age_min: 18, age_max: 65, genders: [],
+            geo_locations: [], interests: [],
+          },
+          suggested_creatives: [],
+          image_briefs: [],
+          ads,
+          status: 'ANALYZED',
+        };
+        setResult(campaignDraft);
+        setView('results');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Quick generation failed');
+        setView('landing');
+      }
+      return;
+    }
+
+    // Full mode
     if (!url.trim()) return;
 
     setView('loading');
@@ -224,6 +303,7 @@ function App() {
     setResult(null);
     setSelectedAd(null);
     setPublishResult(null);
+    setQuickResult(null);
     // Clear product state
     setProductDescription('');
     clearProductImage();
@@ -242,8 +322,12 @@ function App() {
         <div className="text-center space-y-8">
           <div className="w-16 h-16 border-2 border-brand-lime/30 border-t-brand-lime rounded-full animate-spin mx-auto" />
           <div>
-            <h2 className="text-2xl font-display font-bold mb-2">Analyzing Your Page</h2>
-            <p className="text-gray-400 font-mono text-sm">{url}</p>
+            <h2 className="text-2xl font-display font-bold mb-2">
+              {generationMode === 'quick' ? 'Generating Your Ad' : 'Analyzing Your Page'}
+            </h2>
+            <p className="text-gray-400 font-mono text-sm">
+              {generationMode === 'quick' ? quickIdea.slice(0, 80) + (quickIdea.length > 80 ? '...' : '') : url}
+            </p>
           </div>
           <div className="max-w-md mx-auto">
             <Terminal />
@@ -329,52 +413,110 @@ function App() {
               Turn any landing page into a <span className="text-white font-medium">Meta Ads campaign</span> in 60 seconds.
             </p>
 
-            {/* Business Type Toggle */}
+            {/* Generation Mode Toggle */}
             <div className="flex justify-center gap-2 mb-2">
               <button
                 type="button"
-                onClick={() => setBusinessType('saas')}
+                onClick={() => setGenerationMode('full')}
                 className={`px-6 py-2 text-sm font-mono transition-all border ${
-                  businessType === 'saas'
+                  generationMode === 'full'
                     ? 'bg-brand-lime text-brand-dark border-brand-lime'
                     : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
                 }`}
               >
-                SaaS
+                Full Mode
               </button>
               <button
                 type="button"
-                onClick={() => setBusinessType('commerce')}
+                onClick={() => setGenerationMode('quick')}
                 className={`px-6 py-2 text-sm font-mono transition-all border ${
-                  businessType === 'commerce'
+                  generationMode === 'quick'
                     ? 'bg-brand-lime text-brand-dark border-brand-lime'
                     : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
                 }`}
               >
-                Commerce
+                Quick Mode
               </button>
             </div>
             <p className="text-xs text-gray-500 font-mono">
-              {businessType === 'commerce'
-                ? 'Generate product-focused ad creatives'
-                : 'Generate person-centric and brand-centric ad creatives'}
+              {generationMode === 'quick'
+                ? 'Describe your idea, get an ad instantly'
+                : 'Analyze a landing page for brand-matched creatives'}
             </p>
 
-            <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste your landing page URL..."
-                  className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
+            {/* Quick Mode Form */}
+            {generationMode === 'quick' ? (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-lg mx-auto">
+                <textarea
+                  value={quickIdea}
+                  onChange={(e) => setQuickIdea(e.target.value)}
+                  placeholder="Describe your business or product idea..."
+                  rows={3}
+                  className="w-full bg-brand-gray border border-white/10 px-6 py-4 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors resize-none"
                 />
-              </div>
-              <Button type="submit" size="lg" className="shrink-0 group" disabled={!url.trim()}>
-                Generate Ad
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
-            </form>
+                <div className="flex gap-4">
+                  <select
+                    value={quickTone}
+                    onChange={(e) => setQuickTone(e.target.value as ToneOption)}
+                    className="flex-1 h-14 bg-brand-gray border border-white/10 px-4 text-white focus:outline-none focus:border-brand-lime font-mono text-sm transition-colors appearance-none cursor-pointer"
+                  >
+                    <option value="professional">Professional</option>
+                    <option value="casual">Casual</option>
+                    <option value="playful">Playful</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="friendly">Friendly</option>
+                  </select>
+                  <Button type="submit" size="lg" className="shrink-0 group" disabled={quickIdea.trim().length < 10}>
+                    Generate Ad
+                    <Zap className="w-4 h-4 ml-2" />
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <>
+                {/* Full Mode: Business Type Toggle */}
+                <div className="flex justify-center gap-2 mb-2">
+                  <button
+                    type="button"
+                    onClick={() => setBusinessType('saas')}
+                    className={`px-6 py-2 text-sm font-mono transition-all border ${
+                      businessType === 'saas'
+                        ? 'bg-white/10 text-white border-white/30'
+                        : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
+                    }`}
+                  >
+                    SaaS
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBusinessType('commerce')}
+                    className={`px-6 py-2 text-sm font-mono transition-all border ${
+                      businessType === 'commerce'
+                        ? 'bg-white/10 text-white border-white/30'
+                        : 'bg-transparent text-gray-400 border-white/20 hover:border-white/40'
+                    }`}
+                  >
+                    Commerce
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="Paste your landing page URL..."
+                      className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
+                    />
+                  </div>
+                  <Button type="submit" size="lg" className="shrink-0 group" disabled={!url.trim()}>
+                    Generate Ad
+                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </form>
+              </>
+            )}
 
             {error && (
               <div className="text-red-400 text-sm font-mono bg-red-500/10 border border-red-500/20 px-4 py-2 rounded">
@@ -382,8 +524,8 @@ function App() {
               </div>
             )}
 
-            {/* Commerce Product Section */}
-            {businessType === 'commerce' && (
+            {/* Commerce Product Section (Full Mode only) */}
+            {generationMode === 'full' && businessType === 'commerce' && (
               <div className="max-w-lg mx-auto space-y-4 pt-4 border-t border-white/10">
                 <p className="text-xs text-gray-500 font-mono text-center">
                   Optional: Provide product details for better creatives
