@@ -102,7 +102,7 @@ function App() {
   // Quick mode state
   const [quickIdea, setQuickIdea] = useState('');
   const [quickTone, setQuickTone] = useState<ToneOption>('professional');
-  const [quickResult, setQuickResult] = useState<QuickAdResponse | null>(null);
+  const [, setQuickResult] = useState<QuickAdResponse | null>(null);
 
   // Commerce-specific product state
   const [productDescription, setProductDescription] = useState('');

@@ -58,7 +58,7 @@ async def upload_product_image(
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed: JPEG, PNG, WebP"
+            detail="Invalid file type. Allowed: JPEG, PNG, WebP"
         )
 
     # Read file and validate size
@@ -67,7 +67,7 @@ async def upload_product_image(
     if len(content) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File too large. Maximum size: 10MB"
+            detail="File too large. Maximum size: 10MB"
         )
 
     if len(content) == 0:

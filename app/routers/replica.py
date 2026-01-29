@@ -4,13 +4,13 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from typing import List, Optional
+from typing import List
 import uuid
 import logging
 
 from app.models import ReplicaData, ReplicaCreative, ReplicaResponse
 from app.services.replica_scraper import scrape_for_replica
-from app.services.template_renderer import get_template_renderer, AD_DIMENSIONS
+from app.services.template_renderer import get_template_renderer
 from app.services.s3 import get_s3_service
 
 logger = logging.getLogger(__name__)
