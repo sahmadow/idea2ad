@@ -1,4 +1,6 @@
-import { ArrowLeft, ArrowRight, Download, Target, Palette, Sparkles } from 'lucide-react';
+import { useState } from 'react';
+import { ArrowLeft, ArrowRight, Download, Target, Palette, Sparkles, ChevronDown, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
@@ -10,10 +12,28 @@ interface ResultsViewProps {
   onSelectAd: (ad: Ad) => void;
   onBack: () => void;
   onNext?: () => void;
+  onRegenerate?: () => void;
 }
 
-export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: ResultsViewProps) {
-  const pageName = new URL(result.project_url).hostname.replace('www.', '');
+const staggerContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
+};
+
+export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, onRegenerate }: ResultsViewProps) {
+  const [painPointsOpen, setPainPointsOpen] = useState(false);
+
+  let pageName = 'your site';
+  try {
+    pageName = new URL(result.project_url).hostname.replace('www.', '');
+  } catch {
+    // quick mode may have empty project_url
+  }
 
   const handleExportJson = () => {
     const dataStr = JSON.stringify(result, null, 2);
@@ -30,7 +50,7 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
     <div className="min-h-screen bg-brand-dark text-white py-12">
       <div className="max-w-7xl mx-auto px-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-12">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-12">
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
@@ -39,13 +59,20 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             <span className="font-mono text-sm">Try Another URL</span>
           </button>
           <div className="flex items-center gap-3">
-            <Button variant="outline" onClick={handleExportJson}>
+            {onRegenerate && (
+              <Button variant="ghost" size="sm" onClick={onRegenerate}>
+                <RefreshCw className="w-4 h-4 mr-2" />
+                Regenerate
+              </Button>
+            )}
+            <Button variant="outline" size="sm" onClick={handleExportJson}>
               <Download className="w-4 h-4 mr-2" />
-              Export JSON
+              Export
             </Button>
             {onNext && (
               <Button
                 variant="primary"
+                size="sm"
                 onClick={onNext}
                 disabled={!selectedAd}
               >
@@ -62,15 +89,16 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             <Sparkles className="w-3 h-3" />
             Campaign Generated
           </div>
-          <h1 className="text-4xl font-display font-bold mb-2">Your Ad Campaign</h1>
-          <p className="text-gray-400">
-            Based on <span className="text-brand-lime font-mono">{result.project_url}</span>
-          </p>
+          <h1 className="text-3xl sm:text-4xl font-display font-bold mb-2">Your Ad Campaign</h1>
+          {result.project_url && (
+            <p className="text-gray-400">
+              Based on <span className="text-brand-lime font-mono">{result.project_url}</span>
+            </p>
+          )}
         </div>
 
-        {/* Analysis Summary Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-16">
-          {/* Summary Card */}
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
           <Card>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -87,7 +115,6 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             </div>
           </Card>
 
-          {/* Targeting Card */}
           <Card>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -109,7 +136,7 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
                   <span className="text-gray-500">Interests:</span>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {result.targeting.interests.slice(0, 5).map((interest, i) => (
-                      <span key={i} className="px-2 py-0.5 bg-brand-gray border border-white/10 text-xs text-gray-300 rounded">
+                      <span key={i} className="px-2 py-0.5 bg-brand-gray border border-white/10 text-xs text-gray-300">
                         {interest}
                       </span>
                     ))}
@@ -119,7 +146,6 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             </div>
           </Card>
 
-          {/* Styling Card */}
           <Card>
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -135,7 +161,7 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
                     {result.analysis.styling_guide.primary_colors.slice(0, 4).map((color, i) => (
                       <div
                         key={i}
-                        className="w-8 h-8 rounded border border-white/20"
+                        className="w-8 h-8 border border-white/20"
                         style={{ backgroundColor: color }}
                         title={color}
                       />
@@ -162,35 +188,59 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
           <h2 className="text-2xl font-display font-bold text-center mb-2">Generated Ads</h2>
           <p className="text-gray-400 text-center mb-8">Click an ad to select it for launch</p>
 
-          <div className="flex flex-wrap justify-center gap-8">
+          <motion.div
+            className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 justify-items-center"
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
             {result.ads?.map((ad) => (
-              <MetaAdPreview
-                key={ad.id}
-                ad={ad}
-                pageName={pageName}
-                websiteUrl={result.project_url}
-                selected={selectedAd?.id === ad.id}
-                onSelect={() => onSelectAd(ad)}
-              />
+              <motion.div key={ad.id} variants={fadeInUp}>
+                <MetaAdPreview
+                  ad={ad}
+                  pageName={pageName}
+                  websiteUrl={result.project_url}
+                  selected={selectedAd?.id === ad.id}
+                  onSelect={() => onSelectAd(ad)}
+                />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
 
-        {/* Pain Points */}
-        <div className="max-w-2xl mx-auto">
-          <h3 className="text-lg font-display font-bold text-center mb-4">Identified Pain Points</h3>
-          <div className="space-y-2">
-            {result.analysis.pain_points.map((point, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 bg-brand-gray/50 border border-white/5 rounded">
-                <span className="text-brand-lime font-mono text-sm">{i + 1}.</span>
-                <span className="text-gray-300 text-sm">{point}</span>
-              </div>
-            ))}
+        {/* Pain Points (Collapsible) */}
+        {result.analysis.pain_points.length > 0 && (
+          <div className="max-w-2xl mx-auto mb-12">
+            <button
+              onClick={() => setPainPointsOpen(!painPointsOpen)}
+              className="w-full flex items-center justify-between p-4 bg-brand-gray/50 border border-white/5 text-left hover:border-white/10 transition-colors"
+            >
+              <h3 className="text-sm font-mono font-bold uppercase tracking-wide text-gray-400">
+                Identified Pain Points ({result.analysis.pain_points.length})
+              </h3>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${painPointsOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {painPointsOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="border border-t-0 border-white/5 overflow-hidden"
+              >
+                <div className="p-4 space-y-2">
+                  {result.analysis.pain_points.map((point, i) => (
+                    <div key={i} className="flex items-start gap-3 p-3 bg-brand-dark border border-white/5">
+                      <span className="text-brand-lime font-mono text-sm">{i + 1}.</span>
+                      <span className="text-gray-300 text-sm">{point}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
           </div>
-        </div>
+        )}
 
         {/* Bottom Action Bar */}
-        <div className="mt-16 pt-8 border-t border-white/10">
+        <div className="mt-8 pt-8 border-t border-white/10">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button variant="outline" onClick={handleExportJson}>
               <Download className="w-4 h-4 mr-2" />
@@ -209,11 +259,25 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext }: 
             )}
           </div>
           {!selectedAd && (
-            <p className="text-center text-gray-500 text-sm mt-3">
+            <p className="text-center text-gray-500 text-sm mt-3 font-mono">
               Click on an ad above to select it for publishing
             </p>
           )}
         </div>
+
+        {/* Floating selection bar */}
+        {selectedAd && onNext && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-brand-gray border border-white/10 px-6 py-3 shadow-2xl flex items-center gap-4"
+          >
+            <span className="text-sm text-gray-400 font-mono">Ad selected</span>
+            <Button size="sm" onClick={onNext}>
+              Publish to Meta <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </motion.div>
+        )}
       </div>
     </div>
   );

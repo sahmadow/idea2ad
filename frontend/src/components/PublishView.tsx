@@ -1,6 +1,5 @@
 /**
  * Publish Campaign View
- * Production flow for publishing campaigns to Meta Ads
  */
 import { useState, useEffect } from 'react';
 import {
@@ -9,14 +8,16 @@ import {
   CheckCircle,
   XCircle,
   ExternalLink,
-  Loader2,
   RefreshCw,
-  AlertCircle,
   Target,
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
+import { StepIndicator } from './ui/StepIndicator';
+import { ErrorBanner } from './ui/ErrorBanner';
+import { Skeleton } from './ui/Skeleton';
 import { useFacebookAuth } from '../hooks/useFacebookAuth';
 import { getPaymentStatus, publishCampaign } from '../api/facebook';
 import type { CampaignDraft, Ad } from '../api';
@@ -46,6 +47,12 @@ const DURATION_OPTIONS = [
   { value: 30, label: '30 days' },
 ];
 
+const STEPS = [
+  { label: 'Connect' },
+  { label: 'Configure' },
+  { label: 'Publish' },
+];
+
 export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: PublishViewProps) {
   const {
     isConnected,
@@ -58,26 +65,26 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
     refreshStatus
   } = useFacebookAuth();
 
-  // Selection state
   const [selectedPageId, setSelectedPageId] = useState<string>('');
   const [selectedAdAccountId, setSelectedAdAccountId] = useState<string>('');
-
-  // Campaign settings
   const [budget, setBudget] = useState<number>(50);
   const [durationDays, setDurationDays] = useState<number>(7);
   const [callToAction, setCallToAction] = useState<string>('LEARN_MORE');
-
-  // Payment status
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
-
-  // Publish state
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
-  const pageName = new URL(campaignData.project_url).hostname.replace('www.', '');
+  let pageName = 'your site';
+  try {
+    pageName = new URL(campaignData.project_url).hostname.replace('www.', '');
+  } catch {
+    // quick mode may have empty project_url
+  }
 
-  // Auto-select first page/ad account when connected
+  // Determine current step
+  const currentStep = !isConnected ? 0 : (!selectedPageId || !selectedAdAccountId) ? 1 : 2;
+
   useEffect(() => {
     if (status?.connected) {
       if (status.pages?.length && !selectedPageId) {
@@ -89,7 +96,6 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
     }
   }, [status, selectedPageId, selectedAdAccountId]);
 
-  // Check payment status when ad account changes
   useEffect(() => {
     if (selectedAdAccountId && sessionId) {
       checkPaymentStatus();
@@ -98,7 +104,6 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
 
   const checkPaymentStatus = async () => {
     if (!selectedAdAccountId) return;
-
     setPaymentLoading(true);
     try {
       const result = await getPaymentStatus(sessionId || undefined, selectedAdAccountId);
@@ -112,7 +117,6 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
 
   const handlePublish = async () => {
     if (!selectedPageId || !selectedAdAccountId) return;
-
     setPublishLoading(true);
     setPublishError(null);
 
@@ -135,7 +139,7 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
           },
         },
         settings: {
-          budget: budget * 100, // Convert to cents
+          budget: budget * 100,
           duration_days: durationDays,
           call_to_action: callToAction,
         },
@@ -153,14 +157,14 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
     }
   };
 
-  const selectedPage = status?.pages?.find(p => p.id === selectedPageId);
+  const selectedPage = status?.pages?.find((p: FBPage) => p.id === selectedPageId);
   const estimatedTotal = budget * durationDays;
 
   return (
     <div className="min-h-screen bg-brand-dark text-white py-12">
       <div className="max-w-6xl mx-auto px-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-6">
           <button
             onClick={onBack}
             className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
@@ -171,10 +175,13 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
           <h1 className="text-2xl font-display font-bold">Publish Campaign</h1>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Left Column - Controls */}
-          <div className="space-y-6">
-            {/* Connection Card */}
+        {/* Step Indicator */}
+        <StepIndicator steps={STEPS} currentStep={currentStep} className="mb-10" />
+
+        <div className="grid lg:grid-cols-5 gap-8">
+          {/* Left Column (3/5) */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Connection */}
             <Card>
               <div className="p-6">
                 <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -183,48 +190,37 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                 </h2>
 
                 {authLoading ? (
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Checking connection...
+                  <div className="space-y-3">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-4 w-32" />
                   </div>
                 ) : isConnected && status?.user ? (
                   <div className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+                      <div className="w-10 h-10 bg-blue-600 flex items-center justify-center text-white font-bold">
                         {status.user.name.charAt(0).toUpperCase()}
                       </div>
                       <div>
                         <div className="font-medium">{status.user.name}</div>
                         <div className="text-sm text-gray-400">Connected</div>
                       </div>
-                      <CheckCircle className="w-5 h-5 text-green-500 ml-auto" />
+                      <CheckCircle className="w-5 h-5 text-status-success ml-auto" />
                     </div>
                     <div className="flex items-center gap-4">
-                      <button
-                        onClick={disconnect}
-                        className="text-sm text-red-400 hover:text-red-300"
-                      >
+                      <button onClick={disconnect} className="text-sm text-status-error hover:opacity-80 transition-opacity">
                         Disconnect
                       </button>
-                      <button
-                        onClick={refreshStatus}
-                        className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" />
-                        Refresh
+                      <button onClick={refreshStatus} className="text-sm text-gray-400 hover:text-white flex items-center gap-1 transition-colors">
+                        <RefreshCw className="w-3 h-3" /> Refresh
                       </button>
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {authError && (
-                      <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 p-3 rounded">
-                        {authError}
-                      </div>
-                    )}
+                    {authError && <ErrorBanner message={authError} />}
                     <button
                       onClick={connect}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 flex items-center justify-center gap-2 transition-colors"
                     >
                       <Facebook className="w-5 h-5" />
                       Connect with Facebook
@@ -234,20 +230,20 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
               </div>
             </Card>
 
-            {/* Account Selection Card */}
+            {/* Account Selection */}
             {isConnected && (
               <Card>
                 <div className="p-6">
                   <h2 className="text-lg font-bold mb-4">Account Selection</h2>
-
                   <div className="space-y-4">
-                    {/* Page Selector */}
                     <div>
-                      <label className="block text-sm text-gray-400 mb-2">Facebook Page</label>
+                      <label htmlFor="page-select" className="block text-sm text-gray-400 mb-2">Facebook Page</label>
                       <select
+                        id="page-select"
                         value={selectedPageId}
                         onChange={(e) => setSelectedPageId(e.target.value)}
-                        className="w-full bg-brand-dark border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
+                        aria-label="Facebook Page"
+                        className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
                       >
                         <option value="">Select a page...</option>
                         {status?.pages?.map((page: FBPage) => (
@@ -257,17 +253,18 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                         ))}
                       </select>
                       {status?.pages?.length === 0 && (
-                        <p className="text-yellow-400 text-sm mt-1">No pages found. Create a Facebook Page first.</p>
+                        <ErrorBanner message="No pages found. Create a Facebook Page first." variant="warning" className="mt-2" />
                       )}
                     </div>
 
-                    {/* Ad Account Selector */}
                     <div>
-                      <label className="block text-sm text-gray-400 mb-2">Ad Account</label>
+                      <label htmlFor="ad-account-select" className="block text-sm text-gray-400 mb-2">Ad Account</label>
                       <select
+                        id="ad-account-select"
                         value={selectedAdAccountId}
                         onChange={(e) => setSelectedAdAccountId(e.target.value)}
-                        className="w-full bg-brand-dark border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
+                        aria-label="Ad Account"
+                        className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
                       >
                         <option value="">Select an ad account...</option>
                         {status?.adAccounts?.map((account: FBAdAccount) => (
@@ -277,44 +274,33 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                         ))}
                       </select>
                       {status?.adAccounts?.length === 0 && (
-                        <p className="text-yellow-400 text-sm mt-1">No ad accounts found. Create one in Meta Business Manager.</p>
+                        <ErrorBanner message="No ad accounts found. Create one in Meta Business Manager." variant="warning" className="mt-2" />
                       )}
                     </div>
 
-                    {/* Payment Status */}
+                    {/* Payment */}
                     {selectedAdAccountId && (
-                      <div className="flex items-center justify-between p-3 bg-brand-dark rounded border border-white/5">
+                      <div className="flex items-center justify-between p-3 bg-brand-dark border border-white/5">
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-gray-400">Payment Method:</span>
                           {paymentLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                            <Skeleton className="h-4 w-16" />
                           ) : paymentStatus?.has_payment_method ? (
-                            <span className="flex items-center gap-1 text-green-400 text-sm">
-                              <CheckCircle className="w-4 h-4" />
-                              Valid
+                            <span className="flex items-center gap-1 text-status-success text-sm">
+                              <CheckCircle className="w-4 h-4" /> Valid
                             </span>
                           ) : (
-                            <span className="flex items-center gap-1 text-red-400 text-sm">
-                              <XCircle className="w-4 h-4" />
-                              Not Set
+                            <span className="flex items-center gap-1 text-status-error text-sm">
+                              <XCircle className="w-4 h-4" /> Not Set
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={checkPaymentStatus}
-                            disabled={paymentLoading}
-                            className="text-gray-400 hover:text-white"
-                          >
+                          <button onClick={checkPaymentStatus} disabled={paymentLoading} className="text-gray-400 hover:text-white transition-colors">
                             <RefreshCw className={`w-4 h-4 ${paymentLoading ? 'animate-spin' : ''}`} />
                           </button>
                           {paymentStatus?.add_payment_url && !paymentStatus.has_payment_method && (
-                            <a
-                              href={paymentStatus.add_payment_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
-                            >
+                            <a href={paymentStatus.add_payment_url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
                               Add Payment <ExternalLink className="w-3 h-3" />
                             </a>
                           )}
@@ -326,36 +312,37 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
               </Card>
             )}
 
-            {/* Campaign Settings Card */}
+            {/* Campaign Settings */}
             {isConnected && selectedPageId && selectedAdAccountId && (
               <Card>
                 <div className="p-6">
                   <h2 className="text-lg font-bold mb-4">Campaign Settings</h2>
-
                   <div className="space-y-4">
-                    {/* Budget */}
                     <div>
-                      <label className="block text-sm text-gray-400 mb-2">Daily Budget (USD)</label>
+                      <label htmlFor="budget-input" className="block text-sm text-gray-400 mb-2">Daily Budget (USD)</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                         <input
+                          id="budget-input"
                           type="number"
                           min={5}
                           value={budget}
                           onChange={(e) => setBudget(Math.max(5, Number(e.target.value)))}
-                          className="w-full bg-brand-dark border border-white/10 rounded px-3 py-2 pl-7 text-white focus:outline-none focus:border-brand-lime"
+                          aria-label="Daily budget in USD"
+                          className="w-full bg-brand-dark border border-white/10 px-3 py-2 pl-7 text-white focus:outline-none focus:border-brand-lime"
                         />
                       </div>
                       <p className="text-xs text-gray-500 mt-1">Minimum $5/day</p>
                     </div>
 
-                    {/* Duration */}
                     <div>
-                      <label className="block text-sm text-gray-400 mb-2">Duration</label>
+                      <label htmlFor="duration-select" className="block text-sm text-gray-400 mb-2">Duration</label>
                       <select
+                        id="duration-select"
                         value={durationDays}
                         onChange={(e) => setDurationDays(Number(e.target.value))}
-                        className="w-full bg-brand-dark border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
+                        aria-label="Campaign duration"
+                        className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
                       >
                         {DURATION_OPTIONS.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -363,13 +350,14 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                       </select>
                     </div>
 
-                    {/* Call to Action */}
                     <div>
-                      <label className="block text-sm text-gray-400 mb-2">Call to Action</label>
+                      <label htmlFor="cta-select" className="block text-sm text-gray-400 mb-2">Call to Action</label>
                       <select
+                        id="cta-select"
                         value={callToAction}
                         onChange={(e) => setCallToAction(e.target.value)}
-                        className="w-full bg-brand-dark border border-white/10 rounded px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
+                        aria-label="Call to action button"
+                        className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white focus:outline-none focus:border-brand-lime"
                       >
                         {CTA_OPTIONS.map(opt => (
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -378,49 +366,44 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                     </div>
 
                     {/* Estimated Total */}
-                    <div className="p-4 bg-brand-lime/10 border border-brand-lime/30 rounded">
+                    <div className="p-4 bg-brand-lime/10 border border-brand-lime/30">
                       <div className="text-sm text-gray-400 mb-1">Estimated Total</div>
-                      <div className="text-2xl font-bold text-brand-lime">
+                      <motion.div
+                        key={estimatedTotal}
+                        initial={{ scale: 1.1 }}
+                        animate={{ scale: 1 }}
+                        className="text-2xl font-bold text-brand-lime"
+                      >
                         ${estimatedTotal}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        ${budget}/day x {durationDays} days
-                      </div>
+                      </motion.div>
+                      <div className="text-xs text-gray-400 mt-1">${budget}/day x {durationDays} days</div>
                     </div>
 
-                    {/* Publish Button */}
                     <Button
                       variant="primary"
                       onClick={handlePublish}
-                      disabled={publishLoading || !paymentStatus?.has_payment_method}
+                      loading={publishLoading}
+                      disabled={!paymentStatus?.has_payment_method}
                       className="w-full py-3"
                     >
-                      {publishLoading ? (
-                        <>
-                          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                          Publishing...
-                        </>
-                      ) : (
-                        'Publish Campaign'
-                      )}
+                      Publish Campaign
                     </Button>
 
                     {!paymentStatus?.has_payment_method && (
-                      <p className="text-yellow-400 text-sm flex items-center gap-1">
-                        <AlertCircle className="w-4 h-4" />
-                        Add a payment method to publish ads
-                      </p>
+                      <ErrorBanner
+                        message="Add a payment method to publish ads"
+                        variant="warning"
+                      />
                     )}
 
-                    {/* Publish Error */}
                     {publishError && (
-                      <div className="text-red-400 text-sm bg-red-500/10 border border-red-500/20 p-3 rounded">
-                        {publishError}
-                      </div>
+                      <ErrorBanner
+                        message={publishError}
+                        onDismiss={() => setPublishError(null)}
+                      />
                     )}
 
-                    {/* Status note */}
-                    <p className="text-xs text-gray-500 text-center">
+                    <p className="text-xs text-gray-500 text-center font-mono">
                       Campaign will be created in PAUSED status
                     </p>
                   </div>
@@ -429,9 +412,8 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
             )}
           </div>
 
-          {/* Right Column - Preview & Targeting */}
-          <div className="space-y-6">
-            {/* Ad Preview */}
+          {/* Right Column (2/5) */}
+          <div className="lg:col-span-2 space-y-6">
             <Card>
               <div className="p-6">
                 <h2 className="text-lg font-bold mb-4">Selected Ad</h2>
@@ -445,7 +427,6 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
               </div>
             </Card>
 
-            {/* Targeting Summary */}
             <Card>
               <div className="p-6">
                 <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
@@ -465,7 +446,7 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                     <span className="text-gray-400">Interests</span>
                     <div className="flex flex-wrap gap-1 mt-2">
                       {campaignData.targeting.interests.slice(0, 6).map((interest, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-brand-gray border border-white/10 text-xs text-gray-300 rounded">
+                        <span key={i} className="px-2 py-0.5 bg-brand-gray border border-white/10 text-xs text-gray-300">
                           {interest}
                         </span>
                       ))}
