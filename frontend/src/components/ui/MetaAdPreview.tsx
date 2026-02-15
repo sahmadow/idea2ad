@@ -136,9 +136,10 @@ export function MetaAdPreview({
           </div>
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-violet-600 to-purple-700 text-white">
-            <div className="text-center">
+            <div className="text-center px-4">
               <div className="text-5xl mb-2">🖼️</div>
-              <div className="text-sm opacity-80">Generating image...</div>
+              <div className="text-sm opacity-80">Image not available</div>
+              <div className="text-xs opacity-50 mt-1">Ad copy generated without image</div>
             </div>
           </div>
         )}

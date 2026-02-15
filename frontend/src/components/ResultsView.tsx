@@ -265,19 +265,6 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, on
           )}
         </div>
 
-        {/* Floating selection bar */}
-        {selectedAd && onNext && (
-          <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-brand-gray border border-white/10 px-6 py-3 shadow-2xl flex items-center gap-4"
-          >
-            <span className="text-sm text-gray-400 font-mono">Ad selected</span>
-            <Button size="sm" onClick={onNext}>
-              Publish to Meta <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </motion.div>
-        )}
       </div>
     </div>
   );
