@@ -120,7 +120,7 @@ async def generate_quick_image(prompt: str, aspect_ratio: str = "1:1") -> bytes:
     for attempt in range(MAX_RETRIES):
         try:
             result = await client.aio.models.generate_content(
-                model='gemini-2.5-flash-image',
+                model='gemini-2.0-flash-exp',
                 contents=enhanced_prompt,
                 config=types.GenerateContentConfig(
                     response_modalities=["IMAGE", "TEXT"],
