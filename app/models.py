@@ -111,6 +111,7 @@ class CampaignDraft(BaseModel):
     suggested_creatives: List[CreativeAsset]
     image_briefs: List[ImageBrief]
     ads: Optional[List[Ad]] = None  # 2 ready-to-use ads
+    carousel: Optional[Dict[str, Any]] = None  # Carousel ad data (if generated)
     status: str = "DRAFT"
 
 
@@ -175,3 +176,33 @@ class ReplicaResponse(BaseModel):
     url: str
     creatives: List[ReplicaCreative]
     replica_data: ReplicaData  # Full extracted data
+
+
+# =====================================
+# CAROUSEL AD MODELS
+# =====================================
+
+class CarouselCard(BaseModel):
+    """Single card in a carousel ad."""
+    card_type: str  # "hook", "value_prop", "cta"
+    headline: str
+    description: Optional[str] = None
+    icon_name: Optional[str] = None  # Lucide icon name for value prop cards
+    image_url: Optional[str] = None  # S3 URL after rendering
+    link_url: Optional[str] = None  # Per-card destination URL
+
+
+class CarouselAd(BaseModel):
+    """Complete carousel ad with multiple cards."""
+    cards: List[CarouselCard]
+    primary_text: str  # Ad copy shown above the carousel
+    aspect_ratio: str = "1:1"  # All cards share same aspect ratio
+    brand_name: Optional[str] = None
+    destination_url: str  # Default link URL
+
+
+class CarouselResponse(BaseModel):
+    """Response from carousel generation endpoint."""
+    url: str
+    carousel: CarouselAd
+    meta_carousel_json: Dict[str, Any]  # Ready-to-use Meta API format

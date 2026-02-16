@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block styles %}
+<style>
+.card {
+    width: 100%;
+    height: 100%;
+    background: {{ gradient or primary_color }};
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    padding: 60px 50px;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Subtle decorative element */
+.deco-circle {
+    position: absolute;
+    border-radius: 50%;
+    background: {{ accent_color }};
+    opacity: 0.08;
+    width: 500px;
+    height: 500px;
+    top: -200px;
+    right: -200px;
+}
+
+.logo {
+    max-width: 140px;
+    max-height: 56px;
+    object-fit: contain;
+}
+
+.headline {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 64px;
+    font-weight: 800;
+    color: {{ text_color }};
+    text-align: center;
+    line-height: 1.08;
+    letter-spacing: -1px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.product-image-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex: 1;
+    padding: 24px 0;
+}
+
+.product-image {
+    max-width: 80%;
+    max-height: 340px;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 36px rgba(0, 0, 0, 0.18));
+}
+
+/* Swipe hint at bottom */
+.swipe-hint {
+    font-family: '{{ font_family }}', sans-serif;
+    font-size: 20px;
+    font-weight: 500;
+    color: {{ text_color }};
+    opacity: 0.5;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.swipe-arrow {
+    font-size: 22px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="deco-circle"></div>
+
+    {% if logo_url %}
+    <img class="logo" src="{{ logo_url }}" alt="Logo">
+    {% endif %}
+
+    <h1 class="headline">{{ headline }}</h1>
+
+    {% if product_image_url %}
+    <div class="product-image-wrapper">
+        <img class="product-image" src="{{ product_image_url }}" alt="Product">
+    </div>
+    {% endif %}
+
+    <div class="swipe-hint">
+        Swipe to learn more <span class="swipe-arrow">&rarr;</span>
+    </div>
+</div>
+{% endblock %}
