@@ -1,6 +1,6 @@
 # LaunchAd (idea2ad)
 
-AI-powered landing page to Meta ad campaign generator. Paste a URL, get ready-to-launch ad creatives.
+AI-powered ad campaign generator. Paste a URL or describe your idea, get ready-to-launch Meta ad creatives.
 
 ## Quick Start
 
@@ -20,22 +20,19 @@ Open https://localhost:5173 (accept the self-signed cert warning).
 
 ## Architecture
 
+**Two generation modes:**
+
 ```
-Frontend (React/Vite)          Backend (FastAPI)
-    │                               │
-    ├─ POST /analyze/async ────────►│ Create job, return job_id
-    │                               │
-    │◄─ { job_id } ─────────────────┤
-    │                               │
-    ├─ GET /jobs/{id} ─────────────►│ Poll status
-    │    (every 2s)                 │
-    │                               │ Background: scrape → analyze → generate
-    │◄─ { status: complete } ───────┤
-    │                               │
-    ├─ Facebook OAuth ─────────────►│ /auth/facebook (popup flow)
-    │◄─ Session ID ─────────────────┤
-    │                               │
-    ├─ POST /facebook/campaign ────►│ Create Meta ad campaign
+Quick Mode:
+Frontend ── POST /quick/generate ──► Gemini (copy) → Imagen 3.0 (image) → S3 → response
+
+Full Mode:
+Frontend ── POST /analyze/async ───► Job created → scrape → Gemini (analysis)
+         ── GET /jobs/{id} (poll) ──► → Gemini (copy) → Imagen 3.0 (images) → S3 → complete
+
+Publishing:
+Frontend ── Facebook OAuth ────────► /auth/facebook (popup flow)
+         ── POST /facebook/campaign ► Create Meta ad campaign
 ```
 
 ## Local Development
@@ -144,7 +141,10 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 
 ## API Endpoints
 
-### Analysis
+### Quick Mode
+- `POST /quick/generate` - Generate ad from a text idea (Gemini copy + Imagen image)
+
+### Full Mode (URL Analysis)
 - `POST /analyze/async` - Start URL analysis job
 - `GET /jobs/{job_id}` - Poll job status
 
@@ -160,11 +160,11 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 
 ## Tech Stack
 
-**Backend:** FastAPI, Python 3.13, Prisma, Playwright, Google Gemini
+**Backend:** FastAPI, Python 3.13, Prisma, Playwright, Google Gemini, Vertex AI Imagen 3.0
 
-**Frontend:** React, TypeScript, Vite, TailwindCSS
+**Frontend:** React, TypeScript, Vite, TailwindCSS, Framer Motion
 
-**Infrastructure:** PostgreSQL, AWS S3, Railway (prod), Vercel (prod)
+**Infrastructure:** PostgreSQL, AWS S3, Railway (prod), Vercel (frontend)
 
 ## Project Structure
 
