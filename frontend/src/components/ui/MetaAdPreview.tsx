@@ -19,6 +19,7 @@ export function MetaAdPreview({
   selected = false,
   onSelect,
 }: MetaAdPreviewProps) {
+  const [textExpanded, setTextExpanded] = useState(false);
   const [imageState, setImageState] = useState({ loaded: false, error: false, url: ad.imageUrl });
 
   const imageLoaded = imageState.url === ad.imageUrl ? imageState.loaded : false;
@@ -102,8 +103,21 @@ export function MetaAdPreview({
       </div>
 
       {/* Primary Text */}
-      <div className="px-3 pb-3 text-meta-text text-sm whitespace-pre-line leading-relaxed">
-        {ad.primaryText}
+      <div className="px-3 pb-3 text-meta-text text-sm leading-relaxed">
+        {textExpanded || ad.primaryText.length <= 125 ? (
+          <span className="whitespace-pre-line">{ad.primaryText}</span>
+        ) : (
+          <>
+            <span className="whitespace-pre-line">{ad.primaryText.slice(0, 125).trimEnd()}</span>
+            <span className="text-meta-text-muted">... </span>
+            <button
+              onClick={(e) => { e.stopPropagation(); setTextExpanded(true); }}
+              className="text-meta-text-muted hover:underline font-medium"
+            >
+              See more
+            </button>
+          </>
+        )}
       </div>
 
       {/* Image */}
