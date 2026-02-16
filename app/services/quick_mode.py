@@ -3,10 +3,8 @@
 import os
 import json
 import asyncio
-import base64
 import logging
 from google import genai
-from google.genai import types
 
 logger = logging.getLogger(__name__)
 
@@ -98,15 +96,11 @@ IMPORTANT:
 
 async def generate_quick_image(prompt: str, aspect_ratio: str = "1:1") -> bytes:
     """
-    Generate an ad image using Gemini with image generation.
+    Generate an ad image using Vertex AI Imagen 3.0 (same as full mode).
 
     Returns raw image bytes (PNG).
     """
-    api_key = os.environ.get("GOOGLE_API_KEY")
-    if not api_key:
-        raise QuickModeError("GOOGLE_API_KEY not configured")
-
-    client = genai.Client(api_key=api_key)
+    from app.services.image_gen import get_image_generator
 
     enhanced_prompt = (
         f"Create a professional, high-quality advertisement image. "
@@ -119,25 +113,14 @@ async def generate_quick_image(prompt: str, aspect_ratio: str = "1:1") -> bytes:
 
     for attempt in range(MAX_RETRIES):
         try:
-            result = await client.aio.models.generate_content(
-                model='gemini-2.0-flash-exp',
-                contents=enhanced_prompt,
-                config=types.GenerateContentConfig(
-                    response_modalities=["IMAGE", "TEXT"],
-                )
+            generator = get_image_generator()
+            image_bytes = await generator.generate_image(
+                prompt=enhanced_prompt,
+                aspect_ratio=aspect_ratio,
+                negative_prompt="text, words, letters, watermarks, logos, blurry, low quality",
             )
-
-            # Extract image from response parts
-            if result.candidates and result.candidates[0].content.parts:
-                for part in result.candidates[0].content.parts:
-                    if part.inline_data and part.inline_data.mime_type.startswith("image/"):
-                        image_bytes = part.inline_data.data
-                        if isinstance(image_bytes, str):
-                            image_bytes = base64.b64decode(image_bytes)
-                        logger.info(f"Quick image generated: {len(image_bytes)} bytes")
-                        return image_bytes
-
-            raise ValueError("No image data in Gemini response")
+            logger.info(f"Quick image generated: {len(image_bytes)} bytes")
+            return image_bytes
 
         except Exception as e:
             last_error = e
