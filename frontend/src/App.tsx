@@ -2,10 +2,15 @@ import { useState, useEffect, useRef, lazy, Suspense, type FormEvent, type Chang
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { LandingView } from './components/LandingView';
+import { DashboardView } from './components/DashboardView';
+import { CampaignDetailView } from './components/CampaignDetailView';
+import { AuthModal } from './components/AuthModal';
 import { Terminal } from './components/ui/Terminal';
 import { Button } from './components/ui/Button';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Skeleton } from './components/ui/Skeleton';
+import { useAuth } from './hooks/useAuth';
+import { useCampaigns } from './hooks/useCampaigns';
 import { analyzeUrl, uploadProductImage, generateQuickAd, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse } from './api';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
@@ -15,7 +20,7 @@ const ResultsView = lazy(() => import('./components/ResultsView').then(m => ({ d
 const PublishView = lazy(() => import('./components/PublishView').then(m => ({ default: m.PublishView })));
 const SuccessView = lazy(() => import('./components/SuccessView').then(m => ({ default: m.SuccessView })));
 
-type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
+type View = 'landing' | 'loading' | 'results' | 'publish' | 'success' | 'dashboard' | 'campaign-detail';
 type GenerationMode = 'full' | 'quick';
 
 const STORAGE_KEYS = {
@@ -67,6 +72,15 @@ function ViewSkeleton() {
 function App() {
   const hash = useHashRoute();
 
+  // Auth
+  const auth = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Campaigns
+  const campaignsHook = useCampaigns();
+  const [viewingCampaignId, setViewingCampaignId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   // State (with localStorage persistence)
   const [url, setUrl] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEYS.URL) || ''; } catch { return ''; }
@@ -75,6 +89,8 @@ function App() {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.VIEW) as View;
       if (stored === 'loading') return 'landing';
+      // Don't restore dashboard/campaign-detail views from storage
+      if (stored === 'dashboard' || stored === 'campaign-detail') return 'landing';
       return stored || 'landing';
     } catch { return 'landing'; }
   });
@@ -126,7 +142,14 @@ function App() {
 
   // Persist to localStorage
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.URL, url); } catch { /* */ } }, [url]);
-  useEffect(() => { try { if (view !== 'loading') localStorage.setItem(STORAGE_KEYS.VIEW, view); } catch { /* */ } }, [view]);
+  useEffect(() => {
+    try {
+      // Don't persist dashboard/campaign-detail views
+      if (view !== 'loading' && view !== 'dashboard' && view !== 'campaign-detail') {
+        localStorage.setItem(STORAGE_KEYS.VIEW, view);
+      }
+    } catch { /* */ }
+  }, [view]);
   useEffect(() => {
     try {
       if (result) localStorage.setItem(STORAGE_KEYS.RESULT, JSON.stringify(result));
@@ -307,8 +330,101 @@ function App() {
     setView('landing');
   };
 
+  // Dashboard navigation
+  const handleDashboardClick = () => {
+    if (!auth.isAuthenticated) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setView('dashboard');
+  };
+
+  const handleViewCampaign = (id: string) => {
+    setViewingCampaignId(id);
+    setView('campaign-detail');
+  };
+
+  const handleSignInClick = () => {
+    setAuthModalOpen(true);
+  };
+
+  const handleLogout = async () => {
+    await auth.logout();
+    if (view === 'dashboard' || view === 'campaign-detail') {
+      setView('landing');
+    }
+    toast.success('Signed out');
+  };
+
+  // Save campaign
+  const handleSaveCampaign = async () => {
+    if (!auth.isAuthenticated || !result) {
+      if (!auth.isAuthenticated) {
+        setAuthModalOpen(true);
+      }
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const campaignName = result.project_url
+        ? new URL(result.project_url).hostname.replace('www.', '')
+        : `Campaign ${new Date().toLocaleDateString()}`;
+
+      await campaignsHook.saveCampaign(campaignName, result);
+      toast.success('Campaign saved to your dashboard');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save campaign');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Render current view
   const renderView = () => {
+    // Dashboard view
+    if (view === 'dashboard') {
+      return (
+        <motion.div key="dashboard" {...pageTransition}>
+          <DashboardView
+            campaigns={campaignsHook.campaigns}
+            isLoading={campaignsHook.isLoading}
+            error={campaignsHook.error}
+            userName={auth.user?.name || auth.user?.email || null}
+            onFetchCampaigns={campaignsHook.fetchCampaigns}
+            onViewCampaign={handleViewCampaign}
+            onDeleteCampaign={campaignsHook.removeCampaign}
+            onNewCampaign={resetToLanding}
+            onLogoClick={resetToLanding}
+            onDashboardClick={handleDashboardClick}
+            onLogout={handleLogout}
+            onDismissError={campaignsHook.clearError}
+          />
+        </motion.div>
+      );
+    }
+
+    // Campaign detail view
+    if (view === 'campaign-detail' && viewingCampaignId) {
+      return (
+        <motion.div key="campaign-detail" {...pageTransition}>
+          <CampaignDetailView
+            campaign={campaignsHook.selectedCampaign}
+            isLoading={campaignsHook.isLoading}
+            error={campaignsHook.error}
+            campaignId={viewingCampaignId}
+            userName={auth.user?.name || auth.user?.email || null}
+            onFetchCampaign={campaignsHook.fetchCampaign}
+            onBack={() => setView('dashboard')}
+            onLogoClick={resetToLanding}
+            onDashboardClick={handleDashboardClick}
+            onLogout={handleLogout}
+            onDismissError={campaignsHook.clearError}
+          />
+        </motion.div>
+      );
+    }
+
     if (view === 'loading') {
       return (
         <motion.div key="loading" {...pageTransition}>
@@ -358,6 +474,9 @@ function App() {
               onBack={handleBack}
               onNext={() => selectedAd && setView('publish')}
               onRegenerate={() => handleSubmit(new Event('submit') as unknown as FormEvent)}
+              onSave={handleSaveCampaign}
+              isSaving={isSaving}
+              isAuthenticated={auth.isAuthenticated}
             />
           </Suspense>
         </motion.div>
@@ -426,6 +545,10 @@ function App() {
           onSubmit={handleSubmit}
           error={error}
           onDismissError={() => setError(null)}
+          userName={auth.user?.name || auth.user?.email || null}
+          onSignInClick={handleSignInClick}
+          onDashboardClick={handleDashboardClick}
+          onLogout={handleLogout}
         />
       </motion.div>
     );
@@ -448,6 +571,18 @@ function App() {
           resetToLanding();
         }}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => {
+          setAuthModalOpen(false);
+          auth.clearError();
+        }}
+        onLogin={auth.login}
+        onRegister={auth.register}
+        error={auth.error}
+        isLoading={auth.isLoading}
       />
     </main>
   );
