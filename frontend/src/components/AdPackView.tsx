@@ -182,7 +182,6 @@ function InlineEditField({
 
 function ExpandedCreativeView({
   creative,
-  adPack,
   onClose,
   onSave,
   onPublish,
@@ -190,7 +189,6 @@ function ExpandedCreativeView({
   websiteUrl,
 }: {
   creative: AdCreative;
-  adPack: AdPack;
   onClose: () => void;
   onSave: (field: string, value: string) => void;
   onPublish?: () => void;
@@ -647,7 +645,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
         {expandedCreative && (
           <ExpandedCreativeView
             creative={expandedCreative}
-            adPack={adPack}
             pageName={pageName}
             websiteUrl={adPack.project_url}
             onClose={() => setExpandedCreative(null)}
