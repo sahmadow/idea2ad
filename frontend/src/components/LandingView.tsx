@@ -45,6 +45,12 @@ interface LandingViewProps {
   onSubmit: (e: FormEvent) => void;
   error: string | null;
   onDismissError: () => void;
+
+  // Auth
+  userName?: string | null;
+  onSignInClick?: () => void;
+  onDashboardClick?: () => void;
+  onLogout?: () => Promise<void>;
 }
 
 const staggerContainer = {
@@ -81,6 +87,10 @@ export function LandingView({
   onSubmit,
   error,
   onDismissError,
+  userName,
+  onSignInClick,
+  onDashboardClick,
+  onLogout,
 }: LandingViewProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -90,7 +100,13 @@ export function LandingView({
 
   return (
     <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-lime selection:text-brand-dark">
-      <Navbar onLogoClick={scrollToTop} />
+      <Navbar
+        onLogoClick={scrollToTop}
+        userName={userName}
+        onSignInClick={onSignInClick}
+        onDashboardClick={onDashboardClick}
+        onLogout={onLogout}
+      />
 
       {/* Hero */}
       <section className="relative pt-32 pb-20 overflow-hidden">

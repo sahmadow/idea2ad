@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, ArrowRight, Download, Target, Palette, Sparkles, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, Target, Palette, Sparkles, ChevronDown, RefreshCw, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
@@ -15,6 +15,9 @@ interface ResultsViewProps {
   onNext?: () => void;
   onRegenerate?: () => void;
   competitorData?: CompetitorIntelligence | null;
+  onSave?: () => void;
+  isSaving?: boolean;
+  isAuthenticated?: boolean;
 }
 
 const staggerContainer = {
@@ -27,7 +30,7 @@ const fadeInUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
 
-export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, onRegenerate, competitorData }: ResultsViewProps) {
+export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, onRegenerate, competitorData, onSave, isSaving, isAuthenticated }: ResultsViewProps) {
   const [painPointsOpen, setPainPointsOpen] = useState(false);
 
   let pageName = 'your site';
@@ -65,6 +68,12 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, on
               <Button variant="ghost" size="sm" onClick={onRegenerate}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Regenerate
+              </Button>
+            )}
+            {isAuthenticated && onSave && (
+              <Button variant="outline" size="sm" onClick={onSave} loading={isSaving}>
+                <Save className="w-4 h-4 mr-2" />
+                Save
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={handleExportJson}>
@@ -255,6 +264,12 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, on
         {/* Bottom Action Bar */}
         <div className="mt-8 pt-8 border-t border-white/10">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            {isAuthenticated && onSave && (
+              <Button variant="outline" onClick={onSave} loading={isSaving}>
+                <Save className="w-4 h-4 mr-2" />
+                Save Campaign
+              </Button>
+            )}
             <Button variant="outline" onClick={handleExportJson}>
               <Download className="w-4 h-4 mr-2" />
               Export JSON

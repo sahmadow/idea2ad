@@ -2,20 +2,28 @@ import { useState, useEffect, useRef, lazy, Suspense, type FormEvent, type Chang
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { LandingView } from './components/LandingView';
+import { DashboardView } from './components/DashboardView';
+import { CampaignDetailView } from './components/CampaignDetailView';
+import { AuthModal } from './components/AuthModal';
 import { Terminal } from './components/ui/Terminal';
 import { Button } from './components/ui/Button';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Skeleton } from './components/ui/Skeleton';
+import { useAuth } from './hooks/useAuth';
+import { useCampaigns } from './hooks/useCampaigns';
 import { analyzeUrl, uploadProductImage, generateQuickAd, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse, type CompetitorIntelligence } from './api';
+import { assembleAdPack } from './api/adpack';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
+import type { AdPack } from './types/adpack';
 
 // Lazy-loaded views
 const ResultsView = lazy(() => import('./components/ResultsView').then(m => ({ default: m.ResultsView })));
+const AdPackView = lazy(() => import('./components/AdPackView').then(m => ({ default: m.AdPackView })));
 const PublishView = lazy(() => import('./components/PublishView').then(m => ({ default: m.PublishView })));
 const SuccessView = lazy(() => import('./components/SuccessView').then(m => ({ default: m.SuccessView })));
 
-type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
+type View = 'landing' | 'loading' | 'results' | 'adpack' | 'publish' | 'success' | 'dashboard' | 'campaign-detail';
 type GenerationMode = 'full' | 'quick';
 
 const STORAGE_KEYS = {
@@ -25,13 +33,14 @@ const STORAGE_KEYS = {
   URL: 'idea2ad_url',
   BUSINESS_TYPE: 'idea2ad_businessType',
   GENERATION_MODE: 'idea2ad_generationMode',
+  AD_PACK: 'idea2ad_adPack',
 };
 
 const LOADING_STAGES = [
   'Analyzing',
   'Generating Copy',
   'Creating Images',
-  'Finalizing',
+  'Building Ad Pack',
 ];
 
 // Hash-based routing for test pages
@@ -67,6 +76,15 @@ function ViewSkeleton() {
 function App() {
   const hash = useHashRoute();
 
+  // Auth
+  const auth = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+
+  // Campaigns
+  const campaignsHook = useCampaigns();
+  const [viewingCampaignId, setViewingCampaignId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
   // State (with localStorage persistence)
   const [url, setUrl] = useState(() => {
     try { return localStorage.getItem(STORAGE_KEYS.URL) || ''; } catch { return ''; }
@@ -75,6 +93,8 @@ function App() {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.VIEW) as View;
       if (stored === 'loading') return 'landing';
+      // Don't restore dashboard/campaign-detail views from storage
+      if (stored === 'dashboard' || stored === 'campaign-detail') return 'landing';
       return stored || 'landing';
     } catch { return 'landing'; }
   });
@@ -87,6 +107,12 @@ function App() {
   const [selectedAd, setSelectedAd] = useState<Ad | null>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEYS.SELECTED_AD);
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+  const [adPack, setAdPack] = useState<AdPack | null>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.AD_PACK);
       return stored ? JSON.parse(stored) : null;
     } catch { return null; }
   });
@@ -130,7 +156,14 @@ function App() {
 
   // Persist to localStorage
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.URL, url); } catch { /* */ } }, [url]);
-  useEffect(() => { try { if (view !== 'loading') localStorage.setItem(STORAGE_KEYS.VIEW, view); } catch { /* */ } }, [view]);
+  useEffect(() => {
+    try {
+      // Don't persist dashboard/campaign-detail views
+      if (view !== 'loading' && view !== 'dashboard' && view !== 'campaign-detail') {
+        localStorage.setItem(STORAGE_KEYS.VIEW, view);
+      }
+    } catch { /* */ }
+  }, [view]);
   useEffect(() => {
     try {
       if (result) localStorage.setItem(STORAGE_KEYS.RESULT, JSON.stringify(result));
@@ -143,6 +176,12 @@ function App() {
       else localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
     } catch { /* */ }
   }, [selectedAd]);
+  useEffect(() => {
+    try {
+      if (adPack) localStorage.setItem(STORAGE_KEYS.AD_PACK, JSON.stringify(adPack));
+      else localStorage.removeItem(STORAGE_KEYS.AD_PACK);
+    } catch { /* */ }
+  }, [adPack]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.BUSINESS_TYPE, businessType); } catch { /* */ } }, [businessType]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.GENERATION_MODE, generationMode); } catch { /* */ } }, [generationMode]);
 
@@ -220,6 +259,7 @@ function App() {
       setError(null);
       setResult(null);
       setSelectedAd(null);
+      setAdPack(null);
       setQuickResult(null);
       try {
         const data = await generateQuickAd(quickIdea.trim(), quickTone);
@@ -255,7 +295,16 @@ function App() {
           status: 'ANALYZED',
         };
         setResult(campaignDraft);
-        setView('results');
+
+        // Assemble AdPack from quick mode result
+        try {
+          const pack = await assembleAdPack(campaignDraft);
+          setAdPack(pack);
+          setView('adpack');
+        } catch {
+          // Fallback to results view if AdPack assembly fails
+          setView('results');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Quick generation failed');
         setView('landing');
@@ -270,6 +319,7 @@ function App() {
     setResult(null);
     setSelectedAd(null);
     setCompetitorData(null);
+    setAdPack(null);
     try {
       const normalizedUrl = normalizeUrl(url);
 
@@ -292,7 +342,16 @@ function App() {
 
       setResult(data);
       setCompetitorData(compData);
-      setView('results');
+
+      // Assemble AdPack from full mode result
+      try {
+        const pack = await assembleAdPack(data);
+        setAdPack(pack);
+        setView('adpack');
+      } catch {
+        // Fallback to results view if AdPack assembly fails
+        setView('results');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
       setView('landing');
@@ -300,7 +359,7 @@ function App() {
   };
 
   const handleBack = () => {
-    if (result && (view === 'results' || view === 'publish')) {
+    if (result && (view === 'results' || view === 'adpack' || view === 'publish')) {
       setConfirmOpen(true);
       return;
     }
@@ -311,6 +370,7 @@ function App() {
     setView('landing');
     setResult(null);
     setSelectedAd(null);
+    setAdPack(null);
     setPublishResult(null);
     setQuickResult(null);
     setCompetitorData(null);
@@ -321,6 +381,7 @@ function App() {
       localStorage.removeItem(STORAGE_KEYS.VIEW);
       localStorage.removeItem(STORAGE_KEYS.RESULT);
       localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
+      localStorage.removeItem(STORAGE_KEYS.AD_PACK);
     } catch { /* */ }
   };
 
@@ -328,8 +389,101 @@ function App() {
     setView('landing');
   };
 
+  // Dashboard navigation
+  const handleDashboardClick = () => {
+    if (!auth.isAuthenticated) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setView('dashboard');
+  };
+
+  const handleViewCampaign = (id: string) => {
+    setViewingCampaignId(id);
+    setView('campaign-detail');
+  };
+
+  const handleSignInClick = () => {
+    setAuthModalOpen(true);
+  };
+
+  const handleLogout = async () => {
+    await auth.logout();
+    if (view === 'dashboard' || view === 'campaign-detail') {
+      setView('landing');
+    }
+    toast.success('Signed out');
+  };
+
+  // Save campaign
+  const handleSaveCampaign = async () => {
+    if (!auth.isAuthenticated || !result) {
+      if (!auth.isAuthenticated) {
+        setAuthModalOpen(true);
+      }
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const campaignName = result.project_url
+        ? new URL(result.project_url).hostname.replace('www.', '')
+        : `Campaign ${new Date().toLocaleDateString()}`;
+
+      await campaignsHook.saveCampaign(campaignName, result);
+      toast.success('Campaign saved to your dashboard');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save campaign');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Render current view
   const renderView = () => {
+    // Dashboard view
+    if (view === 'dashboard') {
+      return (
+        <motion.div key="dashboard" {...pageTransition}>
+          <DashboardView
+            campaigns={campaignsHook.campaigns}
+            isLoading={campaignsHook.isLoading}
+            error={campaignsHook.error}
+            userName={auth.user?.name || auth.user?.email || null}
+            onFetchCampaigns={campaignsHook.fetchCampaigns}
+            onViewCampaign={handleViewCampaign}
+            onDeleteCampaign={campaignsHook.removeCampaign}
+            onNewCampaign={resetToLanding}
+            onLogoClick={resetToLanding}
+            onDashboardClick={handleDashboardClick}
+            onLogout={handleLogout}
+            onDismissError={campaignsHook.clearError}
+          />
+        </motion.div>
+      );
+    }
+
+    // Campaign detail view
+    if (view === 'campaign-detail' && viewingCampaignId) {
+      return (
+        <motion.div key="campaign-detail" {...pageTransition}>
+          <CampaignDetailView
+            campaign={campaignsHook.selectedCampaign}
+            isLoading={campaignsHook.isLoading}
+            error={campaignsHook.error}
+            campaignId={viewingCampaignId}
+            userName={auth.user?.name || auth.user?.email || null}
+            onFetchCampaign={campaignsHook.fetchCampaign}
+            onBack={() => setView('dashboard')}
+            onLogoClick={resetToLanding}
+            onDashboardClick={handleDashboardClick}
+            onLogout={handleLogout}
+            onDismissError={campaignsHook.clearError}
+          />
+        </motion.div>
+      );
+    }
+
     if (view === 'loading') {
       return (
         <motion.div key="loading" {...pageTransition}>
@@ -368,6 +522,24 @@ function App() {
       );
     }
 
+    if (view === 'adpack' && adPack) {
+      return (
+        <motion.div key="adpack" {...pageTransition}>
+          <Suspense fallback={<ViewSkeleton />}>
+            <AdPackView
+              adPack={adPack}
+              onAdPackChange={setAdPack}
+              onBack={handleBack}
+              onPublish={(ad) => {
+                setSelectedAd(ad);
+                setView('publish');
+              }}
+            />
+          </Suspense>
+        </motion.div>
+      );
+    }
+
     if (view === 'results' && result) {
       return (
         <motion.div key="results" {...pageTransition}>
@@ -380,6 +552,9 @@ function App() {
               onNext={() => selectedAd && setView('publish')}
               onRegenerate={() => handleSubmit(new Event('submit') as unknown as FormEvent)}
               competitorData={competitorData}
+              onSave={handleSaveCampaign}
+              isSaving={isSaving}
+              isAuthenticated={auth.isAuthenticated}
             />
           </Suspense>
         </motion.div>
@@ -393,7 +568,7 @@ function App() {
             <PublishView
               campaignData={result}
               selectedAd={selectedAd}
-              onBack={() => setView('results')}
+              onBack={() => setView(adPack ? 'adpack' : 'results')}
               onSuccess={(res) => {
                 setPublishResult(res);
                 setView('success');
@@ -450,6 +625,10 @@ function App() {
           onSubmit={handleSubmit}
           error={error}
           onDismissError={() => setError(null)}
+          userName={auth.user?.name || auth.user?.email || null}
+          onSignInClick={handleSignInClick}
+          onDashboardClick={handleDashboardClick}
+          onLogout={handleLogout}
         />
       </motion.div>
     );
@@ -472,6 +651,18 @@ function App() {
           resetToLanding();
         }}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <AuthModal
+        open={authModalOpen}
+        onClose={() => {
+          setAuthModalOpen(false);
+          auth.clearError();
+        }}
+        onLogin={auth.login}
+        onRegister={auth.register}
+        error={auth.error}
+        isLoading={auth.isLoading}
       />
     </main>
   );

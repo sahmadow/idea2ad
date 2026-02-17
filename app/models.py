@@ -111,7 +111,79 @@ class CampaignDraft(BaseModel):
     suggested_creatives: List[CreativeAsset]
     image_briefs: List[ImageBrief]
     ads: Optional[List[Ad]] = None  # 2 ready-to-use ads
+    carousel: Optional[Dict[str, Any]] = None  # Carousel ad data (if generated)
     status: str = "DRAFT"
+
+
+# =====================================
+# AD PACK MODELS (Phase 5)
+# =====================================
+
+AdStrategy = Literal["product_aware", "product_unaware"]
+
+
+class AdCreative(BaseModel):
+    """Single creative variant within an AdPack."""
+    id: str  # Unique creative ID
+    strategy: AdStrategy  # Product Aware or Product Unaware
+    primary_text: str
+    headline: str
+    description: str
+    image_url: Optional[str] = None
+    image_brief: Optional[ImageBrief] = None
+    call_to_action: str = "LEARN_MORE"
+
+
+class TargetingRationale(BaseModel):
+    """Explains why specific targeting was chosen."""
+    age_range_reason: str
+    geo_reason: str
+    exclusion_reason: Optional[str] = None
+    methodology: str = "smart_broad"  # Smart Broad targeting approach
+
+
+class SmartBroadTargeting(BaseModel):
+    """Smart Broad targeting spec derived from persona analysis."""
+    age_min: int = 18
+    age_max: int = 65
+    genders: List[str] = ["all"]
+    geo_locations: List[str] = ["US"]
+    excluded_geo_locations: List[str] = []
+    exclusions: List[str] = []  # Excluded interests/behaviors
+    rationale: TargetingRationale
+
+
+class CampaignStructure(BaseModel):
+    """Defines the Meta campaign hierarchy."""
+    campaign_name: str
+    objective: str = "OUTCOME_SALES"
+    adset_name: str
+    ad_count: int  # Number of ads in the ad set
+
+
+class AdPack(BaseModel):
+    """Complete ad pack: all creatives + targeting + budget for a campaign."""
+    id: str  # Unique AdPack ID
+    project_url: str
+    creatives: List[AdCreative]  # All creative variants
+    targeting: SmartBroadTargeting
+    budget_daily: float = 15.0  # Default $15/day
+    duration_days: int = 3  # Default 3-day duration
+    campaign_structure: CampaignStructure
+    status: str = "draft"  # draft | ready | published
+    meta_campaign_id: Optional[str] = None
+    meta_adset_id: Optional[str] = None
+    created_from: Optional[str] = None  # Source CampaignDraft job_id
+
+
+class AdPackUpdateRequest(BaseModel):
+    """Request to update AdPack fields (inline editing)."""
+    creative_id: Optional[str] = None
+    primary_text: Optional[str] = None
+    headline: Optional[str] = None
+    description: Optional[str] = None
+    budget_daily: Optional[float] = None
+    duration_days: Optional[int] = None
 
 
 # =====================================
@@ -236,3 +308,33 @@ class CompetitorIntelligence(BaseModel):
     recommendations: List[GapRecommendation] = []
     confidence_score: int = 0
     status: str = "complete"
+
+
+# =====================================
+# CAROUSEL AD MODELS
+# =====================================
+
+class CarouselCard(BaseModel):
+    """Single card in a carousel ad."""
+    card_type: str  # "hook", "value_prop", "cta"
+    headline: str
+    description: Optional[str] = None
+    icon_name: Optional[str] = None  # Lucide icon name for value prop cards
+    image_url: Optional[str] = None  # S3 URL after rendering
+    link_url: Optional[str] = None  # Per-card destination URL
+
+
+class CarouselAd(BaseModel):
+    """Complete carousel ad with multiple cards."""
+    cards: List[CarouselCard]
+    primary_text: str  # Ad copy shown above the carousel
+    aspect_ratio: str = "1:1"  # All cards share same aspect ratio
+    brand_name: Optional[str] = None
+    destination_url: str  # Default link URL
+
+
+class CarouselResponse(BaseModel):
+    """Response from carousel generation endpoint."""
+    url: str
+    carousel: CarouselAd
+    meta_carousel_json: Dict[str, Any]  # Ready-to-use Meta API format
