@@ -35,6 +35,13 @@ REPLICA_TEMPLATE_MAP = {
     "testimonial": "replica/testimonial_replica.html",
 }
 
+# Carousel template map
+CAROUSEL_TEMPLATE_MAP = {
+    "hook": "carousel/hook_card.html",
+    "value_prop": "carousel/value_prop_card.html",
+    "cta": "carousel/cta_card.html",
+}
+
 
 class TemplateRenderer:
     """Render HTML ad templates to PNG using Playwright."""
