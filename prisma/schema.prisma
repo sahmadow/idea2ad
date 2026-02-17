@@ -46,6 +46,7 @@ model Campaign {
   analysis     Analysis?
   creatives    Creative[]
   image_briefs ImageBrief[]
+  ad_packs     AdPack[]
 
   @@index([user_id])
   @@index([status])
@@ -129,4 +130,34 @@ model FacebookSession {
   created_at          DateTime @default(now())
 
   @@index([id])
+}
+
+model AdPack {
+  id                String      @id @default(uuid())
+  campaign_id       String?
+  project_url       String
+  creatives         Json        // Array of AdCreative objects
+  targeting         Json        // SmartBroadTargeting object
+  budget_daily      Float       @default(15.0)
+  duration_days     Int         @default(3)
+  campaign_structure Json       // CampaignStructure object
+  status            AdPackStatus @default(DRAFT)
+
+  // Meta platform IDs (populated after publish)
+  meta_campaign_id  String?
+  meta_adset_id     String?
+
+  created_at        DateTime    @default(now())
+  updated_at        DateTime    @updatedAt
+
+  campaign          Campaign?   @relation(fields: [campaign_id], references: [id], onDelete: SetNull)
+
+  @@index([campaign_id])
+  @@index([status])
+}
+
+enum AdPackStatus {
+  DRAFT
+  READY
+  PUBLISHED
 }

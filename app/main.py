@@ -17,7 +17,7 @@ from app.services.jobs import create_job, get_job, update_job, JobStatus, cleanu
 import asyncio
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
-from app.routers import auth_router, images_router, campaigns_router, replica_router, quick_router, carousel_router, v2_router
+from app.routers import auth_router, images_router, campaigns_router, replica_router, quick_router, carousel_router, v2_router, adpack_router
 from app.routers.facebook import router as facebook_router, auth_router as facebook_auth_router
 from app.config import get_settings
 from app.logging_config import setup_logging, get_logger
@@ -135,6 +135,7 @@ app.include_router(replica_router)
 app.include_router(quick_router)
 app.include_router(carousel_router)
 app.include_router(v2_router)
+app.include_router(adpack_router)
 
 
 # Request models for Meta API endpoints
@@ -331,7 +332,17 @@ async def run_analysis_job(
             status="ANALYZED"
         )
 
-        update_job(job_id, JobStatus.COMPLETE, result=result.model_dump())
+        # 7. Assemble AdPack from the campaign draft
+        from app.services.adpack import assemble_ad_pack
+        try:
+            ad_pack = assemble_ad_pack(result, job_id=job_id)
+            result_dict = result.model_dump()
+            result_dict["ad_pack_id"] = ad_pack.id
+        except Exception as e:
+            logger.warning(f"AdPack assembly failed (non-fatal): {e}")
+            result_dict = result.model_dump()
+
+        update_job(job_id, JobStatus.COMPLETE, result=result_dict)
         logger.info(f"Job {job_id} completed successfully")
 
     except Exception as e:
