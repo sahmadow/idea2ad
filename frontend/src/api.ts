@@ -234,3 +234,114 @@ export const uploadProductImage = async (file: File): Promise<string> => {
   const result: UploadResponse = await response.json();
   return result.url;
 };
+
+
+// =====================================
+// COMPETITOR INTELLIGENCE
+// =====================================
+
+export interface CompetitorProfile {
+  name: string;
+  url?: string;
+  positioning: string;
+  claims: string[];
+  pricing?: string;
+  differentiators: string[];
+  facebook_page_id?: string;
+  ad_count: number;
+  error?: string;
+}
+
+export interface GapRecommendation {
+  type: string;
+  action: string;
+  rationale: string;
+  sample?: string;
+  priority: string;
+}
+
+export interface CompetitorIntelligence {
+  competitors: CompetitorProfile[];
+  total_ads_analyzed: number;
+  profitable_ads_count: number;
+  hook_distribution: Record<string, number>;
+  angle_distribution: Record<string, number>;
+  cta_distribution: Record<string, number>;
+  format_distribution: Record<string, number>;
+  top_hooks: string[];
+  top_angles: string[];
+  avg_strength: number;
+  gap_analysis: Record<string, unknown>;
+  recommendations: GapRecommendation[];
+  confidence_score: number;
+  status: string;
+}
+
+interface CompetitorJobResponse {
+  job_id: string;
+  status: string;
+}
+
+interface CompetitorJobStatusResponse {
+  job_id: string;
+  status: "pending" | "processing" | "complete" | "failed";
+  result?: CompetitorIntelligence;
+  error?: string;
+}
+
+export const analyzeCompetitors = async (
+  competitors: string[],
+  userContext?: string,
+  onProgress?: (status: string) => void
+): Promise<CompetitorIntelligence> => {
+  const body = {
+    competitors: competitors.map((c) => ({ name_or_url: c })),
+    user_context: userContext,
+  };
+
+  const startResponse = await fetch(`${API_URL}/competitors/analyze`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!startResponse.ok) {
+    const error = await startResponse.json();
+    throw new Error(error.detail || "Failed to start competitor analysis");
+  }
+
+  const job: CompetitorJobResponse = await startResponse.json();
+
+  if (onProgress) {
+    onProgress("pending");
+  }
+
+  // Poll for results
+  let attempts = 0;
+  while (attempts < MAX_POLL_ATTEMPTS) {
+    const response = await fetch(`${API_URL}/jobs/${job.job_id}`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || "Failed to check job status");
+    }
+
+    const jobStatus: CompetitorJobStatusResponse = await response.json();
+
+    if (onProgress) {
+      onProgress(jobStatus.status);
+    }
+
+    if (jobStatus.status === "complete" && jobStatus.result) {
+      return jobStatus.result;
+    }
+
+    if (jobStatus.status === "failed") {
+      throw new Error(jobStatus.error || "Competitor analysis failed");
+    }
+
+    await sleep(POLL_INTERVAL_MS);
+    attempts++;
+  }
+
+  throw new Error("Competitor analysis timed out. Please try again.");
+};

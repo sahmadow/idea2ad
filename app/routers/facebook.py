@@ -4,7 +4,7 @@ Handles server-side OAuth flow for Facebook/Meta integration
 """
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import List, Optional
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel
@@ -18,12 +18,25 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/meta", tags=["facebook"])
 
 
+class AdData(BaseModel):
+    imageUrl: Optional[str] = None
+    primaryText: str
+    headline: str
+    description: str = ""
+
+
 class PublishCampaignRequest(BaseModel):
     page_id: str
     ad_account_id: Optional[str] = None  # User's ad account ID
-    ad: dict
+    ad: dict  # Primary ad (backward compatible)
+    ads: Optional[List[dict]] = None  # Multiple ads to publish
     campaign_data: dict
     settings: dict
+
+
+class ActivateCampaignRequest(BaseModel):
+    campaign_id: str
+    ad_account_id: Optional[str] = None
 
 
 async def get_fb_session(request: Request) -> Optional[dict]:
@@ -264,7 +277,11 @@ async def search_locations(request: Request, q: str = Query(..., min_length=2)):
 
 @router.post("/publish-campaign")
 async def publish_campaign(request: Request, data: PublishCampaignRequest):
-    """Publish campaign using user's Facebook access token"""
+    """
+    Publish campaign to Meta Ads Manager.
+    Supports single or multiple ads with partial failure recovery.
+    Returns Ads Manager link for the created campaign.
+    """
     session = await get_fb_session(request)
     if not session:
         raise HTTPException(status_code=401, detail="Not connected to Facebook")
@@ -292,8 +309,27 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
             detail="No ad account selected. Please reconnect to Facebook and select an ad account."
         )
 
+    # Pre-submission validation
+    project_url = data.campaign_data.get("project_url", "")
+    if not project_url:
+        raise HTTPException(status_code=400, detail="project_url is required in campaign_data")
+
+    # Collect all ads to publish (support both single and multi-ad)
+    ads_to_publish = []
+    if data.ads and len(data.ads) > 0:
+        ads_to_publish = data.ads
+    else:
+        ads_to_publish = [data.ad]
+
+    # Validate at least one ad has required fields
+    for i, ad_data in enumerate(ads_to_publish):
+        if not ad_data.get("headline") and not ad_data.get("primaryText"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ad {i + 1} must have at least a headline or primaryText"
+            )
+
     try:
-        # Create campaign using Meta Marketing API
         from facebook_business.api import FacebookAdsApi
         from facebook_business.adobjects.adaccount import AdAccount
         from facebook_business.adobjects.campaign import Campaign
@@ -301,6 +337,7 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
         from facebook_business.adobjects.adcreative import AdCreative
         from facebook_business.adobjects.ad import Ad
         from facebook_business.adobjects.adimage import AdImage
+        from app.services.meta_api import _retry_api_call
 
         # Initialize with user's token
         FacebookAdsApi.init(
@@ -309,177 +346,283 @@ async def publish_campaign(request: Request, data: PublishCampaignRequest):
             access_token=user_access_token,
         )
 
-        # Create campaign
-        campaign = AdAccount(ad_account_id).create_campaign(params={
-            Campaign.Field.name: f"Idea2Ad - {data.campaign_data.get('project_url', 'Campaign')[:30]}",
-            Campaign.Field.objective: "OUTCOME_TRAFFIC",
-            Campaign.Field.status: Campaign.Status.paused,
-            Campaign.Field.special_ad_categories: [],
-            "is_adset_budget_sharing_enabled": False,
-        })
+        # Step 1: Create campaign
+        campaign_name = f"Idea2Ad - {project_url[:30]}"
+        campaign = _retry_api_call(
+            AdAccount(ad_account_id).create_campaign,
+            params={
+                Campaign.Field.name: campaign_name,
+                Campaign.Field.objective: "OUTCOME_TRAFFIC",
+                Campaign.Field.status: Campaign.Status.paused,
+                Campaign.Field.special_ad_categories: [],
+                "is_adset_budget_sharing_enabled": False,
+            }
+        )
+        campaign_id = campaign.get_id()
 
-        # Daily budget is sent from frontend in cents
+        # Step 2: Create ad set
         duration_days = data.settings.get("duration_days", 3)
         daily_budget = data.settings.get("budget", 5000)  # Already daily budget in cents
 
-        # Calculate end time (72 hours = 3 days from now)
         end_time = datetime.now() + timedelta(days=duration_days)
         end_time_str = end_time.strftime("%Y-%m-%dT%H:%M:%S")
 
         # Build geo_locations targeting
         locations = data.settings.get("locations", [])
         if locations:
-            # Use cities if provided
             geo_locations = {
                 "cities": [{"key": loc["key"]} for loc in locations]
             }
         else:
-            # Fallback to countries from campaign_data
             geo_locations = {
                 "countries": data.campaign_data.get("targeting", {}).get("geo_locations", ["US"])
             }
 
         # Create ad set with DSA compliance fields (EU Digital Services Act)
-        ad_set = AdAccount(ad_account_id).create_ad_set(params={
-            AdSet.Field.name: "Idea2Ad Ad Set",
-            AdSet.Field.campaign_id: campaign.get_id(),
-            AdSet.Field.daily_budget: daily_budget,
-            AdSet.Field.billing_event: AdSet.BillingEvent.impressions,
-            AdSet.Field.optimization_goal: AdSet.OptimizationGoal.link_clicks,
-            AdSet.Field.bid_strategy: AdSet.BidStrategy.lowest_cost_without_cap,
-            AdSet.Field.targeting: {
-                "geo_locations": geo_locations,
-                "age_min": data.campaign_data.get("targeting", {}).get("age_min", 18),
-                "age_max": data.campaign_data.get("targeting", {}).get("age_max", 65),
-                "targeting_automation": {
-                    "advantage_audience": 0  # 0=disabled (manual targeting), 1=enabled (Meta's automation)
-                }
-            },
-            AdSet.Field.end_time: end_time_str,
-            AdSet.Field.status: AdSet.Status.paused,
-            "dsa_beneficiary": page_name,  # Who benefits from the ad (DSA compliance)
-            "dsa_payor": page_name,        # Who pays for the ad (DSA compliance)
-        })
+        ad_set = _retry_api_call(
+            AdAccount(ad_account_id).create_ad_set,
+            params={
+                AdSet.Field.name: f"{campaign_name} - Ad Set",
+                AdSet.Field.campaign_id: campaign_id,
+                AdSet.Field.daily_budget: daily_budget,
+                AdSet.Field.billing_event: AdSet.BillingEvent.impressions,
+                AdSet.Field.optimization_goal: AdSet.OptimizationGoal.link_clicks,
+                AdSet.Field.bid_strategy: AdSet.BidStrategy.lowest_cost_without_cap,
+                AdSet.Field.targeting: {
+                    "geo_locations": geo_locations,
+                    "age_min": data.campaign_data.get("targeting", {}).get("age_min", 18),
+                    "age_max": data.campaign_data.get("targeting", {}).get("age_max", 65),
+                    "targeting_automation": {
+                        "advantage_audience": 0
+                    }
+                },
+                AdSet.Field.end_time: end_time_str,
+                AdSet.Field.status: AdSet.Status.paused,
+                "dsa_beneficiary": page_name,
+                "dsa_payor": page_name,
+            }
+        )
+        ad_set_id = ad_set.get_id()
 
-        logger.info(f"Campaign created: {campaign.get_id()}, AdSet: {ad_set.get_id()}")
+        logger.info(f"Campaign created: {campaign_id}, AdSet: {ad_set_id}")
 
-        # Step 3: Upload image to Meta (download bytes first for reliability)
-        image_hash = None
-        ad_image_url = data.ad.get("imageUrl")
-        if ad_image_url:
-            try:
-                import tempfile
-                import os
-
-                # Download image bytes first
-                async with httpx.AsyncClient() as img_client:
-                    img_response = await img_client.get(ad_image_url, timeout=30.0)
-                    img_response.raise_for_status()
-                    image_bytes = img_response.content
-
-                # Save to temp file and upload
-                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
-                    tmp_file.write(image_bytes)
-                    tmp_path = tmp_file.name
-
-                try:
-                    ad_image = AdImage(parent_id=ad_account_id)
-                    ad_image[AdImage.Field.filename] = tmp_path
-                    ad_image.remote_create()
-                    image_hash = ad_image.get(AdImage.Field.hash)
-                    logger.info(f"Image uploaded to Meta, hash: {image_hash}")
-                finally:
-                    # Clean up temp file
-                    os.unlink(tmp_path)
-
-            except Exception as img_err:
-                logger.error(f"Image upload failed: {img_err}")
-                # Continue without image - don't fail the whole campaign
-
-        # Step 4: Create Ad Creative
-        creative_id = None
-        project_url = data.campaign_data.get("project_url", "https://example.com")
+        # Step 3: Create ads (with partial failure recovery for multi-ad)
         cta_type = data.settings.get("call_to_action", "LEARN_MORE")
+        created_ads = []
+        created_creatives = []
+        ad_errors = []
 
-        # Build object_story_spec for the ad creative
-        link_data = {
-            "link": project_url,
-            "message": data.ad.get("primaryText", "Check this out!"),
-            "name": data.ad.get("headline", "Learn More"),
-            "description": data.ad.get("description", ""),
-            "call_to_action": {
-                "type": cta_type,
-                "value": {"link": project_url}
-            }
-        }
+        for i, ad_data in enumerate(ads_to_publish):
+            ad_num = i + 1
+            try:
+                # Upload image
+                image_hash = None
+                ad_image_url = ad_data.get("imageUrl")
+                if ad_image_url:
+                    try:
+                        import tempfile
+                        import os
 
-        # Add image hash if available
-        if image_hash:
-            link_data["image_hash"] = image_hash
-            logger.info(f"Adding image_hash to creative: {image_hash}")
-        else:
-            logger.warning("No image_hash available - creative will be without image")
+                        async with httpx.AsyncClient() as img_client:
+                            img_response = await img_client.get(ad_image_url, timeout=30.0)
+                            img_response.raise_for_status()
+                            image_bytes = img_response.content
 
-        object_story_spec = {
-            "page_id": data.page_id,
-            "link_data": link_data
-        }
+                        with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as tmp_file:
+                            tmp_file.write(image_bytes)
+                            tmp_path = tmp_file.name
 
-        logger.info(f"Creating Ad Creative with object_story_spec: page_id={data.page_id}, link={project_url}")
+                        try:
+                            ad_image = AdImage(parent_id=ad_account_id)
+                            ad_image[AdImage.Field.filename] = tmp_path
+                            _retry_api_call(ad_image.remote_create)
+                            image_hash = ad_image.get(AdImage.Field.hash)
+                            logger.info(f"Image uploaded for ad {ad_num}, hash: {image_hash}")
+                        finally:
+                            os.unlink(tmp_path)
 
-        try:
-            creative = AdAccount(ad_account_id).create_ad_creative(params={
-                AdCreative.Field.name: f"Idea2Ad Creative - {project_url[:30]}",
-                AdCreative.Field.object_story_spec: object_story_spec,
-            })
-            creative_id = creative.get_id()
-            logger.info(f"Ad Creative created successfully: {creative_id}")
-        except Exception as creative_err:
-            logger.error(f"Creative creation failed: {creative_err}")
-            # Return failure - don't pretend success
+                    except Exception as img_err:
+                        logger.error(f"Image upload failed for ad {ad_num}: {img_err}")
+
+                # Build creative
+                link_data = {
+                    "link": project_url,
+                    "message": ad_data.get("primaryText", "Check this out!"),
+                    "name": ad_data.get("headline", "Learn More"),
+                    "description": ad_data.get("description", ""),
+                    "call_to_action": {
+                        "type": cta_type,
+                        "value": {"link": project_url}
+                    }
+                }
+
+                if image_hash:
+                    link_data["image_hash"] = image_hash
+
+                object_story_spec = {
+                    "page_id": data.page_id,
+                    "link_data": link_data
+                }
+
+                creative = _retry_api_call(
+                    AdAccount(ad_account_id).create_ad_creative,
+                    params={
+                        AdCreative.Field.name: f"{campaign_name} - Creative {ad_num}",
+                        AdCreative.Field.object_story_spec: object_story_spec,
+                    }
+                )
+                creative_id = creative.get_id()
+                created_creatives.append(creative_id)
+
+                # Create ad
+                ad = _retry_api_call(
+                    AdAccount(ad_account_id).create_ad,
+                    params={
+                        Ad.Field.name: f"{campaign_name} - Ad {ad_num}",
+                        Ad.Field.adset_id: ad_set_id,
+                        Ad.Field.creative: {"creative_id": creative_id},
+                        Ad.Field.status: "PAUSED",
+                    }
+                )
+                created_ads.append(ad.get_id())
+                logger.info(f"Ad {ad_num} created: {ad.get_id()}")
+
+            except Exception as ad_err:
+                logger.error(f"Failed to create ad {ad_num}: {ad_err}")
+                ad_errors.append({
+                    "ad_index": i,
+                    "error": str(ad_err),
+                })
+                # Continue to next ad (partial failure recovery)
+
+        # Build Ads Manager URL
+        ads_manager_url = (
+            f"https://www.facebook.com/adsmanager/manage/campaigns"
+            f"?act={ad_account_id.replace('act_', '')}&campaign_ids={campaign_id}"
+        )
+
+        # Determine success
+        if not created_ads:
             return {
                 "success": False,
-                "campaign_id": campaign.get_id(),
-                "ad_set_id": ad_set.get_id(),
-                "creative_id": None,
+                "campaign_id": campaign_id,
+                "ad_set_id": ad_set_id,
+                "creative_id": created_creatives[0] if created_creatives else None,
                 "ad_id": None,
-                "error": f"Creative creation failed: {creative_err}"
-            }
-
-        # Step 5: Create Ad linking creative to ad set
-        ad_id = None
-        logger.info(f"Creating Ad with creative_id={creative_id}, adset_id={ad_set.get_id()}")
-        try:
-            ad = AdAccount(ad_account_id).create_ad(params={
-                Ad.Field.name: f"Idea2Ad Ad - {data.ad.get('headline', 'Ad')[:30]}",
-                Ad.Field.adset_id: ad_set.get_id(),
-                Ad.Field.creative: {"creative_id": creative_id},
-                Ad.Field.status: "PAUSED",
-            })
-            ad_id = ad.get_id()
-            logger.info(f"Ad created successfully: {ad_id}")
-        except Exception as ad_err:
-            logger.error(f"Ad creation failed: {ad_err}")
-            return {
-                "success": False,
-                "campaign_id": campaign.get_id(),
-                "ad_set_id": ad_set.get_id(),
-                "creative_id": creative_id,
-                "ad_id": None,
-                "error": f"Ad creation failed: {ad_err}"
+                "ads_manager_url": ads_manager_url,
+                "error": f"All ads failed to create: {ad_errors}",
+                "ad_errors": ad_errors,
             }
 
         return {
             "success": True,
-            "campaign_id": campaign.get_id(),
-            "ad_set_id": ad_set.get_id(),
-            "creative_id": creative_id,
-            "ad_id": ad_id,
-            "message": "Campaign published successfully with Ad in PAUSED status"
+            "campaign_id": campaign_id,
+            "ad_set_id": ad_set_id,
+            "creative_id": created_creatives[0] if created_creatives else None,
+            "ad_id": created_ads[0] if created_ads else None,
+            "ad_ids": created_ads,
+            "creative_ids": created_creatives,
+            "ads_created": len(created_ads),
+            "ads_failed": len(ad_errors),
+            "ad_errors": ad_errors if ad_errors else None,
+            "ads_manager_url": ads_manager_url,
+            "message": (
+                f"Campaign published with {len(created_ads)} ad(s) in PAUSED status"
+                + (f" ({len(ad_errors)} failed)" if ad_errors else "")
+            ),
         }
 
     except Exception as e:
-        logger.error(f"Failed to publish campaign: {e}")
+        logger.error(f"Failed to publish campaign: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/activate-campaign")
+async def activate_campaign(request: Request, data: ActivateCampaignRequest):
+    """
+    Activate a paused campaign (set status to ACTIVE).
+    Also activates the campaign's ad sets and ads.
+    """
+    session = await get_fb_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not connected to Facebook")
+
+    settings = get_settings()
+    user_access_token = session.get("access_token")
+
+    ad_account_id = data.ad_account_id or session.get("selectedAdAccountId")
+    if not ad_account_id:
+        raise HTTPException(status_code=400, detail="No ad account selected")
+
+    try:
+        from facebook_business.api import FacebookAdsApi
+        from facebook_business.adobjects.campaign import Campaign
+        from app.services.meta_api import _retry_api_call
+
+        FacebookAdsApi.init(
+            app_id=settings.meta_app_id,
+            app_secret=settings.meta_app_secret,
+            access_token=user_access_token,
+        )
+
+        campaign = Campaign(data.campaign_id)
+        _retry_api_call(
+            campaign.api_update,
+            params={Campaign.Field.status: Campaign.Status.active}
+        )
+
+        ads_manager_url = (
+            f"https://www.facebook.com/adsmanager/manage/campaigns"
+            f"?act={ad_account_id.replace('act_', '')}&campaign_ids={data.campaign_id}"
+        )
+
+        return {
+            "success": True,
+            "campaign_id": data.campaign_id,
+            "status": "ACTIVE",
+            "ads_manager_url": ads_manager_url,
+            "message": "Campaign activated successfully",
+        }
+    except Exception as e:
+        logger.error(f"Failed to activate campaign: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/pause-campaign")
+async def pause_campaign(request: Request, data: ActivateCampaignRequest):
+    """Pause an active campaign (set status to PAUSED)."""
+    session = await get_fb_session(request)
+    if not session:
+        raise HTTPException(status_code=401, detail="Not connected to Facebook")
+
+    settings = get_settings()
+    user_access_token = session.get("access_token")
+
+    try:
+        from facebook_business.api import FacebookAdsApi
+        from facebook_business.adobjects.campaign import Campaign
+        from app.services.meta_api import _retry_api_call
+
+        FacebookAdsApi.init(
+            app_id=settings.meta_app_id,
+            app_secret=settings.meta_app_secret,
+            access_token=user_access_token,
+        )
+
+        campaign = Campaign(data.campaign_id)
+        _retry_api_call(
+            campaign.api_update,
+            params={Campaign.Field.status: Campaign.Status.paused}
+        )
+
+        return {
+            "success": True,
+            "campaign_id": data.campaign_id,
+            "status": "PAUSED",
+            "message": "Campaign paused successfully",
+        }
+    except Exception as e:
+        logger.error(f"Failed to pause campaign: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -718,12 +861,13 @@ async def facebook_callback(
     except Exception as e:
         logger.error(f"Facebook OAuth error: {e}")
         frontend_url = settings.frontend_url
+        escaped_error = str(e).replace("'", "\\'")
         return HTMLResponse(f"""
             <html>
             <script>
                 window.opener.postMessage({{
                     type: 'FB_AUTH_ERROR',
-                    error: '{str(e).replace("'", "\\'")}'
+                    error: '{escaped_error}'
                 }}, '{frontend_url}');
                 window.close();
             </script>

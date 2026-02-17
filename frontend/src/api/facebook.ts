@@ -6,6 +6,8 @@ import type {
   PaymentStatusResponse,
   PublishCampaignRequest,
   PublishCampaignResponse,
+  CampaignStatusRequest,
+  CampaignStatusResponse,
 } from '../types/facebook';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -111,6 +113,50 @@ export async function publishCampaign(
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Failed to publish campaign' }));
     throw new Error(error.detail || 'Failed to publish campaign');
+  }
+
+  return response.json();
+}
+
+/**
+ * Activate a paused campaign
+ */
+export async function activateCampaign(
+  data: CampaignStatusRequest,
+  sessionId?: string
+): Promise<CampaignStatusResponse> {
+  const response = await fetch(`${API_URL}/meta/activate-campaign`, {
+    method: 'POST',
+    headers: buildHeaders(sessionId),
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to activate campaign' }));
+    throw new Error(error.detail || 'Failed to activate campaign');
+  }
+
+  return response.json();
+}
+
+/**
+ * Pause an active campaign
+ */
+export async function pauseCampaign(
+  data: CampaignStatusRequest,
+  sessionId?: string
+): Promise<CampaignStatusResponse> {
+  const response = await fetch(`${API_URL}/meta/pause-campaign`, {
+    method: 'POST',
+    headers: buildHeaders(sessionId),
+    credentials: 'include',
+    body: JSON.stringify(data),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to pause campaign' }));
+    throw new Error(error.detail || 'Failed to pause campaign');
   }
 
   return response.json();

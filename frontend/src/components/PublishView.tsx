@@ -10,6 +10,7 @@ import {
   ExternalLink,
   RefreshCw,
   Target,
+  Layers,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from './ui/Button';
@@ -70,10 +71,15 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
   const [budget, setBudget] = useState<number>(50);
   const [durationDays, setDurationDays] = useState<number>(7);
   const [callToAction, setCallToAction] = useState<string>('LEARN_MORE');
+  const [publishAllAds, setPublishAllAds] = useState<boolean>(false);
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+
+  // Check if there are multiple ads available
+  const allAds = campaignData.ads || [];
+  const hasMultipleAds = allAds.length > 1;
 
   let pageName = 'your site';
   try {
@@ -121,15 +127,29 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
     setPublishError(null);
 
     try {
+      // Build ad data for the request
+      const primaryAd = {
+        imageUrl: selectedAd.imageUrl,
+        primaryText: selectedAd.primaryText,
+        headline: selectedAd.headline,
+        description: selectedAd.description,
+      };
+
+      // If publishing all ads, include them
+      const adsToPublish = publishAllAds && hasMultipleAds
+        ? allAds.map(ad => ({
+            imageUrl: ad.imageUrl,
+            primaryText: ad.primaryText,
+            headline: ad.headline,
+            description: ad.description,
+          }))
+        : undefined;
+
       const result = await publishCampaign({
         page_id: selectedPageId,
         ad_account_id: selectedAdAccountId,
-        ad: {
-          imageUrl: selectedAd.imageUrl,
-          primaryText: selectedAd.primaryText,
-          headline: selectedAd.headline,
-          description: selectedAd.description,
-        },
+        ad: primaryAd,
+        ads: adsToPublish,
         campaign_data: {
           project_url: campaignData.project_url,
           targeting: {
@@ -365,6 +385,32 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                       </select>
                     </div>
 
+                    {/* Multi-ad toggle */}
+                    {hasMultipleAds && (
+                      <div className="flex items-center justify-between p-3 bg-brand-dark border border-white/5">
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-brand-lime" />
+                          <div>
+                            <span className="text-sm text-white">Publish all {allAds.length} ads</span>
+                            <p className="text-xs text-gray-500">Meta will test both ads and optimize delivery</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setPublishAllAds(!publishAllAds)}
+                          className={`relative w-10 h-6 rounded-full transition-colors ${
+                            publishAllAds ? 'bg-brand-lime' : 'bg-white/10'
+                          }`}
+                          aria-label="Publish all ads"
+                        >
+                          <span
+                            className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                              publishAllAds ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+
                     {/* Estimated Total */}
                     <div className="p-4 bg-brand-lime/10 border border-brand-lime/30">
                       <div className="text-sm text-gray-400 mb-1">Estimated Total</div>
@@ -386,7 +432,10 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
                       disabled={!paymentStatus?.has_payment_method}
                       className="w-full py-3"
                     >
-                      Publish Campaign
+                      {publishAllAds && hasMultipleAds
+                        ? `Publish ${allAds.length} Ads`
+                        : 'Publish Campaign'
+                      }
                     </Button>
 
                     {!paymentStatus?.has_payment_method && (
