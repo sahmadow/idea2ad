@@ -7,15 +7,18 @@ import { Button } from './components/ui/Button';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Skeleton } from './components/ui/Skeleton';
 import { analyzeUrl, uploadProductImage, generateQuickAd, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse } from './api';
+import { assembleAdPack } from './api/adpack';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
+import type { AdPack } from './types/adpack';
 
 // Lazy-loaded views
 const ResultsView = lazy(() => import('./components/ResultsView').then(m => ({ default: m.ResultsView })));
+const AdPackView = lazy(() => import('./components/AdPackView').then(m => ({ default: m.AdPackView })));
 const PublishView = lazy(() => import('./components/PublishView').then(m => ({ default: m.PublishView })));
 const SuccessView = lazy(() => import('./components/SuccessView').then(m => ({ default: m.SuccessView })));
 
-type View = 'landing' | 'loading' | 'results' | 'publish' | 'success';
+type View = 'landing' | 'loading' | 'results' | 'adpack' | 'publish' | 'success';
 type GenerationMode = 'full' | 'quick';
 
 const STORAGE_KEYS = {
@@ -25,13 +28,14 @@ const STORAGE_KEYS = {
   URL: 'idea2ad_url',
   BUSINESS_TYPE: 'idea2ad_businessType',
   GENERATION_MODE: 'idea2ad_generationMode',
+  AD_PACK: 'idea2ad_adPack',
 };
 
 const LOADING_STAGES = [
   'Analyzing',
   'Generating Copy',
   'Creating Images',
-  'Finalizing',
+  'Building Ad Pack',
 ];
 
 // Hash-based routing for test pages
@@ -90,6 +94,12 @@ function App() {
       return stored ? JSON.parse(stored) : null;
     } catch { return null; }
   });
+  const [adPack, setAdPack] = useState<AdPack | null>(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEYS.AD_PACK);
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
   const [error, setError] = useState<string | null>(null);
   const [publishResult, setPublishResult] = useState<PublishCampaignResponse | null>(null);
   const [businessType, setBusinessType] = useState<BusinessType>(() => {
@@ -139,6 +149,12 @@ function App() {
       else localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
     } catch { /* */ }
   }, [selectedAd]);
+  useEffect(() => {
+    try {
+      if (adPack) localStorage.setItem(STORAGE_KEYS.AD_PACK, JSON.stringify(adPack));
+      else localStorage.removeItem(STORAGE_KEYS.AD_PACK);
+    } catch { /* */ }
+  }, [adPack]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.BUSINESS_TYPE, businessType); } catch { /* */ } }, [businessType]);
   useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.GENERATION_MODE, generationMode); } catch { /* */ } }, [generationMode]);
 
@@ -216,6 +232,7 @@ function App() {
       setError(null);
       setResult(null);
       setSelectedAd(null);
+      setAdPack(null);
       setQuickResult(null);
       try {
         const data = await generateQuickAd(quickIdea.trim(), quickTone);
@@ -251,7 +268,16 @@ function App() {
           status: 'ANALYZED',
         };
         setResult(campaignDraft);
-        setView('results');
+
+        // Assemble AdPack from quick mode result
+        try {
+          const pack = await assembleAdPack(campaignDraft);
+          setAdPack(pack);
+          setView('adpack');
+        } catch {
+          // Fallback to results view if AdPack assembly fails
+          setView('results');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Quick generation failed');
         setView('landing');
@@ -265,6 +291,7 @@ function App() {
     setError(null);
     setResult(null);
     setSelectedAd(null);
+    setAdPack(null);
     try {
       const normalizedUrl = normalizeUrl(url);
       const data = await analyzeUrl(normalizedUrl, undefined, {
@@ -273,7 +300,16 @@ function App() {
         productImageUrl: businessType === 'commerce' ? uploadedImageUrl || undefined : undefined,
       });
       setResult(data);
-      setView('results');
+
+      // Assemble AdPack from full mode result
+      try {
+        const pack = await assembleAdPack(data);
+        setAdPack(pack);
+        setView('adpack');
+      } catch {
+        // Fallback to results view if AdPack assembly fails
+        setView('results');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
       setView('landing');
@@ -281,7 +317,7 @@ function App() {
   };
 
   const handleBack = () => {
-    if (result && (view === 'results' || view === 'publish')) {
+    if (result && (view === 'results' || view === 'adpack' || view === 'publish')) {
       setConfirmOpen(true);
       return;
     }
@@ -292,6 +328,7 @@ function App() {
     setView('landing');
     setResult(null);
     setSelectedAd(null);
+    setAdPack(null);
     setPublishResult(null);
     setQuickResult(null);
     setProductDescription('');
@@ -300,6 +337,7 @@ function App() {
       localStorage.removeItem(STORAGE_KEYS.VIEW);
       localStorage.removeItem(STORAGE_KEYS.RESULT);
       localStorage.removeItem(STORAGE_KEYS.SELECTED_AD);
+      localStorage.removeItem(STORAGE_KEYS.AD_PACK);
     } catch { /* */ }
   };
 
@@ -347,6 +385,24 @@ function App() {
       );
     }
 
+    if (view === 'adpack' && adPack) {
+      return (
+        <motion.div key="adpack" {...pageTransition}>
+          <Suspense fallback={<ViewSkeleton />}>
+            <AdPackView
+              adPack={adPack}
+              onAdPackChange={setAdPack}
+              onBack={handleBack}
+              onPublish={(ad) => {
+                setSelectedAd(ad);
+                setView('publish');
+              }}
+            />
+          </Suspense>
+        </motion.div>
+      );
+    }
+
     if (view === 'results' && result) {
       return (
         <motion.div key="results" {...pageTransition}>
@@ -371,7 +427,7 @@ function App() {
             <PublishView
               campaignData={result}
               selectedAd={selectedAd}
-              onBack={() => setView('results')}
+              onBack={() => setView(adPack ? 'adpack' : 'results')}
               onSuccess={(res) => {
                 setPublishResult(res);
                 setView('success');

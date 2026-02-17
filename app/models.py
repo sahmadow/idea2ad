@@ -115,6 +115,77 @@ class CampaignDraft(BaseModel):
 
 
 # =====================================
+# AD PACK MODELS (Phase 5)
+# =====================================
+
+AdStrategy = Literal["product_aware", "product_unaware"]
+
+
+class AdCreative(BaseModel):
+    """Single creative variant within an AdPack."""
+    id: str  # Unique creative ID
+    strategy: AdStrategy  # Product Aware or Product Unaware
+    primary_text: str
+    headline: str
+    description: str
+    image_url: Optional[str] = None
+    image_brief: Optional[ImageBrief] = None
+    call_to_action: str = "LEARN_MORE"
+
+
+class TargetingRationale(BaseModel):
+    """Explains why specific targeting was chosen."""
+    age_range_reason: str
+    geo_reason: str
+    exclusion_reason: Optional[str] = None
+    methodology: str = "smart_broad"  # Smart Broad targeting approach
+
+
+class SmartBroadTargeting(BaseModel):
+    """Smart Broad targeting spec derived from persona analysis."""
+    age_min: int = 18
+    age_max: int = 65
+    genders: List[str] = ["all"]
+    geo_locations: List[str] = ["US"]
+    excluded_geo_locations: List[str] = []
+    exclusions: List[str] = []  # Excluded interests/behaviors
+    rationale: TargetingRationale
+
+
+class CampaignStructure(BaseModel):
+    """Defines the Meta campaign hierarchy."""
+    campaign_name: str
+    objective: str = "OUTCOME_SALES"
+    adset_name: str
+    ad_count: int  # Number of ads in the ad set
+
+
+class AdPack(BaseModel):
+    """Complete ad pack: all creatives + targeting + budget for a campaign."""
+    id: str  # Unique AdPack ID
+    project_url: str
+    creatives: List[AdCreative]  # All creative variants
+    targeting: SmartBroadTargeting
+    budget_daily: float = 15.0  # Default $15/day
+    duration_days: int = 3  # Default 3-day duration
+    campaign_structure: CampaignStructure
+    status: str = "draft"  # draft | ready | published
+    meta_campaign_id: Optional[str] = None
+    meta_adset_id: Optional[str] = None
+    created_from: Optional[str] = None  # Source CampaignDraft job_id
+
+
+class AdPackUpdateRequest(BaseModel):
+    """Request to update AdPack fields (inline editing)."""
+    creative_id: Optional[str] = None
+    primary_text: Optional[str] = None
+    headline: Optional[str] = None
+    description: Optional[str] = None
+    budget_daily: Optional[float] = None
+    duration_days: Optional[int] = None
+
+
+# =====================================
 # REPLICA AD CREATIVE MODELS
 # =====================================
 

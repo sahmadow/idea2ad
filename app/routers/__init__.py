@@ -3,5 +3,6 @@ from .images import router as images_router
 from .campaigns import router as campaigns_router
 from .replica import router as replica_router
 from .quick import router as quick_router
+from .adpack import router as adpack_router
 
-__all__ = ["auth_router", "images_router", "campaigns_router", "replica_router", "quick_router"]
+__all__ = ["auth_router", "images_router", "campaigns_router", "replica_router", "quick_router", "adpack_router"]
