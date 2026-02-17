@@ -17,7 +17,7 @@ from app.services.jobs import create_job, get_job, update_job, JobStatus, cleanu
 import asyncio
 from app.services.meta_api import get_meta_manager, BUSINESS_VERTICALS
 from app.db import connect_db, disconnect_db
-from app.routers import auth_router, images_router, campaigns_router, replica_router, quick_router, v2_router
+from app.routers import auth_router, images_router, campaigns_router, replica_router, quick_router, carousel_router, v2_router
 from app.routers.facebook import router as facebook_router, auth_router as facebook_auth_router
 from app.config import get_settings
 from app.logging_config import setup_logging, get_logger
@@ -133,6 +133,7 @@ app.include_router(facebook_router)
 app.include_router(facebook_auth_router)
 app.include_router(replica_router)
 app.include_router(quick_router)
+app.include_router(carousel_router)
 app.include_router(v2_router)
 
 
@@ -300,7 +301,25 @@ async def run_analysis_job(
             user_product_image_url=product_image_url
         )
 
-        # 6. Build result
+        # 6. Generate carousel (non-blocking — failures don't affect the campaign)
+        carousel_data = None
+        try:
+            from app.services.carousel import generate_carousel
+            carousel_ad, meta_json = await generate_carousel(
+                analysis=analysis_result,
+                scraped_data=scraped_data,
+                product_image_url=product_image_url,
+                destination_url=url,
+            )
+            carousel_data = {
+                "carousel": carousel_ad.model_dump(),
+                "meta_carousel_json": meta_json,
+            }
+            logger.info(f"Carousel generated with {len(carousel_ad.cards)} cards")
+        except Exception as e:
+            logger.warning(f"Carousel generation failed (non-blocking): {e}")
+
+        # 7. Build result
         result = CampaignDraft(
             project_url=url,
             analysis=analysis_result,
@@ -308,6 +327,7 @@ async def run_analysis_job(
             suggested_creatives=creatives,
             image_briefs=image_briefs,
             ads=ads,
+            carousel=carousel_data,
             status="ANALYZED"
         )
 
