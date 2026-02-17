@@ -3,8 +3,10 @@ Meta (Facebook) Marketing API Integration Service
 Handles campaign creation and publishing to Meta Ads Manager
 """
 
+import logging
 import os
-from typing import Dict, Any, List, Optional
+import time
+from typing import Callable, Dict, Any, List, Optional
 from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign
@@ -12,12 +14,61 @@ from facebook_business.adobjects.adset import AdSet
 from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.adcreative import AdCreative
 from facebook_business.adobjects.adimage import AdImage
+from facebook_business.adobjects.advideo import AdVideo
 from facebook_business.adobjects.business import Business
 from facebook_business.adobjects.user import User
 from facebook_business.adobjects.page import Page
+from facebook_business.exceptions import FacebookRequestError
 from dotenv import load_dotenv
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+# Retry configuration for transient Meta API errors
+MAX_RETRIES = 3
+RETRY_DELAYS = [1, 2, 4]  # Exponential backoff in seconds
+# Meta API error codes considered transient (worth retrying)
+TRANSIENT_ERROR_CODES = {
+    1,       # Unknown error
+    2,       # Temporary issue
+    4,       # Too many calls
+    17,      # Rate limit
+    32,      # Page request limit
+    341,     # Temporary error
+    368,     # Temporarily blocked
+    2446079, # Transient error
+}
+
+
+def _is_transient_error(exc: Exception) -> bool:
+    """Check if a Meta API error is transient and worth retrying."""
+    if isinstance(exc, FacebookRequestError):
+        return exc.api_error_code() in TRANSIENT_ERROR_CODES
+    return False
+
+
+def _retry_api_call(func: Callable, *args, **kwargs) -> Any:
+    """
+    Execute a Meta API call with retry logic for transient errors.
+    Uses exponential backoff: 1s, 2s, 4s delays between retries.
+    """
+    last_exc = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            last_exc = exc
+            if attempt < MAX_RETRIES and _is_transient_error(exc):
+                delay = RETRY_DELAYS[attempt]
+                logger.warning(
+                    f"Transient Meta API error (attempt {attempt + 1}/{MAX_RETRIES + 1}), "
+                    f"retrying in {delay}s: {exc}"
+                )
+                time.sleep(delay)
+            else:
+                raise
+    raise last_exc  # Should not reach here, but safety net
 
 
 # Meta Business Verticals
@@ -117,7 +168,9 @@ class MetaAdsManager:
         }
 
         try:
-            campaign = self.ad_account.create_campaign(params=params)
+            campaign = _retry_api_call(
+                self.ad_account.create_campaign, params=params
+            )
 
             return {
                 'campaign_id': campaign.get_id(),
@@ -174,7 +227,9 @@ class MetaAdsManager:
             params[AdSet.Field.bid_amount] = bid_amount
 
         try:
-            ad_set = self.ad_account.create_ad_set(params=params)
+            ad_set = _retry_api_call(
+                self.ad_account.create_ad_set, params=params
+            )
 
             return {
                 'ad_set_id': ad_set.get_id(),
@@ -263,7 +318,9 @@ class MetaAdsManager:
             params[AdCreative.Field.degrees_of_freedom_spec] = degrees_of_freedom_spec
 
         try:
-            creative = self.ad_account.create_ad_creative(params=params)
+            creative = _retry_api_call(
+                self.ad_account.create_ad_creative, params=params
+            )
 
             return {
                 'creative_id': creative.get_id(),
@@ -298,7 +355,7 @@ class MetaAdsManager:
             if image_name:
                 image[AdImage.Field.name] = image_name
 
-            image.remote_create()
+            _retry_api_call(image.remote_create)
 
             return {
                 'image_hash': image[AdImage.Field.hash],
@@ -333,7 +390,7 @@ class MetaAdsManager:
             if image_name:
                 image[AdImage.Field.name] = image_name
 
-            image.remote_create()
+            _retry_api_call(image.remote_create)
 
             return {
                 'image_hash': image[AdImage.Field.hash],
@@ -346,6 +403,330 @@ class MetaAdsManager:
                 'error': str(e),
                 'details': 'Failed to upload image from URL'
             }
+
+    def upload_video(
+        self,
+        video_path: str,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Upload a video to Meta Ads.
+
+        Args:
+            video_path: Local path to video file
+            video_name: Optional video name
+
+        Returns:
+            Dict with video_id and details
+        """
+        try:
+            video = AdVideo(parent_id=self.ad_account_id)
+            video[AdVideo.Field.filepath] = video_path
+            if video_name:
+                video[AdVideo.Field.name] = video_name
+
+            _retry_api_call(video.remote_create)
+
+            return {
+                'video_id': video.get_id(),
+                'success': True
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'details': 'Failed to upload video'
+            }
+
+    def upload_video_from_url(
+        self,
+        video_url: str,
+        video_name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Upload a video to Meta Ads from a URL.
+
+        Args:
+            video_url: Public URL of the video
+            video_name: Optional video name
+
+        Returns:
+            Dict with video_id and details
+        """
+        try:
+            video = AdVideo(parent_id=self.ad_account_id)
+            video[AdVideo.Field.file_url] = video_url
+            if video_name:
+                video[AdVideo.Field.name] = video_name
+
+            _retry_api_call(video.remote_create)
+
+            return {
+                'video_id': video.get_id(),
+                'success': True
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'details': 'Failed to upload video from URL'
+            }
+
+    def create_carousel_creative(
+        self,
+        name: str,
+        page_id: str,
+        cards: List[Dict[str, Any]],
+        message: str = '',
+        link: str = ''
+    ) -> Dict[str, Any]:
+        """
+        Create a carousel ad creative with multiple cards.
+
+        Args:
+            name: Creative name
+            page_id: Facebook Page ID
+            cards: List of card dicts, each with:
+                - image_hash or video_id
+                - link
+                - name (headline)
+                - description (optional)
+                - call_to_action (optional, dict with 'type' and 'value')
+            message: Primary text shown above the carousel
+            link: Default destination URL
+
+        Returns:
+            Dict with creative_id and details
+        """
+        try:
+            child_attachments = []
+            for card in cards:
+                attachment: Dict[str, Any] = {
+                    'link': card.get('link', link),
+                    'name': card.get('name', ''),
+                }
+                if card.get('description'):
+                    attachment['description'] = card['description']
+                if card.get('image_hash'):
+                    attachment['image_hash'] = card['image_hash']
+                if card.get('video_id'):
+                    attachment['video_id'] = card['video_id']
+                if card.get('call_to_action'):
+                    attachment['call_to_action'] = card['call_to_action']
+                child_attachments.append(attachment)
+
+            object_story_spec = {
+                'page_id': page_id,
+                'link_data': {
+                    'message': message,
+                    'link': link,
+                    'child_attachments': child_attachments,
+                }
+            }
+
+            params = {
+                AdCreative.Field.name: name,
+                AdCreative.Field.object_story_spec: object_story_spec,
+            }
+
+            creative = _retry_api_call(
+                self.ad_account.create_ad_creative, params=params
+            )
+
+            return {
+                'creative_id': creative.get_id(),
+                'name': name,
+                'success': True
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'details': 'Failed to create carousel creative'
+            }
+
+    def create_video_creative(
+        self,
+        name: str,
+        page_id: str,
+        video_id: str,
+        message: str = '',
+        link: str = '',
+        headline: str = '',
+        description: str = '',
+        call_to_action_type: str = 'LEARN_MORE',
+        image_hash: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Create a video ad creative.
+
+        Args:
+            name: Creative name
+            page_id: Facebook Page ID
+            video_id: Meta video ID from upload
+            message: Primary text
+            link: Destination URL
+            headline: Ad headline
+            description: Ad description
+            call_to_action_type: CTA button type
+            image_hash: Optional thumbnail image hash
+
+        Returns:
+            Dict with creative_id and details
+        """
+        try:
+            video_data: Dict[str, Any] = {
+                'video_id': video_id,
+                'message': message,
+                'link_description': description,
+                'call_to_action': {
+                    'type': call_to_action_type,
+                    'value': {'link': link}
+                }
+            }
+            if headline:
+                video_data['title'] = headline
+            if image_hash:
+                video_data['image_hash'] = image_hash
+
+            object_story_spec = {
+                'page_id': page_id,
+                'video_data': video_data,
+            }
+
+            params = {
+                AdCreative.Field.name: name,
+                AdCreative.Field.object_story_spec: object_story_spec,
+            }
+
+            creative = _retry_api_call(
+                self.ad_account.create_ad_creative, params=params
+            )
+
+            return {
+                'creative_id': creative.get_id(),
+                'name': name,
+                'success': True
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'details': 'Failed to create video creative'
+            }
+
+    def activate_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Activate a paused campaign by setting status to ACTIVE.
+
+        Args:
+            campaign_id: Meta campaign ID to activate
+
+        Returns:
+            Dict with success flag and details
+        """
+        try:
+            campaign = Campaign(campaign_id)
+            _retry_api_call(
+                campaign.api_update,
+                params={Campaign.Field.status: Campaign.Status.active}
+            )
+
+            return {
+                'success': True,
+                'campaign_id': campaign_id,
+                'status': 'ACTIVE',
+                'ads_manager_url': self.get_ads_manager_url(campaign_id),
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'campaign_id': campaign_id,
+                'details': 'Failed to activate campaign'
+            }
+
+    def pause_campaign(self, campaign_id: str) -> Dict[str, Any]:
+        """
+        Pause an active campaign.
+
+        Args:
+            campaign_id: Meta campaign ID to pause
+
+        Returns:
+            Dict with success flag and details
+        """
+        try:
+            campaign = Campaign(campaign_id)
+            _retry_api_call(
+                campaign.api_update,
+                params={Campaign.Field.status: Campaign.Status.paused}
+            )
+
+            return {
+                'success': True,
+                'campaign_id': campaign_id,
+                'status': 'PAUSED',
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e),
+                'campaign_id': campaign_id,
+                'details': 'Failed to pause campaign'
+            }
+
+    @staticmethod
+    def get_ads_manager_url(campaign_id: str) -> str:
+        """Get the Ads Manager URL for a campaign."""
+        return f"https://www.facebook.com/adsmanager/manage/campaigns?act=&campaign_ids={campaign_id}"
+
+    @staticmethod
+    def validate_campaign_data(campaign_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate all required fields before submitting to Meta API.
+
+        Args:
+            campaign_data: Campaign specification to validate
+
+        Returns:
+            Dict with 'valid' bool and list of 'errors'
+        """
+        errors = []
+
+        # Check project URL
+        project_url = campaign_data.get('project_url', '')
+        if not project_url or not project_url.startswith(('http://', 'https://')):
+            errors.append('project_url must be a valid HTTP(S) URL')
+
+        # Check creatives
+        creatives = campaign_data.get('suggested_creatives', [])
+        if not creatives:
+            # Also accept direct ad data
+            ad = campaign_data.get('ad', {})
+            if not ad.get('headline') and not ad.get('primaryText'):
+                errors.append('At least one creative with headline/primary text is required')
+
+        # Check budget
+        budget = campaign_data.get('budget_daily', campaign_data.get('budget', 0))
+        if isinstance(budget, (int, float)) and budget < 100:
+            # If in cents, minimum is 100 cents ($1)
+            if budget > 0 and budget < 1:
+                errors.append('Daily budget must be at least $1.00')
+
+        # Check image briefs (at least one should have an image_url)
+        image_briefs = campaign_data.get('image_briefs', [])
+        has_image = any(b.get('image_url') for b in image_briefs)
+        ad_image = campaign_data.get('ad', {}).get('imageUrl')
+        if not has_image and not ad_image:
+            # Warning but not blocking
+            errors.append('WARNING: No images available - ad will be created without an image')
+
+        return {
+            'valid': not any(e for e in errors if not e.startswith('WARNING:')),
+            'errors': errors,
+            'warnings': [e for e in errors if e.startswith('WARNING:')],
+        }
 
     def create_ad(
         self,
@@ -374,7 +755,9 @@ class MetaAdsManager:
         }
 
         try:
-            ad = self.ad_account.create_ad(params=params)
+            ad = _retry_api_call(
+                self.ad_account.create_ad, params=params
+            )
 
             return {
                 'ad_id': ad.get_id(),
@@ -392,29 +775,44 @@ class MetaAdsManager:
     def publish_complete_campaign(
         self,
         campaign_data: Dict[str, Any],
-        page_id: Optional[str] = None
+        page_id: Optional[str] = None,
+        ads_to_publish: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Publish a complete campaign with ad sets and ads
+        Publish a complete campaign with ad sets and ads.
+        Supports multiple ads with partial failure recovery.
 
         Args:
             campaign_data: Complete campaign specification from CampaignDraft
             page_id: Facebook Page ID for ad creative (optional, falls back to env var)
+            ads_to_publish: Optional list of ad dicts to create. Each dict has:
+                - headline, primaryText, description, imageUrl (optional)
+                Defaults to using suggested_creatives from campaign_data.
 
         Returns:
-            Dict with all created resource IDs and status
+            Dict with all created resource IDs, Ads Manager link, and status
         """
-        results = {
+        results: Dict[str, Any] = {
             'success': False,
             'campaign': None,
             'ad_sets': [],
             'creatives': [],
             'ads': [],
-            'errors': []
+            'errors': [],
+            'ads_manager_url': None,
         }
 
         try:
-            # 0. Validate page_id
+            # 0. Pre-submission validation
+            validation = self.validate_campaign_data(campaign_data)
+            if not validation['valid']:
+                results['errors'].extend(
+                    [{'error': e, 'details': 'Validation failed'} for e in validation['errors']
+                     if not e.startswith('WARNING:')]
+                )
+                return results
+
+            # 0b. Validate page_id
             if not page_id:
                 page_id = os.getenv('META_DEFAULT_PAGE_ID')
 
@@ -439,6 +837,7 @@ class MetaAdsManager:
 
             results['campaign'] = campaign_result
             campaign_id = campaign_result['campaign_id']
+            results['ads_manager_url'] = self.get_ads_manager_url(campaign_id)
 
             # 2. Build targeting from analysis
             targeting_data = campaign_data.get('targeting', {})
@@ -480,82 +879,123 @@ class MetaAdsManager:
             results['ad_sets'].append(ad_set_result)
             ad_set_id = ad_set_result['ad_set_id']
 
-            # 4. Create Ads from suggested creatives
-            # Get headline and primary text from creatives
-            creatives = campaign_data.get('suggested_creatives', [])
-            if creatives and len(creatives) > 0:
-                first_creative = creatives[0]
-                headline = first_creative.get('headline', 'Limited Time Offer')
-                primary_text = first_creative.get('primary_text', 'Check out our amazing product!')
+            # 4. Determine ads to create
+            # Use explicit ads_to_publish if provided, else fall back to suggested_creatives
+            ad_specs = []
+            if ads_to_publish:
+                ad_specs = ads_to_publish
             else:
-                headline = 'Limited Time Offer'
-                primary_text = 'Check out our amazing product!'
+                creatives = campaign_data.get('suggested_creatives', [])
+                image_briefs = campaign_data.get('image_briefs', [])
+                if creatives:
+                    for i, creative in enumerate(creatives):
+                        spec = {
+                            'headline': creative.get('headline', 'Limited Time Offer'),
+                            'primaryText': creative.get('primary_text', 'Check out our product!'),
+                            'description': creative.get('description', ''),
+                        }
+                        # Try to pair with an image brief
+                        if i < len(image_briefs) and image_briefs[i].get('image_url'):
+                            spec['imageUrl'] = image_briefs[i]['image_url']
+                        elif image_briefs:
+                            # Use first available image
+                            for brief in image_briefs:
+                                if brief.get('image_url'):
+                                    spec['imageUrl'] = brief['image_url']
+                                    break
+                        ad_specs.append(spec)
 
-            # 4a. Try to upload image from image_briefs if available
-            image_hash = None
-            image_briefs = campaign_data.get('image_briefs', [])
-            for brief in image_briefs:
-                image_url = brief.get('image_url')
-                if image_url:
-                    img_result = self.upload_image_from_url(
-                        image_url=image_url,
-                        image_name=f"Idea2Ad - {brief.get('approach', 'image')}"
+            # If still no ad specs, create one from defaults
+            if not ad_specs:
+                ad_specs = [{
+                    'headline': 'Limited Time Offer',
+                    'primaryText': 'Check out our amazing product!',
+                    'description': '',
+                }]
+
+            project_url = campaign_data.get('project_url', 'https://example.com')
+
+            # 5. Create each ad with partial failure recovery
+            for i, ad_spec in enumerate(ad_specs):
+                ad_num = i + 1
+                try:
+                    # Upload image if available
+                    image_hash = None
+                    image_url = ad_spec.get('imageUrl')
+                    if image_url:
+                        img_result = self.upload_image_from_url(
+                            image_url=image_url,
+                            image_name=f"Idea2Ad - Ad {ad_num}"
+                        )
+                        if img_result.get('success'):
+                            image_hash = img_result['image_hash']
+                        else:
+                            logger.warning(f"Image upload failed for ad {ad_num}: {img_result.get('error')}")
+
+                    # Build creative spec
+                    link_data: Dict[str, Any] = {
+                        'link': project_url,
+                        'message': ad_spec.get('primaryText', ''),
+                        'name': ad_spec.get('headline', ''),
+                        'call_to_action': {
+                            'type': campaign_data.get('call_to_action', 'LEARN_MORE')
+                        }
+                    }
+                    if ad_spec.get('description'):
+                        link_data['description'] = ad_spec['description']
+                    if image_hash:
+                        link_data['image_hash'] = image_hash
+
+                    object_story_spec = {
+                        'page_id': page_id,
+                        'link_data': link_data
+                    }
+
+                    creative_result = self.create_ad_creative(
+                        name=f"{campaign_name} - Creative {ad_num}",
+                        object_story_spec=object_story_spec
                     )
-                    if img_result.get('success'):
-                        image_hash = img_result['image_hash']
-                        break  # Use first successful image
 
-            # Build object story spec for link ad
-            link_data = {
-                'link': campaign_data.get('project_url', 'https://example.com'),
-                'message': primary_text,
-                'name': headline,
-                'call_to_action': {
-                    'type': 'LEARN_MORE'
-                }
-            }
+                    if not creative_result.get('success'):
+                        results['errors'].append({
+                            'ad_index': i,
+                            **creative_result,
+                            'note': f'Creative {ad_num} failed - skipping this ad'
+                        })
+                        continue  # Partial failure: skip to next ad
 
-            # Add image hash if we have one
-            if image_hash:
-                link_data['image_hash'] = image_hash
+                    results['creatives'].append(creative_result)
+                    creative_id = creative_result['creative_id']
 
-            object_story_spec = {
-                'page_id': page_id,
-                'link_data': link_data
-            }
+                    # Create ad
+                    ad_result = self.create_ad(
+                        name=f"{campaign_name} - Ad {ad_num}",
+                        ad_set_id=ad_set_id,
+                        creative_id=creative_id,
+                        status='PAUSED'
+                    )
 
-            creative_result = self.create_ad_creative(
-                name=f"{campaign_name} - Creative 1",
-                object_story_spec=object_story_spec
-            )
+                    if not ad_result.get('success'):
+                        results['errors'].append({
+                            'ad_index': i,
+                            **ad_result,
+                            'note': f'Ad {ad_num} creation failed'
+                        })
+                        continue  # Partial failure: skip to next ad
 
-            if not creative_result.get('success'):
-                results['errors'].append(creative_result)
-                results['errors'].append({
-                    'note': 'Creative creation failed. You may need to provide a Facebook Page ID.'
-                })
-                # Continue anyway to show what was created
-                results['success'] = True  # Partial success
-                return results
+                    results['ads'].append(ad_result)
 
-            results['creatives'].append(creative_result)
-            creative_id = creative_result['creative_id']
+                except Exception as ad_exc:
+                    logger.error(f"Error creating ad {ad_num}: {ad_exc}")
+                    results['errors'].append({
+                        'ad_index': i,
+                        'error': str(ad_exc),
+                        'details': f'Unexpected error creating ad {ad_num}'
+                    })
+                    # Continue to next ad (partial failure recovery)
 
-            # 5. Create Ad
-            ad_result = self.create_ad(
-                name=f"{campaign_name} - Ad 1",
-                ad_set_id=ad_set_id,
-                creative_id=creative_id,
-                status='PAUSED'
-            )
-
-            if not ad_result.get('success'):
-                results['errors'].append(ad_result)
-                results['success'] = True  # Partial success (campaign & ad set created)
-                return results
-
-            results['ads'].append(ad_result)
-            results['success'] = True
+            # Mark success if at least one ad was created
+            results['success'] = len(results['ads']) > 0
 
             return results
 

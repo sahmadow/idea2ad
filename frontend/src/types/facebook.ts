@@ -42,16 +42,20 @@ export interface PaymentStatusResponse {
   error?: string;
 }
 
+// Single ad data for publishing
+export interface PublishAdData {
+  imageUrl?: string;
+  primaryText: string;
+  headline: string;
+  description: string;
+}
+
 // Publish campaign request
 export interface PublishCampaignRequest {
   page_id: string;
   ad_account_id?: string;
-  ad: {
-    imageUrl?: string;
-    primaryText: string;
-    headline: string;
-    description: string;
-  };
+  ad: PublishAdData;
+  ads?: PublishAdData[]; // Multiple ads to publish
   campaign_data: {
     project_url: string;
     targeting?: {
@@ -68,6 +72,12 @@ export interface PublishCampaignRequest {
   };
 }
 
+// Error for a specific ad in multi-ad publish
+export interface AdPublishError {
+  ad_index: number;
+  error: string;
+}
+
 // Publish campaign response from /meta/publish-campaign
 export interface PublishCampaignResponse {
   success: boolean;
@@ -75,8 +85,29 @@ export interface PublishCampaignResponse {
   ad_set_id?: string;
   creative_id?: string;
   ad_id?: string;
+  ad_ids?: string[];
+  creative_ids?: string[];
+  ads_created?: number;
+  ads_failed?: number;
+  ad_errors?: AdPublishError[] | null;
+  ads_manager_url?: string;
   message?: string;
   error?: string;
+}
+
+// Activate/pause campaign request
+export interface CampaignStatusRequest {
+  campaign_id: string;
+  ad_account_id?: string;
+}
+
+// Activate/pause campaign response
+export interface CampaignStatusResponse {
+  success: boolean;
+  campaign_id: string;
+  status: 'ACTIVE' | 'PAUSED';
+  ads_manager_url?: string;
+  message?: string;
 }
 
 // OAuth message types from popup
