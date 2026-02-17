@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
+import { TemplateEditor } from './TemplateEditor';
 import { updateAdPack } from '../api/adpack';
 import type { AdPack, AdCreative, AdStrategy } from '../types/adpack';
 import type { Ad } from '../api';
@@ -61,11 +62,13 @@ function CreativeCard({
   pageName,
   websiteUrl,
   onExpand,
+  onEditTemplate,
 }: {
   creative: AdCreative;
   pageName: string;
   websiteUrl: string;
   onExpand: () => void;
+  onEditTemplate?: () => void;
 }) {
   // Convert AdCreative to Ad shape for MetaAdPreview
   const ad: Ad = {
@@ -87,13 +90,24 @@ function CreativeCard({
           onSelect={onExpand}
         />
       </div>
-      <button
-        onClick={onExpand}
-        className="absolute bottom-16 right-3 z-10 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-2 opacity-0 group-hover:opacity-100 transition-opacity"
-        aria-label="Expand creative"
-      >
-        <Eye className="w-4 h-4" />
-      </button>
+      <div className="absolute bottom-16 right-3 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onEditTemplate && creative.format === 'static' && (
+          <button
+            onClick={onEditTemplate}
+            className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-2"
+            aria-label="Edit template"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        )}
+        <button
+          onClick={onExpand}
+          className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-2"
+          aria-label="Expand creative"
+        >
+          <Eye className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -452,6 +466,7 @@ function BudgetControls({
 export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPackViewProps) {
   const [filterStrategy, setFilterStrategy] = useState<FilterStrategy>('all');
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
+  const [editingCreative, setEditingCreative] = useState<AdCreative | null>(null);
 
   let pageName = 'Your Page';
   try {
@@ -617,6 +632,7 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
                   pageName={pageName}
                   websiteUrl={adPack.project_url}
                   onExpand={() => setExpandedCreative(creative)}
+                  onEditTemplate={() => setEditingCreative(creative)}
                 />
               </motion.div>
             ))}
@@ -639,6 +655,19 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
           </span>
         </div>
       </div>
+
+      {/* Template Editor Modal */}
+      {editingCreative && (
+        <TemplateEditor
+          adTypeId={editingCreative.ad_type_id}
+          initialAspectRatio={editingCreative.aspect_ratio || '1:1'}
+          onSave={() => {
+            setEditingCreative(null);
+            toast.success('Template saved — re-render to update creative');
+          }}
+          onClose={() => setEditingCreative(null)}
+        />
+      )}
 
       {/* Expanded Creative Modal */}
       <AnimatePresence>

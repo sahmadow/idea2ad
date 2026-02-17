@@ -161,3 +161,18 @@ enum AdPackStatus {
   READY
   PUBLISHED
 }
+
+model AdTemplate {
+  id            String   @id @default(uuid())
+  ad_type_id    String   // e.g. "product_benefits_static"
+  aspect_ratio  String   // "1:1", "9:16", "1.91:1"
+  name          String   // display name
+  canvas_json   Json     // Fabric.js canvas JSON
+  is_default    Boolean  @default(false) // seed template flag
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([ad_type_id, aspect_ratio, is_default]) // one default per type+ratio
+  @@index([ad_type_id])
+  @@index([ad_type_id, aspect_ratio])
+}

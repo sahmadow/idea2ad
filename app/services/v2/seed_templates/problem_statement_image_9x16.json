@@ -1,0 +1,70 @@
+{
+  "version": "6.5.1",
+  "objects": [
+    {
+      "type": "rect",
+      "left": 0,
+      "top": 0,
+      "width": 1080,
+      "height": 1920,
+      "fill": "rgba(0,0,0,0.55)",
+      "rx": 0,
+      "ry": 0,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{problem_hook}}",
+      "left": 60,
+      "top": 384,
+      "width": 960,
+      "fontFamily": "Inter",
+      "fontSize": 48,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.2,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{customer_pains[0]}}",
+      "left": 60,
+      "top": 1056,
+      "width": 960,
+      "fontFamily": "Inter",
+      "fontSize": 26,
+      "fontWeight": "normal",
+      "fill": "#E2E8F0",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "rect",
+      "left": 60,
+      "top": 1574,
+      "width": 260,
+      "height": 56,
+      "fill": "#FF6B35",
+      "rx": 28,
+      "ry": 28,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{cta_text}}",
+      "left": 90,
+      "top": 1586,
+      "width": 200,
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "center",
+      "lineHeight": 1.3,
+      "selectable": true
+    }
+  ],
+  "background": "#1A202C"
+}

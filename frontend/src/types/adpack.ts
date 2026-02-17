@@ -6,11 +6,15 @@ export type AdStrategy = 'product_aware' | 'product_unaware';
 
 export interface AdCreative {
   id: string;
+  ad_type_id: string;
   strategy: AdStrategy;
+  format: 'static' | 'video' | 'carousel';
+  aspect_ratio: string;
   primary_text: string;
   headline: string;
   description: string;
   image_url?: string;
+  asset_url?: string;
   image_brief?: {
     approach: string;
     creative_type?: string;

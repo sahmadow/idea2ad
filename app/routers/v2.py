@@ -1,9 +1,14 @@
 """
 V2 API Router — dual-strategy creative generation pipeline.
 
-POST /v2/analyze       → Extract CreativeParameters from URL
-POST /v2/render        → Render static images for an AdPack
-GET  /v2/ad-types      → List available ad types in the registry
+POST /v2/analyze            → Extract CreativeParameters from URL
+POST /v2/render             → Render static images for an AdPack
+GET  /v2/ad-types           → List available ad types in the registry
+GET  /v2/templates          → List all ad templates
+GET  /v2/templates/{type}   → Get templates for a specific ad type
+POST /v2/templates          → Create/update a template
+PUT  /v2/templates/{id}     → Update a template by ID
+POST /v2/templates/{id}/render → Render a template with given params
 """
 
 import logging
@@ -233,6 +238,194 @@ async def render_static(body: RenderRequest):
 
     return results
 
+
+# --- Template CRUD endpoints ---
+
+class TemplateResponse(BaseModel):
+    id: str
+    ad_type_id: str
+    aspect_ratio: str
+    name: str
+    canvas_json: dict
+    is_default: bool
+
+
+class TemplateCreateRequest(BaseModel):
+    ad_type_id: str
+    aspect_ratio: str
+    name: str
+    canvas_json: dict
+    is_default: bool = False
+
+
+class TemplateUpdateRequest(BaseModel):
+    name: str | None = None
+    canvas_json: dict | None = None
+    is_default: bool | None = None
+
+
+class TemplateRenderRequest(BaseModel):
+    parameters: CreativeParameters
+    width: int | None = None
+    height: int | None = None
+
+
+@router.get("/templates", response_model=list[TemplateResponse])
+async def list_templates(ad_type_id: str | None = None):
+    """List all templates, optionally filtered by ad_type_id."""
+    from prisma import Prisma
+    db = Prisma()
+    await db.connect()
+    try:
+        where = {}
+        if ad_type_id:
+            where["ad_type_id"] = ad_type_id
+        templates = await db.adtemplate.find_many(
+            where=where,
+            order={"created_at": "desc"},
+        )
+        return [
+            TemplateResponse(
+                id=t.id,
+                ad_type_id=t.ad_type_id,
+                aspect_ratio=t.aspect_ratio,
+                name=t.name,
+                canvas_json=t.canvas_json,
+                is_default=t.is_default,
+            )
+            for t in templates
+        ]
+    finally:
+        await db.disconnect()
+
+
+@router.get("/templates/{ad_type_id}", response_model=list[TemplateResponse])
+async def get_templates_for_type(ad_type_id: str):
+    """Get all templates for a specific ad type."""
+    from prisma import Prisma
+    db = Prisma()
+    await db.connect()
+    try:
+        templates = await db.adtemplate.find_many(
+            where={"ad_type_id": ad_type_id},
+            order={"aspect_ratio": "asc"},
+        )
+        if not templates:
+            raise HTTPException(status_code=404, detail=f"No templates for ad type: {ad_type_id}")
+        return [
+            TemplateResponse(
+                id=t.id,
+                ad_type_id=t.ad_type_id,
+                aspect_ratio=t.aspect_ratio,
+                name=t.name,
+                canvas_json=t.canvas_json,
+                is_default=t.is_default,
+            )
+            for t in templates
+        ]
+    finally:
+        await db.disconnect()
+
+
+@router.post("/templates", response_model=TemplateResponse, status_code=201)
+async def create_template(body: TemplateCreateRequest):
+    """Create a new ad template."""
+    from prisma import Prisma
+    db = Prisma()
+    await db.connect()
+    try:
+        template = await db.adtemplate.create(
+            data={
+                "ad_type_id": body.ad_type_id,
+                "aspect_ratio": body.aspect_ratio,
+                "name": body.name,
+                "canvas_json": body.canvas_json,
+                "is_default": body.is_default,
+            }
+        )
+        return TemplateResponse(
+            id=template.id,
+            ad_type_id=template.ad_type_id,
+            aspect_ratio=template.aspect_ratio,
+            name=template.name,
+            canvas_json=template.canvas_json,
+            is_default=template.is_default,
+        )
+    finally:
+        await db.disconnect()
+
+
+@router.put("/templates/{template_id}", response_model=TemplateResponse)
+async def update_template(template_id: str, body: TemplateUpdateRequest):
+    """Update an existing template."""
+    from prisma import Prisma
+    db = Prisma()
+    await db.connect()
+    try:
+        data = {}
+        if body.name is not None:
+            data["name"] = body.name
+        if body.canvas_json is not None:
+            data["canvas_json"] = body.canvas_json
+        if body.is_default is not None:
+            data["is_default"] = body.is_default
+
+        if not data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        template = await db.adtemplate.update(
+            where={"id": template_id},
+            data=data,
+        )
+        return TemplateResponse(
+            id=template.id,
+            ad_type_id=template.ad_type_id,
+            aspect_ratio=template.aspect_ratio,
+            name=template.name,
+            canvas_json=template.canvas_json,
+            is_default=template.is_default,
+        )
+    except Exception as e:
+        if "Record to update not found" in str(e):
+            raise HTTPException(status_code=404, detail="Template not found")
+        raise
+    finally:
+        await db.disconnect()
+
+
+@router.post("/templates/{template_id}/render")
+async def render_template(template_id: str, body: TemplateRenderRequest):
+    """Render a specific template with given parameters. Returns PNG image."""
+    from fastapi.responses import Response
+    from prisma import Prisma
+
+    db = Prisma()
+    await db.connect()
+    try:
+        template = await db.adtemplate.find_unique(where={"id": template_id})
+        if not template:
+            raise HTTPException(status_code=404, detail="Template not found")
+
+        w = body.width or ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[0]
+        h = body.height or ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[1]
+
+        renderer = get_static_renderer()
+        img_bytes = await renderer.render_from_template(
+            canvas_json=template.canvas_json,
+            params=body.parameters,
+            width=w,
+            height=h,
+        )
+        return Response(content=img_bytes, media_type="image/png")
+    finally:
+        await db.disconnect()
+
+
+# Import ASPECT_RATIO_SIZES for template render endpoint
+from app.services.v2.static_renderer import ASPECT_RATIO_SIZES
+
+
+# --- Helper functions ---
 
 def _resolve_hook(template: AdTypeDefinition, params: CreativeParameters) -> str | None:
     """Pick a random hook from hook_templates and resolve variables."""

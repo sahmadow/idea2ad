@@ -35,6 +35,30 @@ class GeneratedCopy(dict):
     pass
 
 
+def _clean_interpolated_text(text: str) -> str:
+    """
+    Post-process interpolated copy to fix punctuation artifacts.
+
+    Fixes:
+    - Trailing punctuation from array values ("neck pain." → "neck pain")
+    - Duplicate punctuation after interpolation (".?" → "?", ".." → ".")
+    - Lowercase first char when value appears mid-sentence
+    """
+    # Remove duplicate punctuation patterns
+    text = re.sub(r"\.{2,}", ".", text)
+    text = re.sub(r"\.\?", "?", text)
+    text = re.sub(r"\.!", "!", text)
+    text = re.sub(r"\?\.", "?", text)
+    text = re.sub(r"!\.", "!", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
+
+
+def _strip_trailing_punct(value: str) -> str:
+    """Strip trailing sentence punctuation from interpolated values."""
+    return value.rstrip(".!?;,")
+
+
 def _resolve_variable(template: str, params: CreativeParameters) -> str:
     """
     Replace {variable} placeholders with values from CreativeParameters.
@@ -51,7 +75,14 @@ def _resolve_variable(template: str, params: CreativeParameters) -> str:
             index = int(idx_match.group(2))
             value = getattr(params, field_name, [])
             if isinstance(value, list) and index < len(value):
-                return str(value[index])
+                result = _strip_trailing_punct(str(value[index]))
+                # Lowercase first char if mid-sentence (preceded by non-start text)
+                start = match.start()
+                if start > 0 and template[start - 1] == " " and result:
+                    prev_char = template[start - 2] if start >= 2 else ""
+                    if prev_char not in (".", "!", "?", ""):
+                        result = result[0].lower() + result[1:]
+                return result
             return fallback
 
         # Handle dotted paths: brand_colors.primary
@@ -64,7 +95,7 @@ def _resolve_variable(template: str, params: CreativeParameters) -> str:
                 return fallback
         if obj is None:
             return fallback
-        return str(obj)
+        return _strip_trailing_punct(str(obj))
 
     return re.sub(r"\{(\w+(?:\[\d+\])?(?:\.\w+)?)\}", replacer, template)
 
@@ -104,6 +135,12 @@ def generate_copy_from_template(
     headline = re.sub(r"\{[^}]+\}", "", headline).strip()
     if description:
         description = re.sub(r"\{[^}]+\}", "", description).strip()
+
+    # Fix interpolation artifacts (duplicate punct, trailing punct, etc.)
+    primary_text = _clean_interpolated_text(primary_text)
+    headline = _clean_interpolated_text(headline)
+    if description:
+        description = _clean_interpolated_text(description)
 
     # Enforce constraints
     if len(headline) > HEADLINE_MAX:

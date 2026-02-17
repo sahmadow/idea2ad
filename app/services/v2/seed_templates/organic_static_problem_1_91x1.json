@@ -1,0 +1,98 @@
+{
+  "version": "6.5.1",
+  "objects": [
+    {
+      "type": "rect",
+      "left": 0,
+      "top": 0,
+      "width": 1200,
+      "height": 628,
+      "fill": "#FFFFFF",
+      "rx": 0,
+      "ry": 0,
+      "selectable": true
+    },
+    {
+      "type": "rect",
+      "left": 20,
+      "top": 20,
+      "width": 1160,
+      "height": 588,
+      "fill": "#FFFFFF",
+      "rx": 16,
+      "ry": 16,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "Everyday User  @user_2025",
+      "left": 50,
+      "top": 40,
+      "width": 1100,
+      "fontFamily": "Inter",
+      "fontSize": 18,
+      "fontWeight": "normal",
+      "fill": "#718096",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{problem_hook}}",
+      "left": 50,
+      "top": 100,
+      "width": 1100,
+      "fontFamily": "Inter",
+      "fontSize": 34,
+      "fontWeight": "bold",
+      "fill": "#1A202C",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{customer_pains[0]}}",
+      "left": 50,
+      "top": 251,
+      "width": 1100,
+      "fontFamily": "Inter",
+      "fontSize": 22,
+      "fontWeight": "normal",
+      "fill": "#4A5568",
+      "textAlign": "left",
+      "lineHeight": 1.5,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{customer_desires[0]}}",
+      "left": 50,
+      "top": 408,
+      "width": 1100,
+      "fontFamily": "Inter",
+      "fontSize": 22,
+      "fontWeight": "normal",
+      "fill": "#2D3748",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "847    128    35",
+      "left": 50,
+      "top": 568,
+      "width": 1100,
+      "fontFamily": "Inter",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "fill": "#A0AEC0",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    }
+  ],
+  "background": "#F7FAFC"
+}

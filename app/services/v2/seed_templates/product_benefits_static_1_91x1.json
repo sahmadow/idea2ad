@@ -1,0 +1,112 @@
+{
+  "version": "6.5.1",
+  "objects": [
+    {
+      "type": "rect",
+      "left": 0,
+      "top": 0,
+      "width": 1200,
+      "height": 628,
+      "fill": "{{brand_colors.primary}}",
+      "rx": 0,
+      "ry": 0,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{product_name}}",
+      "left": 60,
+      "top": 60,
+      "width": 1080,
+      "fontFamily": "Inter",
+      "fontSize": 52,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{key_benefit}}",
+      "left": 60,
+      "top": 140,
+      "width": 1080,
+      "fontFamily": "Inter",
+      "fontSize": 32,
+      "fontWeight": "normal",
+      "fill": "#E2E8F0",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{value_props[0]}}",
+      "left": 60,
+      "top": 219.79999999999998,
+      "width": 510,
+      "fontFamily": "Inter",
+      "fontSize": 28,
+      "fontWeight": "normal",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{value_props[1]}}",
+      "left": 630,
+      "top": 219.79999999999998,
+      "width": 510,
+      "fontFamily": "Inter",
+      "fontSize": 28,
+      "fontWeight": "normal",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{value_props[2]}}",
+      "left": 60,
+      "top": 345.40000000000003,
+      "width": 510,
+      "fontFamily": "Inter",
+      "fontSize": 28,
+      "fontWeight": "normal",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "rect",
+      "left": 60,
+      "top": 514,
+      "width": 220,
+      "height": 56,
+      "fill": "#FF6B35",
+      "rx": 28,
+      "ry": 28,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{cta_text}}",
+      "left": 84,
+      "top": 526,
+      "width": 180,
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "center",
+      "lineHeight": 1.3,
+      "selectable": true
+    }
+  ],
+  "background": "{{brand_colors.primary}}"
+}

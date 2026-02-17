@@ -1,0 +1,70 @@
+{
+  "version": "6.5.1",
+  "objects": [
+    {
+      "type": "rect",
+      "left": 0,
+      "top": 0,
+      "width": 1080,
+      "height": 1080,
+      "fill": "#0F172A",
+      "rx": 0,
+      "ry": 0,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{problem_hook}}",
+      "left": 80,
+      "top": 162,
+      "width": 920,
+      "fontFamily": "Inter",
+      "fontSize": 56,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "left",
+      "lineHeight": 1.2,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{customer_pains[0]}}",
+      "left": 80,
+      "top": 594,
+      "width": 920,
+      "fontFamily": "Inter",
+      "fontSize": 28,
+      "fontWeight": "normal",
+      "fill": "#94A3B8",
+      "textAlign": "left",
+      "lineHeight": 1.4,
+      "selectable": true
+    },
+    {
+      "type": "rect",
+      "left": 80,
+      "top": 885,
+      "width": 280,
+      "height": 60,
+      "fill": "{{brand_colors.primary}}",
+      "rx": 30,
+      "ry": 30,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "Learn More",
+      "left": 120,
+      "top": 899,
+      "width": 200,
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "center",
+      "lineHeight": 1.3,
+      "selectable": true
+    }
+  ],
+  "background": "#0F172A"
+}

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fabric.js Renderer</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; background: transparent; }
+    canvas { display: block; }
+  </style>
+  <!-- Fabric.js loaded from CDN for renderer -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/6.5.1/fabric.min.js"></script>
+</head>
+<body>
+  <canvas id="c" width="1080" height="1080"></canvas>
+  <script>
+    // Initialize global Fabric canvas for Puppeteer to access
+    const canvasEl = document.getElementById('c');
+    window.__fabricCanvas = new fabric.Canvas(canvasEl, {
+      renderOnAddRemove: false,
+      preserveObjectStacking: true,
+    });
+  </script>
+</body>
+</html>

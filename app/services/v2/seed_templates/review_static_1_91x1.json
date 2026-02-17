@@ -1,0 +1,98 @@
+{
+  "version": "6.5.1",
+  "objects": [
+    {
+      "type": "rect",
+      "left": 0,
+      "top": 0,
+      "width": 1200,
+      "height": 628,
+      "fill": "{{brand_colors.primary}}",
+      "rx": 0,
+      "ry": 0,
+      "selectable": true
+    },
+    {
+      "type": "rect",
+      "left": 60,
+      "top": 75,
+      "width": 1080,
+      "height": 314,
+      "fill": "#FFFFFF",
+      "rx": 20,
+      "ry": 20,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "\u2605\u2605\u2605\u2605\u2605",
+      "left": 84,
+      "top": 95,
+      "width": 1032,
+      "fontFamily": "Inter",
+      "fontSize": 28,
+      "fontWeight": "normal",
+      "fill": "#F59E0B",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{testimonials[0]}}",
+      "left": 84,
+      "top": 145,
+      "width": 1032,
+      "fontFamily": "Inter",
+      "fontSize": 26,
+      "fontWeight": "normal",
+      "fill": "#1A202C",
+      "textAlign": "left",
+      "lineHeight": 1.4,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "Verified Purchase",
+      "left": 84,
+      "top": 339,
+      "width": 200,
+      "fontFamily": "Inter",
+      "fontSize": 16,
+      "fontWeight": "normal",
+      "fill": "#48BB78",
+      "textAlign": "left",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{product_name}}",
+      "left": 60,
+      "top": 429,
+      "width": 1080,
+      "fontFamily": "Inter",
+      "fontSize": 36,
+      "fontWeight": "bold",
+      "fill": "#FFFFFF",
+      "textAlign": "center",
+      "lineHeight": 1.3,
+      "selectable": true
+    },
+    {
+      "type": "textbox",
+      "text": "{{cta_text}}",
+      "left": 60,
+      "top": 533,
+      "width": 1080,
+      "fontFamily": "Inter",
+      "fontSize": 24,
+      "fontWeight": "normal",
+      "fill": "#E2E8F0",
+      "textAlign": "center",
+      "lineHeight": 1.3,
+      "selectable": true
+    }
+  ],
+  "background": "{{brand_colors.primary}}"
+}
