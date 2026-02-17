@@ -175,3 +175,64 @@ class ReplicaResponse(BaseModel):
     url: str
     creatives: List[ReplicaCreative]
     replica_data: ReplicaData  # Full extracted data
+
+
+# =====================================
+# COMPETITOR INTELLIGENCE MODELS
+# =====================================
+
+class CompetitorProfile(BaseModel):
+    """A single competitor's profile."""
+    name: str
+    url: Optional[str] = None
+    positioning: str = ""
+    claims: List[str] = []
+    pricing: Optional[str] = None
+    differentiators: List[str] = []
+    facebook_page_id: Optional[str] = None
+    ad_count: int = 0
+    error: Optional[str] = None
+
+
+class CompetitorAd(BaseModel):
+    """A single competitor ad from the Ad Library."""
+    ad_id: str
+    copy: str = ""
+    headline: str = ""
+    description: str = ""
+    page_name: str = ""
+    days_active: int = 0
+    likely_profitable: bool = False
+    hook_type: Optional[str] = None
+    emotional_angle: Optional[str] = None
+    cta_style: Optional[str] = None
+    format_type: Optional[str] = None
+    strength_score: Optional[int] = None
+    key_message: Optional[str] = None
+
+
+class GapRecommendation(BaseModel):
+    """A single actionable recommendation."""
+    type: str  # hook, angle, combo, content_gap, differentiation, copy_direction
+    action: str
+    rationale: str = ""
+    sample: Optional[str] = None
+    priority: str = "medium"  # high, medium, low
+
+
+class CompetitorIntelligence(BaseModel):
+    """Full competitor intelligence report."""
+    competitors: List[CompetitorProfile] = []
+    total_ads_analyzed: int = 0
+    profitable_ads_count: int = 0
+    hook_distribution: Dict[str, float] = {}
+    angle_distribution: Dict[str, float] = {}
+    cta_distribution: Dict[str, float] = {}
+    format_distribution: Dict[str, float] = {}
+    top_hooks: List[str] = []
+    top_angles: List[str] = []
+    avg_strength: float = 0
+    gap_analysis: Dict[str, Any] = {}
+    recommendations: List[GapRecommendation] = []
+    confidence_score: int = 0
+    status: str = "complete"

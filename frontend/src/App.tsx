@@ -6,7 +6,7 @@ import { Terminal } from './components/ui/Terminal';
 import { Button } from './components/ui/Button';
 import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Skeleton } from './components/ui/Skeleton';
-import { analyzeUrl, uploadProductImage, generateQuickAd, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse } from './api';
+import { analyzeUrl, uploadProductImage, generateQuickAd, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse, type CompetitorIntelligence } from './api';
 import { FBAuthTest } from './pages/FBAuthTest';
 import type { PublishCampaignResponse } from './types/facebook';
 
@@ -117,6 +117,10 @@ function App() {
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Competitor state
+  const [competitors, setCompetitors] = useState<string[]>([]);
+  const [competitorData, setCompetitorData] = useState<CompetitorIntelligence | null>(null);
 
   // Loading state
   const [loadingStage, setLoadingStage] = useState(0);
@@ -265,14 +269,29 @@ function App() {
     setError(null);
     setResult(null);
     setSelectedAd(null);
+    setCompetitorData(null);
     try {
       const normalizedUrl = normalizeUrl(url);
-      const data = await analyzeUrl(normalizedUrl, undefined, {
+
+      // Run URL analysis and competitor analysis in parallel
+      const analysisPromise = analyzeUrl(normalizedUrl, undefined, {
         businessType,
         productDescription: businessType === 'commerce' ? productDescription || undefined : undefined,
         productImageUrl: businessType === 'commerce' ? uploadedImageUrl || undefined : undefined,
       });
+
+      const competitorPromise = competitors.length > 0
+        ? analyzeCompetitors(competitors, normalizedUrl).catch((err) => {
+            console.warn('Competitor analysis failed:', err);
+            toast.error('Competitor analysis failed - showing results without competitor intel');
+            return null;
+          })
+        : Promise.resolve(null);
+
+      const [data, compData] = await Promise.all([analysisPromise, competitorPromise]);
+
       setResult(data);
+      setCompetitorData(compData);
       setView('results');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -294,6 +313,8 @@ function App() {
     setSelectedAd(null);
     setPublishResult(null);
     setQuickResult(null);
+    setCompetitorData(null);
+    setCompetitors([]);
     setProductDescription('');
     clearProductImage();
     try {
@@ -358,6 +379,7 @@ function App() {
               onBack={handleBack}
               onNext={() => selectedAd && setView('publish')}
               onRegenerate={() => handleSubmit(new Event('submit') as unknown as FormEvent)}
+              competitorData={competitorData}
             />
           </Suspense>
         </motion.div>
@@ -422,6 +444,8 @@ function App() {
           isUploading={isUploading}
           uploadedImageUrl={uploadedImageUrl}
           onImageSelect={handleImageSelect}
+          competitors={competitors}
+          onCompetitorsChange={setCompetitors}
           onClearImage={clearProductImage}
           onSubmit={handleSubmit}
           error={error}

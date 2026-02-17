@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
-import type { CampaignDraft, Ad } from '../api';
+import { CompetitorInsights } from './CompetitorInsights';
+import type { CampaignDraft, Ad, CompetitorIntelligence } from '../api';
 
 interface ResultsViewProps {
   result: CampaignDraft;
@@ -13,6 +14,7 @@ interface ResultsViewProps {
   onBack: () => void;
   onNext?: () => void;
   onRegenerate?: () => void;
+  competitorData?: CompetitorIntelligence | null;
 }
 
 const staggerContainer = {
@@ -25,7 +27,7 @@ const fadeInUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.3 } },
 };
 
-export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, onRegenerate }: ResultsViewProps) {
+export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, onRegenerate, competitorData }: ResultsViewProps) {
   const [painPointsOpen, setPainPointsOpen] = useState(false);
 
   let pageName = 'your site';
@@ -207,6 +209,17 @@ export function ResultsView({ result, selectedAd, onSelectAd, onBack, onNext, on
             ))}
           </motion.div>
         </div>
+
+        {/* Competitor Intelligence */}
+        {competitorData && competitorData.status === 'complete' && (
+          <div className="max-w-4xl mx-auto mb-12">
+            <h2 className="text-2xl font-display font-bold text-center mb-2">Competitor Intelligence</h2>
+            <p className="text-gray-400 text-center mb-8">
+              Patterns and gaps identified from {competitorData.total_ads_analyzed} competitor ads
+            </p>
+            <CompetitorInsights data={competitorData} />
+          </div>
+        )}
 
         {/* Pain Points (Collapsible) */}
         {result.analysis.pain_points.length > 0 && (

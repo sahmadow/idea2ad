@@ -9,6 +9,7 @@ import { Terminal } from './ui/Terminal';
 import { AdPreview } from './ui/AdPreview';
 import { SegmentedControl } from './ui/SegmentedControl';
 import { ErrorBanner } from './ui/ErrorBanner';
+import { CompetitorInput } from './CompetitorInput';
 import type { BusinessType, ToneOption } from '../api';
 
 type GenerationMode = 'full' | 'quick';
@@ -35,6 +36,10 @@ interface LandingViewProps {
   uploadedImageUrl: string | null;
   onImageSelect: (e: ChangeEvent<HTMLInputElement>) => void;
   onClearImage: () => void;
+
+  // Competitor intel
+  competitors: string[];
+  onCompetitorsChange: (competitors: string[]) => void;
 
   // Actions
   onSubmit: (e: FormEvent) => void;
@@ -70,6 +75,8 @@ export function LandingView({
   isUploading,
   uploadedImageUrl,
   onImageSelect,
+  competitors,
+  onCompetitorsChange,
   onClearImage,
   onSubmit,
   error,
@@ -266,6 +273,21 @@ export function LandingView({
                     </button>
                   </div>
                 )}
+              </motion.div>
+            )}
+
+            {/* Competitor Input (full mode only) */}
+            {generationMode === 'full' && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="max-w-lg mx-auto pt-4 border-t border-white/10"
+              >
+                <CompetitorInput
+                  competitors={competitors}
+                  onCompetitorsChange={onCompetitorsChange}
+                />
               </motion.div>
             )}
 
