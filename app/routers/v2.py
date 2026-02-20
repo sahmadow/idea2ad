@@ -308,8 +308,8 @@ async def _run_v2_job(
             if template.id == "review_static_competition":
                 _competition_copy_store[creative.id] = dict(base_copy)
 
-        # 5. Render UGC avatar video (if selected and HeyGen configured)
-        await _render_ugc_avatar_creatives(creatives, selected, params)
+        # 5. UGC avatar video — OFF pending HeyGen cost/quality eval
+        # await _render_ugc_avatar_creatives(creatives, selected, params)
 
         # 5b. Add manual_image_upload creative (#9) if user provided image
         if image_url:

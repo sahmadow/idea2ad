@@ -95,8 +95,8 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
     # Founder video script always generated
     _try_add(selected, "founder_video_solution", params)
 
-    # UGC avatar video (HeyGen) — needs at least product_name + key_benefit
-    _try_add(selected, "ugc_avatar_video", params)
+    # UGC avatar video (HeyGen) — OFF pending cost/quality eval
+    # _try_add(selected, "ugc_avatar_video", params)
 
     # --- Pass 2: Product Unaware ---
 
