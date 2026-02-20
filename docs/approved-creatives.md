@@ -6,23 +6,25 @@ UGC avatar videos use **HeyGen**: AI avatar + TTS → MP4 via REST API.
 
 **AI Led (9 types):**
 
-| #   | Creative               | ID                       | Format | Renderer                                   | Business Type | Status |
-| --- | ---------------------- | ------------------------ | ------ | ------------------------------------------ | ------------- | ------ |
-| 1   | Branded Static         | `branded_static`         | Static | `scripts/ad_approach_comparison.py`         | All           | Active |
-| 2   | Organic Static — Reddit | `organic_static_reddit` | Static | `social_templates/reddit_post.py`           | All           | Active |
-| 3   | Problem Statement Text | `problem_statement_text` | Static | `social_templates/problem_statement.py`     | All           | Active |
-| 4   | Review Static          | `review_static`          | Static | `social_templates/review_static.py`         | All           | Active |
-| 4b  | Review Static (Competition) | `review_static_competition` | Static | Reuses `review_static` templates + Gemini LLM copy | All | Active |
-| 5   | Service Hero           | `service_hero`           | Static | `social_templates/service_hero.py`          | Service       | Active |
-| 6   | Service Hero Video     | `service_hero_video`     | Video  | `remotion/src/compositions/ServiceHero.tsx` | Service       | Active |
-| 7   | Branded Static Video   | `branded_static_video`   | Video  | `remotion/src/compositions/BrandedStatic.tsx` | All         | Active |
-| 8   | UGC Avatar Video       | `ugc_avatar_video`       | Video  | HeyGen API → `ugc_avatar_renderer.py`         | All         | **OFF** |
+| #   | Creative               | ID                       | Format | Renderer                                   | Business Type | Cost/100 | Status |
+| --- | ---------------------- | ------------------------ | ------ | ------------------------------------------ | ------------- | -------- | ------ |
+| 1   | Branded Static         | `branded_static`         | Static | `scripts/ad_approach_comparison.py`         | All           | ~$0      | Active |
+| 2   | Organic Static — Reddit | `organic_static_reddit` | Static | `social_templates/reddit_post.py`           | All           | ~$0      | Active |
+| 3   | Problem Statement Text | `problem_statement_text` | Static | `social_templates/problem_statement.py`     | All           | ~$0      | Active |
+| 4   | Review Static          | `review_static`          | Static | `social_templates/review_static.py`         | All           | ~$0      | Active |
+| 4b  | Review Static (Competition) | `review_static_competition` | Static | `social_templates/blog_review.py` + Gemini copy | All | ~$0.02   | Active |
+| 5   | Service Hero           | `service_hero`           | Static | `social_templates/service_hero.py`          | Service       | ~$0      | Active |
+| 6   | Service Hero Video     | `service_hero_video`     | Video  | `remotion/src/compositions/ServiceHero.tsx` | Service       | ~$0      | Active |
+| 7   | Branded Static Video   | `branded_static_video`   | Video  | `remotion/src/compositions/BrandedStatic.tsx` | All         | ~$0      | Active |
+| 8   | UGC Avatar Video       | `ugc_avatar_video`       | Video  | HeyGen API → `ugc_avatar_renderer.py`         | All         | ~$400    | **OFF** |
 
 **Manual Upload (1 type):**
 
-| #   | Creative             | ID                     | Format | Renderer                         | Business Type | Status |
-| --- | -------------------- | ---------------------- | ------ | -------------------------------- | ------------- | ------ |
-| 9   | Manual Image Upload  | `manual_image_upload`  | Static | Gemini edit + Playwright overlay | All           | Active |
+| #   | Creative             | ID                     | Format | Renderer                         | Business Type | Cost/100 | Status |
+| --- | -------------------- | ---------------------- | ------ | -------------------------------- | ------------- | -------- | ------ |
+| 9   | Manual Image Upload  | `manual_image_upload`  | Static | Gemini edit + Playwright overlay | All           | ~$0.10   | Active |
+
+**Cost/100** = estimated API cost per 100 creative generations (excludes compute/hosting). See [Cost Model](#cost-model) below.
 
 **Product aware vs unaware** is a copy distinction, not a template distinction. Any template can carry either tone — "Tired of slow ad workflows?" (unaware) or "peec.ai generates ads in 30 seconds" (aware). The copy generator decides awareness level based on funnel stage; templates are visual containers only.
 
@@ -348,6 +350,76 @@ UGC-style avatar video. An AI avatar speaks a generated script directly to camer
 - `HEYGEN_API_KEY` — required for render (skipped gracefully if missing)
 
 **Output:** MP4, ~2-5MB
+
+---
+
+## Cost Model
+
+All estimates as of Feb 2026. Prices change — verify against provider pricing pages.
+
+### Infrastructure (fixed monthly)
+
+| Service | Plan | What it runs | Monthly cost |
+|---------|------|-------------|-------------|
+| **Railway** — API server | Hobby ($5 base) | FastAPI + Playwright + Prisma, ~0.5 vCPU / 1GB RAM 24/7 | ~$25 |
+| **Railway** — Renderer | Hobby (shared) | Node.js Fabric.js renderer (Docker), idles when unused | ~$5-10 |
+| **Railway** — PostgreSQL | Included in compute | Users, campaigns, templates, ad packs | ~$3-5 |
+| **Vercel** — Frontend | Hobby (free) | React/Vite SPA, 100GB bandwidth/mo | $0 |
+| **AWS S3** | Standard | Rendered images, product uploads | ~$0.50 |
+| **Sentry** | Developer (free) | Error monitoring, 5K events/mo | $0 |
+| | | **Total fixed** | **~$35-40/mo** |
+
+**Railway resource rates:** vCPU $0.000463/min, RAM $0.000232/GB/min, disk $0.25/GB/mo, egress $0.05/GB.
+
+**S3 at low volume (<1GB stored, <10K requests):** storage $0.023/GB/mo, PUT $0.005/1K, GET $0.0004/1K, egress $0.09/GB.
+
+**Vercel Pro ($20/user/mo)** needed if >100GB bandwidth or team features. Not needed yet.
+
+### API costs (per-generation, variable)
+
+**Shared cost per URL analysis (amortized across all creatives in the pack):**
+
+| Step | API | Tokens (approx) | Cost/call | Cost/100 analyses |
+|------|-----|-----------------|-----------|-------------------|
+| Parameter extraction | Gemini 2.0 Flash | ~3K in / ~1.5K out | ~$0.001 | ~$0.10 |
+| Scrape (main + competitor) | None (Playwright) | — | $0 | $0 |
+
+**Per-creative marginal cost:**
+
+| Creative | API calls | Tokens/call | Cost/call | Cost/100 |
+|----------|-----------|-------------|-----------|----------|
+| #1-4, #5-7 (statics + videos) | 0 | — | $0 | **~$0** |
+| #4b Review Static (Competition) | 1x Gemini 2.0 Flash | ~800 in / ~300 out | ~$0.0002 | **~$0.02** |
+| #8 UGC Avatar Video | 1x HeyGen API | — | ~$4.00 | **~$400** |
+| #9 Manual Image Upload | 1x Gemini 2.5 Flash | ~1K in / ~300 out + image I/O | ~$0.001 | **~$0.10** |
+
+### Full pack cost (1 URL → ~10 creatives)
+
+| Scenario | API cost | Notes |
+|----------|----------|-------|
+| Without UGC avatar (default) | **~$0.002** | 1 Gemini extraction + 1 Gemini competition copy |
+| With UGC avatar | **~$4.00** | + 1 HeyGen video render |
+| With manual upload | **~$0.003** | + 1 Gemini image edit |
+
+### Scaling estimate (100 packs/month)
+
+| Line item | Cost |
+|-----------|------|
+| Railway (API + renderer + DB) | ~$35 |
+| Vercel (frontend) | $0 |
+| AWS S3 (~1000 images, ~150MB) | ~$0.50 |
+| Gemini API (100 extractions + 100 competition copies) | ~$0.12 |
+| HeyGen (0 videos, OFF) | $0 |
+| **Total** | **~$36/mo** |
+
+### Pricing basis (Feb 2026)
+
+- **Gemini 2.0 Flash:** $0.10/1M input, $0.40/1M output tokens
+- **Gemini 2.5 Flash:** $0.30/1M input, $2.50/1M output tokens
+- **HeyGen:** ~$4/video (Starter $24/mo = ~6 min of video = ~12 x 30s clips)
+- **Railway:** Hobby $5/mo base + usage; Pro $20/mo base + usage
+- **AWS S3 Standard:** $0.023/GB storage, $0.005/1K PUTs, $0.09/GB egress
+- **Vercel:** Hobby free (100GB BW), Pro $20/user/mo (1TB BW)
 
 ---
 
