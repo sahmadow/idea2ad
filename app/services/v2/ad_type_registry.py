@@ -1,7 +1,8 @@
 """
-Ad Type Registry — 6 approved static creative types for V2 pipeline.
+Ad Type Registry — 6 approved static + 2 video creative types for V2 pipeline.
 
-Each type dispatches to a dedicated HTML+Playwright social template renderer.
+Static types dispatch to HTML+Playwright social template renderers.
+Video types dispatch to Remotion server-side rendering (MP4).
 Layers are empty — rendering is handled by social_template_bridges + renderers.
 """
 
@@ -50,6 +51,7 @@ ORGANIC_STATIC_REDDIT = AdTypeDefinition(
             "{key_benefit}. Worth trying if you deal with {customer_pains[0]}."
         ),
         headline="{product_name}",
+        description="{key_benefit}",
         cta_type="LEARN_MORE",
         fallbacks={
             "key_benefit": "It actually works",
@@ -75,6 +77,7 @@ PROBLEM_STATEMENT_TEXT = AdTypeDefinition(
             "{product_name} was built to fix exactly this. →"
         ),
         headline="{key_benefit}",
+        description="{product_name} — built for this",
         cta_type="LEARN_MORE",
         fallbacks={
             "key_benefit": "There's a better way",
@@ -96,6 +99,7 @@ REVIEW_STATIC = AdTypeDefinition(
     copy_templates=CopyTemplate(
         primary_text="This is why {social_proof} people switched to {product_name} 👇",
         headline="See why customers love it",
+        description="Real reviews from real customers",
         cta_type="LEARN_MORE",
         fallbacks={"social_proof": "thousands of"},
     ),
@@ -115,6 +119,7 @@ REVIEW_STATIC_COMPETITION = AdTypeDefinition(
     copy_templates=CopyTemplate(
         primary_text="Tired of {competitor_complaint}? {social_proof} people already switched to {product_name}",
         headline="Try {product_name} instead",
+        description="See why people are switching",
         cta_type="LEARN_MORE",
         fallbacks={
             "social_proof": "thousands of",
@@ -136,8 +141,52 @@ SERVICE_HERO = AdTypeDefinition(
     copy_templates=CopyTemplate(
         primary_text="{key_benefit}\n\n{product_name} →",
         headline="{headline}",
+        description="{product_description_short}",
         cta_type="LEARN_MORE",
-        fallbacks={"headline": "{product_name}", "key_benefit": ""},
+        fallbacks={"headline": "{product_name}", "key_benefit": "", "product_description_short": ""},
+    ),
+)
+
+
+# =====================================================================
+# 2 VIDEO TYPES (Remotion-rendered)
+# =====================================================================
+
+BRANDED_STATIC_VIDEO = AdTypeDefinition(
+    id="branded_static_video",
+    name="Branded Video",
+    strategy="product_aware",
+    format="video",
+    aspect_ratios=["1:1"],
+    required_params=["product_name"],
+    optional_params=["brand_colors", "brand_fonts", "headline", "product_description_short"],
+    skip_condition=None,  # always generate — video version of branded_static
+    layers=[],  # rendered by Remotion (BrandedStatic composition)
+    copy_templates=CopyTemplate(
+        primary_text="{headline}\n\n{product_description_short}",
+        headline="{headline}",
+        description="{product_description_short}",
+        cta_type="LEARN_MORE",
+        fallbacks={"headline": "{product_name}", "product_description_short": ""},
+    ),
+)
+
+SERVICE_HERO_VIDEO = AdTypeDefinition(
+    id="service_hero_video",
+    name="Service Hero Video",
+    strategy="product_aware",
+    format="video",
+    aspect_ratios=["1:1"],
+    required_params=["product_name", "hero_image_url"],
+    optional_params=["headline", "brand_name", "key_benefit"],
+    skip_condition=None,  # gated by selector: only if hero_image_url exists
+    layers=[],  # rendered by Remotion (ServiceHero composition)
+    copy_templates=CopyTemplate(
+        primary_text="{key_benefit}\n\n{product_name} →",
+        headline="{headline}",
+        description="{product_description_short}",
+        cta_type="LEARN_MORE",
+        fallbacks={"headline": "{product_name}", "key_benefit": "", "product_description_short": ""},
     ),
 )
 
@@ -153,6 +202,8 @@ AD_TYPE_REGISTRY: dict[str, AdTypeDefinition] = {
     "review_static": REVIEW_STATIC,
     "review_static_competition": REVIEW_STATIC_COMPETITION,
     "service_hero": SERVICE_HERO,
+    "branded_static_video": BRANDED_STATIC_VIDEO,
+    "service_hero_video": SERVICE_HERO_VIDEO,
 }
 
 

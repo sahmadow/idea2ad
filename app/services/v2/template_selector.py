@@ -1,10 +1,12 @@
 """
-Template Selector — picks which of the 6 approved ad types to generate.
+Template Selector — picks which approved ad types to generate.
 
 Selection logic:
 - branded_static, organic_static_reddit, problem_statement_text: always
 - review_static, review_static_competition: only if social proof exists
 - service_hero: only if hero_image_url exists
+- branded_static_video: always (video counterpart of branded_static)
+- service_hero_video: only if hero_image_url exists
 """
 
 import logging
@@ -32,6 +34,11 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
     # Conditional: hero image
     if params.hero_image_url:
         _try_add(selected, "service_hero", params)
+
+    # Video types (Remotion-rendered)
+    _try_add(selected, "branded_static_video", params)
+    if params.hero_image_url:
+        _try_add(selected, "service_hero_video", params)
 
     logger.info(
         f"Selected {len(selected)} templates: "

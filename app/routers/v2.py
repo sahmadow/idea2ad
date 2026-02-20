@@ -45,6 +45,8 @@ from app.services.v2.social_template_bridges import (
     bridge_problem_statement,
     bridge_review_static,
     bridge_service_hero,
+    bridge_branded_static_video,
+    bridge_service_hero_video,
 )
 from app.services.v2.ugc_avatar_renderer import render_ugc_avatar, UGCAvatarResult
 
@@ -58,8 +60,10 @@ _pack_scraped: dict[str, dict] = {}  # pack_id → scraped_data
 _render_cache: dict[str, tuple[bytes, float]] = {}  # render_id → (PNG bytes, timestamp)
 _competition_copy_store: dict[str, dict] = {}  # creative_id → competition copy dict
 
-# Persist path for last params (survives restarts)
-LAST_PARAMS_PATH = Path(__file__).resolve().parents[2] / "data" / "last_params.json"
+# Persist paths (survive restarts)
+DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+LAST_PARAMS_PATH = DATA_DIR / "last_params.json"
+PACKS_DIR = DATA_DIR / "packs"
 
 
 def _persist_params(params: CreativeParameters) -> None:
@@ -71,6 +75,93 @@ def _persist_params(params: CreativeParameters) -> None:
         )
     except Exception as e:
         logger.warning(f"Failed to persist params: {e}")
+
+
+def _persist_pack_data(pack_id: str, params: CreativeParameters, scraped_data: dict) -> None:
+    """Persist pack params + scraped data to disk so render/pack survives restarts."""
+    try:
+        PACKS_DIR.mkdir(parents=True, exist_ok=True)
+        pack_file = PACKS_DIR / f"{pack_id}.json"
+        pack_file.write_text(json.dumps({
+            "params": params.model_dump(mode="json"),
+            "scraped": scraped_data,
+        }))
+    except Exception as e:
+        logger.warning(f"Failed to persist pack data: {e}")
+
+
+def _load_pack_data(pack_id: str) -> tuple[CreativeParameters | None, dict | None]:
+    """Load pack params + scraped data from disk if not in memory."""
+    try:
+        pack_file = PACKS_DIR / f"{pack_id}.json"
+        if not pack_file.exists():
+            return None, None
+        data = json.loads(pack_file.read_text())
+        params = CreativeParameters(**data["params"])
+        scraped = data.get("scraped", {})
+        # Re-populate in-memory caches
+        _pack_params[pack_id] = params
+        _pack_scraped[pack_id] = scraped
+        return params, scraped
+    except Exception as e:
+        logger.warning(f"Failed to load pack data for {pack_id}: {e}")
+        return None, None
+
+
+def _register_v2_pack_in_v1_store(pack: AdPack, source_url: str) -> None:
+    """Register V2 AdPack in V1 adpack service so PATCH /adpack/{id} works."""
+    try:
+        from app.models import (
+            AdPack as V1AdPack,
+            AdCreative as V1AdCreative,
+            SmartBroadTargeting,
+            TargetingRationale,
+            CampaignStructure,
+        )
+        from app.services.adpack import _ad_packs
+
+        v1_creatives = []
+        for c in pack.creatives:
+            v1_creatives.append(V1AdCreative(
+                id=c.id,
+                strategy=c.strategy,
+                primary_text=c.primary_text or "",
+                headline=c.headline or "",
+                description=c.description or "",
+                image_url=c.asset_url,
+                call_to_action=c.cta_type or "LEARN_MORE",
+            ))
+
+        t = pack.targeting
+        v1_targeting = SmartBroadTargeting(
+            age_min=t.age_min if t else 18,
+            age_max=t.age_max if t else 65,
+            genders=["all"],
+            rationale=TargetingRationale(
+                age_range_reason=t.targeting_rationale or "" if t else "",
+                geo_reason="Smart Broad targeting",
+            ),
+        )
+
+        v1_pack = V1AdPack(
+            id=pack.id,
+            project_url=source_url,
+            creatives=v1_creatives,
+            targeting=v1_targeting,
+            budget_daily=(pack.budget_daily_cents or 1500) / 100,
+            duration_days=pack.duration_days or 3,
+            campaign_structure=CampaignStructure(
+                campaign_name=pack.campaign_name or "Campaign",
+                adset_name=f"{pack.product_name or 'Campaign'} — Smart Broad",
+                ad_count=len(v1_creatives),
+            ),
+            status=pack.status or "draft",
+        )
+
+        _ad_packs[pack.id] = v1_pack
+        logger.info(f"Registered V2 pack {pack.id} in V1 adpack store")
+    except Exception as e:
+        logger.warning(f"Failed to register V2 pack in V1 store: {e}")
 
 
 # --- Request/Response models ---
@@ -201,6 +292,8 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
     _pack_params[pack.id] = params
     _pack_scraped[pack.id] = scraped_data
     _persist_params(params)
+    _persist_pack_data(pack.id, params, scraped_data)
+    _register_v2_pack_in_v1_store(pack, body.url)
 
     # Template info for response
     template_info = [
@@ -338,6 +431,7 @@ async def _run_v2_job(
         _pack_params[pack.id] = params
         _pack_scraped[pack.id] = scraped_data
         _persist_params(params)
+        _register_v2_pack_in_v1_store(pack, url)
 
         # 8. Store result in job — shape matches what frontend expects
         result = {
@@ -507,6 +601,8 @@ async def render_pack(body: RenderPackRequest):
     _cleanup_render_cache()
 
     params = _pack_params.get(body.pack_id)
+    if not params:
+        params, _ = _load_pack_data(body.pack_id)
     if not params:
         raise HTTPException(status_code=404, detail="Pack params not found — re-analyze the URL")
 
@@ -909,10 +1005,11 @@ async def _render_static_creatives(
     params: CreativeParameters,
     scraped_data: dict | None = None,
 ) -> list[GeneratedCreative]:
-    """Render images for static creatives via dedicated social template renderers."""
-    for creative in creatives:
-        if creative.format != "static":
-            continue
+    """Render statics (Playwright) and videos (Remotion) for all creatives."""
+
+    async def _render_one(creative: GeneratedCreative) -> None:
+        if creative.format not in ("static", "video"):
+            return
 
         start = time.time()
         try:
@@ -922,21 +1019,36 @@ async def _render_static_creatives(
                 "description": creative.description or "",
                 "cta_type": creative.cta_type or "LEARN_MORE",
             }
-            img_bytes = await _dispatch_render(
+            rendered_bytes = await _dispatch_render(
                 creative.ad_type_id, params, copy, scraped_data or {}, creative.id
             )
             creative.generation_time_ms = int((time.time() - start) * 1000)
 
             try:
-                url = await _upload_to_s3(
-                    img_bytes, creative.ad_type_id, creative.aspect_ratio
-                )
+                if creative.format == "video":
+                    url = await _upload_video_to_s3(
+                        rendered_bytes, creative.ad_type_id, creative.aspect_ratio
+                    )
+                else:
+                    url = await _upload_to_s3(
+                        rendered_bytes, creative.ad_type_id, creative.aspect_ratio
+                    )
                 creative.asset_url = url
             except Exception as e:
                 logger.warning(f"S3 upload skipped: {e}")
 
         except Exception as e:
             logger.error(f"Render failed {creative.ad_type_id}: {e}", exc_info=True)
+
+    # Render statics sequentially (shared Playwright browser), videos in parallel
+    static_creatives = [c for c in creatives if c.format == "static"]
+    video_creatives = [c for c in creatives if c.format == "video"]
+
+    for c in static_creatives:
+        await _render_one(c)
+
+    if video_creatives:
+        await asyncio.gather(*[_render_one(c) for c in video_creatives])
 
     return creatives
 
@@ -973,6 +1085,17 @@ async def _dispatch_render(
         from app.services.v2.social_templates.service_hero import render_service_hero
         return await render_service_hero(bridge_service_hero(params, copy))
 
+    # Video types (Remotion-rendered)
+    if ad_type_id == "branded_static_video":
+        from app.services.v2.remotion_renderer import render_remotion_video
+        props = bridge_branded_static_video(params, scraped_data, copy)
+        return await render_remotion_video("BrandedStatic", props)
+
+    if ad_type_id == "service_hero_video":
+        from app.services.v2.remotion_renderer import render_remotion_video
+        props = bridge_service_hero_video(params, copy)
+        return await render_remotion_video("ServiceHero", props)
+
     raise ValueError(f"Unknown ad type for rendering: {ad_type_id}")
 
 
@@ -990,6 +1113,25 @@ async def _upload_to_s3(
             return result["url"]
     except Exception as e:
         logger.warning(f"S3 upload failed: {e}")
+    return None
+
+
+async def _upload_video_to_s3(
+    video_bytes: bytes, ad_type_id: str, aspect_ratio: str
+) -> str | None:
+    """Upload rendered video to S3 and return URL."""
+    try:
+        from app.services.s3 import get_s3_service
+        s3 = get_s3_service()
+        ratio_slug = aspect_ratio.replace(":", "x").replace(".", "_")
+        filename = f"v2/{ad_type_id}_{ratio_slug}_{uuid.uuid4().hex[:8]}.mp4"
+        result = s3.upload_image(
+            video_bytes, "v2-renders", filename, content_type="video/mp4"
+        )
+        if result.get("success"):
+            return result["url"]
+    except Exception as e:
+        logger.warning(f"S3 video upload failed: {e}")
     return None
 
 

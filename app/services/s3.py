@@ -35,15 +35,17 @@ class S3Service:
         self,
         image_bytes: bytes,
         campaign_id: str,
-        filename: Optional[str] = None
+        filename: Optional[str] = None,
+        content_type: str = "image/png",
     ) -> dict:
         """
-        Upload image to S3
+        Upload image or video to S3
 
         Args:
-            image_bytes: PNG image bytes
+            image_bytes: File bytes (PNG, MP4, etc.)
             campaign_id: Campaign ID for organizing files
             filename: Optional custom filename
+            content_type: MIME type (default: image/png)
 
         Returns:
             dict with s3_key, url, success
@@ -54,7 +56,8 @@ class S3Service:
         if filename:
             s3_key = f"campaigns/{campaign_id}/{filename}"
         else:
-            s3_key = f"campaigns/{campaign_id}/{timestamp}_{unique_id}.png"
+            ext = ".mp4" if "video" in content_type else ".png"
+            s3_key = f"campaigns/{campaign_id}/{timestamp}_{unique_id}{ext}"
 
         try:
             self.s3.upload_fileobj(
@@ -62,7 +65,7 @@ class S3Service:
                 self.bucket,
                 s3_key,
                 ExtraArgs={
-                    "ContentType": "image/png",
+                    "ContentType": content_type,
                     "CacheControl": "max-age=31536000",
                 }
             )

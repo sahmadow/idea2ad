@@ -187,3 +187,66 @@ def bridge_service_hero(params: CreativeParameters, copy: dict):
         text_position="bottom",
         overlay_opacity=0.55,
     )
+
+
+# =====================================================================
+# VIDEO BRIDGES (Remotion props — plain dicts, not dataclasses)
+# =====================================================================
+
+def bridge_branded_static_video(
+    params: CreativeParameters,
+    scraped_data: dict,
+    copy: dict,
+) -> dict:
+    """Map scraped design tokens → Remotion BrandedStatic props dict."""
+    styling = scraped_data.get("styling", {})
+
+    bgs = styling.get("backgrounds", [])
+    accents = styling.get("accents", [])
+    texts = styling.get("text", [])
+
+    bg_color = bgs[0] if bgs else "#0f172a"
+    accent = accents[0] if accents else "#3b82f6"
+    text_color = "#ffffff"
+    bg_lower = bg_color.lower()
+    if bg_lower.startswith("#f") or bg_lower.startswith("#e") or bg_lower.startswith("#d") or bg_lower.startswith("#c") or bg_lower == "#ffffff":
+        text_color = texts[0] if texts else "#1a202c"
+
+    headers = scraped_data.get("headers", [])
+    headline = headers[0] if headers else params.headline or params.product_name
+    description = scraped_data.get("description", "") or params.product_description_short or ""
+    brand_name = params.brand_name or ""
+
+    css_assets = scraped_data.get("css_assets", {})
+    btn = css_assets.get("button_styles", {})
+
+    return {
+        "brandName": brand_name,
+        "headline": headline,
+        "description": description,
+        "ctaText": params.cta_text or "Get Started",
+        "bgColor": bg_color,
+        "accentColor": accent,
+        "textColor": text_color,
+        "ctaBgColor": btn.get("backgroundColor"),
+        "ctaTextColor": btn.get("color", "#ffffff"),
+        "ctaBorderRadius": 12,
+    }
+
+
+def bridge_service_hero_video(
+    params: CreativeParameters,
+    copy: dict,
+) -> dict:
+    """Map CreativeParameters → Remotion ServiceHero props dict."""
+    headline = params.headline or params.key_benefit or params.product_name
+    scene_url = params.hero_image_url or ""
+
+    return {
+        "sceneImageUrl": scene_url,
+        "headline": headline,
+        "subtext": params.subheadline or params.product_description_short or None,
+        "ctaText": params.cta_text if params.cta_text != "Shop Now" else "Learn More",
+        "brandName": params.brand_name or None,
+        "accentColor": "#FFFFFF",
+    }

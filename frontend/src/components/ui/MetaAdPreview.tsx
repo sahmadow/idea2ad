@@ -52,6 +52,14 @@ export function MetaAdPreview({
   };
 
   const displayUrl = websiteUrl.replace(/^https?:\/\//, '').replace(/\/$/, '').split('/')[0];
+  const isVideo = (() => {
+    if (!ad.imageUrl) return false;
+    try {
+      return new URL(ad.imageUrl).pathname.endsWith('.mp4');
+    } catch {
+      return ad.imageUrl.endsWith('.mp4');
+    }
+  })();
 
   return (
     <div
@@ -120,9 +128,23 @@ export function MetaAdPreview({
         )}
       </div>
 
-      {/* Image */}
+      {/* Image / Video */}
       <div className="relative w-full aspect-square bg-brand-gray overflow-hidden">
-        {ad.imageUrl && !imageError ? (
+        {ad.imageUrl && !imageError && isVideo ? (
+          <video
+            src={ad.imageUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onLoadedData={() => setImageLoaded(true)}
+            onError={() => setImageError(true)}
+            className={cn(
+              'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
+              imageLoaded ? 'opacity-100' : 'opacity-0'
+            )}
+          />
+        ) : ad.imageUrl && !imageError ? (
           <img
             src={ad.imageUrl}
             alt={`Ad creative for ${ad.headline}`}
@@ -138,7 +160,7 @@ export function MetaAdPreview({
           <div className="absolute inset-0 flex items-center justify-center bg-status-error/10">
             <div className="text-center px-4">
               <AlertTriangle className="w-8 h-8 text-status-error mx-auto mb-2" />
-              <div className="text-sm text-status-error mb-1">Image failed to load</div>
+              <div className="text-sm text-status-error mb-1">{isVideo ? 'Video' : 'Image'} failed to load</div>
               <div className="text-xs text-meta-text-muted mb-3">Check your connection and try again</div>
               <button
                 onClick={handleRetry}

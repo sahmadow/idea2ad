@@ -30,6 +30,8 @@ const AD_TYPE_LABELS: Record<string, string> = {
   review_static: 'Review',
   review_static_competition: 'Competition Review',
   service_hero: 'Service Hero',
+  branded_static_video: 'Branded Video',
+  service_hero_video: 'Service Hero Video',
 };
 
 export function TemplateGallery({ adTypeId, aspectRatio, onSelect }: TemplateGalleryProps) {
