@@ -39,7 +39,13 @@ from app.services.v2.copy_generator import (
     _resolve_variable,
 )
 from app.services.v2.ad_type_registry import get_registry, get_ad_type
-from app.services.v2.static_renderer import get_static_renderer
+from app.services.v2.social_template_bridges import (
+    bridge_branded_static,
+    bridge_reddit,
+    bridge_problem_statement,
+    bridge_review_static,
+    bridge_service_hero,
+)
 from app.services.v2.ugc_avatar_renderer import render_ugc_avatar, UGCAvatarResult
 
 logger = logging.getLogger(__name__)
@@ -48,6 +54,7 @@ router = APIRouter(prefix="/v2", tags=["v2"])
 
 # In-memory stores for on-demand rendering
 _pack_params: dict[str, CreativeParameters] = {}  # pack_id → params
+_pack_scraped: dict[str, dict] = {}  # pack_id → scraped_data
 _render_cache: dict[str, tuple[bytes, float]] = {}  # render_id → (PNG bytes, timestamp)
 _competition_copy_store: dict[str, dict] = {}  # creative_id → competition copy dict
 
@@ -155,10 +162,6 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
         else:
             base_copy = generate_copy_from_template(template, params)
 
-        # Resolve hook text for organic/problem types
-        hook_text = _resolve_hook(template, params)
-
-        # Generate one creative per template (1:1 default; other ratios on demand via render)
         creative = GeneratedCreative(
             id=str(uuid.uuid4())[:12],
             ad_type_id=template.id,
@@ -173,13 +176,12 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
         )
         creatives.append(creative)
 
-        # Store competition copy for blog rendering
         if template.id == "review_static_competition":
             _competition_copy_store[creative.id] = dict(base_copy)
 
     # 5. Optional: render static images
     if body.render_images:
-        creatives = await _render_static_creatives(creatives, selected, params)
+        creatives = await _render_static_creatives(creatives, selected, params, scraped_data)
 
     # 6. Build targeting from persona
     targeting = _build_targeting(params)
@@ -197,6 +199,7 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
     )
 
     _pack_params[pack.id] = params
+    _pack_scraped[pack.id] = scraped_data
     _persist_params(params)
 
     # Template info for response
@@ -289,7 +292,6 @@ async def _run_v2_job(
                 base_copy = await generate_competition_copy(template, params, competitor_data)
             else:
                 base_copy = generate_copy_from_template(template, params)
-            hook_text = _resolve_hook(template, params)
             creative = GeneratedCreative(
                 id=str(uuid.uuid4())[:12],
                 ad_type_id=template.id,
@@ -308,7 +310,10 @@ async def _run_v2_job(
             if template.id == "review_static_competition":
                 _competition_copy_store[creative.id] = dict(base_copy)
 
-        # 5. UGC avatar video — OFF pending HeyGen cost/quality eval
+        # 5. Render static images (HTML+Playwright → S3)
+        creatives = await _render_static_creatives(creatives, selected, params, scraped_data)
+
+        # 5a. UGC avatar video — OFF pending HeyGen cost/quality eval
         # await _render_ugc_avatar_creatives(creatives, selected, params)
 
         # 5b. Add manual_image_upload creative (#9) if user provided image
@@ -331,6 +336,7 @@ async def _run_v2_job(
         )
 
         _pack_params[pack.id] = params
+        _pack_scraped[pack.id] = scraped_data
         _persist_params(params)
 
         # 8. Store result in job — shape matches what frontend expects
@@ -343,7 +349,6 @@ async def _run_v2_job(
 
     except Exception as e:
         logger.error(f"V2 job {job_id} failed: {e}", exc_info=True)
-        from app.services.jobs import update_job, JobStatus
         update_job(job_id, JobStatus.FAILED, error=str(e))
 
 
@@ -510,14 +515,11 @@ async def render_pack(body: RenderPackRequest):
     if not static_templates:
         raise HTTPException(status_code=422, detail="No static templates to render")
 
-    renderer = get_static_renderer()
     renders: list[RenderPackItem] = []
 
     for template in static_templates:
-        hook_text = _resolve_hook(template, params)
         cache_key = f"{body.pack_id}_{template.id}_1x1"
 
-        # Use cached render if available (unless force re-render)
         cached = _render_cache.get(cache_key)
         if not body.force and cached and (time.time() - cached[1]) <= RENDER_TTL_SECONDS:
             renders.append(RenderPackItem(
@@ -530,14 +532,14 @@ async def render_pack(body: RenderPackRequest):
 
         start = time.time()
         try:
-            # Competition type → Playwright blog template
+            copy = generate_copy_from_template(template, params)
             if template.id == "review_static_competition":
-                comp_copy = await generate_competition_copy(template, params)
-                img_bytes = await _render_competition_blog(params, dict(comp_copy))
-            else:
-                img_bytes = await renderer.render_ad(
-                    template, params, "1:1", hook_text,
-                )
+                copy = await generate_competition_copy(template, params)
+
+            scraped = _pack_scraped.get(body.pack_id, {})
+            img_bytes = await _dispatch_render(
+                template.id, params, dict(copy), scraped, None
+            )
             gen_ms = int((time.time() - start) * 1000)
             _render_cache[cache_key] = (img_bytes, time.time())
             renders.append(RenderPackItem(
@@ -578,51 +580,41 @@ async def render_static(body: RenderRequest):
     params = body.parameters
     selected = select_templates(params)
 
-    # Filter to requested ad types
     if body.ad_type_ids:
         selected = [t for t in selected if t.id in body.ad_type_ids]
 
-    # Only render static types
     static_types = [t for t in selected if t.format == "static"]
     if not static_types:
         raise HTTPException(status_code=422, detail="No renderable static types selected")
 
-    renderer = get_static_renderer()
     results: list[RenderResult] = []
 
     for template in static_types:
-        hook_text = _resolve_hook(template, params)
-        ratios = body.aspect_ratios or template.aspect_ratios
+        start = time.time()
+        try:
+            copy = generate_copy_from_template(template, params)
+            if template.id == "review_static_competition":
+                copy = await generate_competition_copy(template, params)
 
-        for ratio in ratios:
-            start = time.time()
-            try:
-                # Competition type → Playwright blog template
-                if template.id == "review_static_competition":
-                    comp_copy = await generate_competition_copy(template, params)
-                    img_bytes = await _render_competition_blog(params, dict(comp_copy))
-                else:
-                    img_bytes = await renderer.render_ad(
-                        template, params, ratio, hook_text,
-                    )
-                gen_ms = int((time.time() - start) * 1000)
+            img_bytes = await _dispatch_render(
+                template.id, params, dict(copy), {}, None
+            )
+            gen_ms = int((time.time() - start) * 1000)
 
-                asset_url = None
-                if body.upload_to_s3:
-                    asset_url = await _upload_to_s3(
-                        img_bytes, template.id, ratio
-                    )
+            asset_url = None
+            if body.upload_to_s3:
+                asset_url = await _upload_to_s3(img_bytes, template.id, "1:1")
 
-                results.append(RenderResult(
-                    creative_id=str(uuid.uuid4())[:12],
-                    ad_type_id=template.id,
-                    aspect_ratio=ratio,
-                    asset_url=asset_url,
-                    generation_time_ms=gen_ms,
-                ))
-            except Exception as e:
-                logger.error(f"Render failed {template.id}@{ratio}: {e}")
-                continue
+            results.append(RenderResult(
+                creative_id=str(uuid.uuid4())[:12],
+                ad_type_id=template.id,
+                aspect_ratio="1:1",
+                asset_url=asset_url,
+                generation_time_ms=gen_ms,
+            ))
+        except Exception as e:
+            logger.error(f"Render failed {template.id}: {e}")
+            continue
 
     return results
 
@@ -794,9 +786,10 @@ async def render_template(template_id: str, body: TemplateRenderRequest):
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
 
-        w = body.width or ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[0]
-        h = body.height or ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[1]
+        w = body.width or _ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[0]
+        h = body.height or _ASPECT_RATIO_SIZES.get(template.aspect_ratio, (1080, 1080))[1]
 
+        from app.services.v2.static_renderer import get_static_renderer
         renderer = get_static_renderer()
         img_bytes = await renderer.render_from_template(
             canvas_json=template.canvas_json,
@@ -809,34 +802,15 @@ async def render_template(template_id: str, body: TemplateRenderRequest):
         await db.disconnect()
 
 
-# Import ASPECT_RATIO_SIZES for template render endpoint
-from app.services.v2.static_renderer import ASPECT_RATIO_SIZES
+_ASPECT_RATIO_SIZES: dict[str, tuple[int, int]] = {
+    "1:1": (1080, 1080),
+    "9:16": (1080, 1920),
+    "1.91:1": (1200, 628),
+    "4:5": (1080, 1350),
+}
 
 
 # --- Helper functions ---
-
-def _resolve_hook(template: AdTypeDefinition, params: CreativeParameters) -> str | None:
-    """Pick a random hook from hook_templates and resolve variables.
-    Prefers saas_* keys when business_type == 'saas'."""
-    if not template.hook_templates:
-        return None
-
-    variants = list(template.hook_templates.keys())
-
-    # Prefer SaaS-specific hooks when applicable
-    if params.business_type == "saas":
-        saas_keys = [k for k in variants if k.startswith("saas_")]
-        if saas_keys:
-            variants = saas_keys
-
-    key = random.choice(variants)
-    hooks = template.hook_templates[key]
-    if not hooks:
-        return None
-
-    hook = random.choice(hooks)
-    return _resolve_variable(hook, params)
-
 
 async def _render_ugc_avatar_creatives(
     creatives: list[GeneratedCreative],
@@ -933,33 +907,26 @@ async def _render_static_creatives(
     creatives: list[GeneratedCreative],
     templates: list[AdTypeDefinition],
     params: CreativeParameters,
+    scraped_data: dict | None = None,
 ) -> list[GeneratedCreative]:
-    """Render images for static creatives and attach asset_url."""
-    renderer = get_static_renderer()
-    template_map = {t.id: t for t in templates}
-
+    """Render images for static creatives via dedicated social template renderers."""
     for creative in creatives:
         if creative.format != "static":
             continue
 
-        template = template_map.get(creative.ad_type_id)
-        if not template:
-            continue
-
         start = time.time()
         try:
-            # Competition type → Playwright blog template
-            if creative.ad_type_id == "review_static_competition":
-                comp_copy = _competition_copy_store.get(creative.id, {})
-                img_bytes = await _render_competition_blog(params, comp_copy)
-            else:
-                hook_text = _resolve_hook(template, params)
-                img_bytes = await renderer.render_ad(
-                    template, params, creative.aspect_ratio, hook_text,
-                )
+            copy = {
+                "primary_text": creative.primary_text or "",
+                "headline": creative.headline or "",
+                "description": creative.description or "",
+                "cta_type": creative.cta_type or "LEARN_MORE",
+            }
+            img_bytes = await _dispatch_render(
+                creative.ad_type_id, params, copy, scraped_data or {}, creative.id
+            )
             creative.generation_time_ms = int((time.time() - start) * 1000)
 
-            # Try S3 upload, fall back to no URL
             try:
                 url = await _upload_to_s3(
                     img_bytes, creative.ad_type_id, creative.aspect_ratio
@@ -969,9 +936,44 @@ async def _render_static_creatives(
                 logger.warning(f"S3 upload skipped: {e}")
 
         except Exception as e:
-            logger.error(f"Render failed {creative.ad_type_id}@{creative.aspect_ratio}: {e}")
+            logger.error(f"Render failed {creative.ad_type_id}: {e}", exc_info=True)
 
     return creatives
+
+
+async def _dispatch_render(
+    ad_type_id: str,
+    params: CreativeParameters,
+    copy: dict,
+    scraped_data: dict,
+    creative_id: str | None = None,
+) -> bytes:
+    """Dispatch rendering to the correct social template renderer."""
+    if ad_type_id == "branded_static":
+        from app.services.v2.social_templates.branded_static import render_branded_static
+        return await render_branded_static(bridge_branded_static(params, scraped_data, copy))
+
+    if ad_type_id == "organic_static_reddit":
+        from app.services.v2.social_templates.reddit_post import render_reddit_post
+        return await render_reddit_post(bridge_reddit(params, copy))
+
+    if ad_type_id == "problem_statement_text":
+        from app.services.v2.social_templates.problem_statement import render_problem_statement
+        return await render_problem_statement(bridge_problem_statement(params, copy))
+
+    if ad_type_id == "review_static":
+        from app.services.v2.social_templates.review_static import render_review_static
+        return await render_review_static(bridge_review_static(params, copy))
+
+    if ad_type_id == "review_static_competition":
+        comp_copy = _competition_copy_store.get(creative_id, {}) if creative_id else {}
+        return await _render_competition_blog(params, comp_copy)
+
+    if ad_type_id == "service_hero":
+        from app.services.v2.social_templates.service_hero import render_service_hero
+        return await render_service_hero(bridge_service_hero(params, copy))
+
+    raise ValueError(f"Unknown ad type for rendering: {ad_type_id}")
 
 
 async def _upload_to_s3(

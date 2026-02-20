@@ -24,14 +24,12 @@ interface TemplateGalleryProps {
 }
 
 const AD_TYPE_LABELS: Record<string, string> = {
-  product_benefits_static: 'Product Benefits',
-  review_static: 'Review',
-  us_vs_them_solution: 'Us vs Them (Solution)',
-  organic_static_solution: 'Organic (Solution)',
+  branded_static: 'Branded Static',
+  organic_static_reddit: 'Organic (Reddit)',
   problem_statement_text: 'Problem Text',
-  problem_statement_image: 'Problem Image',
-  organic_static_problem: 'Organic (Problem)',
-  us_vs_them_problem: 'Before/After',
+  review_static: 'Review',
+  review_static_competition: 'Competition Review',
+  service_hero: 'Service Hero',
 };
 
 export function TemplateGallery({ adTypeId, aspectRatio, onSelect }: TemplateGalleryProps) {
