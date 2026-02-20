@@ -4,7 +4,7 @@
  * the actual canvas dimensions for high-quality export.
  */
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 interface FabricCanvasProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;

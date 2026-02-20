@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { X, Save, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { X, Save, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '../ui/Button';
 import { FabricCanvas } from './FabricCanvas';

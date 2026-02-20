@@ -11,8 +11,8 @@ import { ConfirmDialog } from './components/ui/ConfirmDialog';
 import { Skeleton } from './components/ui/Skeleton';
 import { useAuth } from './hooks/useAuth';
 import { useCampaigns } from './hooks/useCampaigns';
-import { analyzeUrl, uploadProductImage, generateQuickAd, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse, type CompetitorIntelligence } from './api';
-import { assembleAdPack, analyzeV2, quickGenerateV2 } from './api/adpack';
+import { uploadProductImage, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type QuickAdResponse, type CompetitorIntelligence } from './api';
+import { analyzeV2, quickGenerateV2 } from './api/adpack';
 import { FBAuthTest } from './pages/FBAuthTest';
 import { ImageEditorTest } from './pages/ImageEditorTest';
 import type { PublishCampaignResponse } from './types/facebook';
@@ -134,7 +134,6 @@ function App() {
 
   // Quick mode state
   const [quickIdea, setQuickIdea] = useState('');
-  const [quickTone, setQuickTone] = useState<ToneOption>('professional');
   const [, setQuickResult] = useState<QuickAdResponse | null>(null);
 
   // Edit prompt (shared by both modes for image editing)
