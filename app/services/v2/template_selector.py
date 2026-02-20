@@ -80,6 +80,7 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
     # Review static only if social proof exists
     if params.has_social_proof():
         _try_add(selected, "review_static", params)
+        _try_add(selected, "review_static_competition", params)
 
     # Us vs Them — always attempt (uses generic fallbacks if no competitor data)
     _try_add(selected, "us_vs_them_solution", params)
@@ -93,6 +94,9 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
 
     # Founder video script always generated
     _try_add(selected, "founder_video_solution", params)
+
+    # UGC avatar video (HeyGen) — needs at least product_name + key_benefit
+    _try_add(selected, "ugc_avatar_video", params)
 
     # --- Pass 2: Product Unaware ---
 

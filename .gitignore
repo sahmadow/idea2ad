@@ -63,3 +63,6 @@ gcp-credentials.json
 .mcp.json
 .vercel
 scripts/test_output.json
+
+# Playground data (user-specific)
+data/

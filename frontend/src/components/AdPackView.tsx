@@ -13,6 +13,8 @@ import {
   Pencil,
   ChevronDown,
   Eye,
+  ImageIcon,
+  Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -20,7 +22,7 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
 import { TemplateEditor } from './TemplateEditor';
-import { updateAdPack } from '../api/adpack';
+import { updateAdPack, renderPackImages } from '../api/adpack';
 import type { AdPack, AdCreative, AdStrategy } from '../types/adpack';
 import type { Ad } from '../api';
 
@@ -81,7 +83,12 @@ function CreativeCard({
 
   return (
     <div className="relative group">
-      <StrategyBadge strategy={creative.strategy} />
+      <div className="flex items-center gap-1.5">
+        <StrategyBadge strategy={creative.strategy} />
+        <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30">
+          {creative.aspect_ratio}
+        </span>
+      </div>
       <div className="mt-2">
         <MetaAdPreview
           ad={ad}
@@ -467,6 +474,7 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
   const [filterStrategy, setFilterStrategy] = useState<FilterStrategy>('all');
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
   const [editingCreative, setEditingCreative] = useState<AdCreative | null>(null);
+  const [rendering, setRendering] = useState(false);
 
   let pageName = 'Your Page';
   try {
@@ -522,6 +530,27 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
     URL.revokeObjectURL(url);
   };
 
+  const handleRenderImages = useCallback(async () => {
+    setRendering(true);
+    try {
+      const renders = await renderPackImages(adPack.id);
+      const urlMap = new Map(renders.map((r) => [r.ad_type_id, r.image_url]));
+      const updatedCreatives = adPack.creatives.map((c) => {
+        const imageUrl = urlMap.get(c.ad_type_id);
+        if (imageUrl) {
+          return { ...c, image_url: imageUrl };
+        }
+        return c;
+      });
+      onAdPackChange({ ...adPack, creatives: updatedCreatives });
+      toast.success(`Rendered ${renders.length} images`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Render failed');
+    } finally {
+      setRendering(false);
+    }
+  }, [adPack, onAdPackChange]);
+
   const handlePublishCreative = (creative: AdCreative) => {
     if (!onPublish) return;
     const ad: Ad = {
@@ -547,6 +576,10 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
             <span className="font-mono text-sm">Back</span>
           </button>
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={handleRenderImages} disabled={rendering}>
+              {rendering ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />}
+              {rendering ? 'Rendering...' : 'Render Images'}
+            </Button>
             <Button variant="outline" size="sm" onClick={handleExportJson}>
               <Download className="w-4 h-4 mr-2" />
               Export

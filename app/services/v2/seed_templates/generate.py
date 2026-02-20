@@ -114,7 +114,7 @@ def review_static(w: int, h: int) -> dict:
         _text("{{testimonials[0]}}", pad + 24, card_y + 70, card_w - 48,
                fontSize=26, fill="#1A202C", lineHeight=1.4),
         # Verified badge
-        _text("Verified Purchase", pad + 24, card_y + card_h - 50, 200,
+        _text("{{verified_purchase_label}}", pad + 24, card_y + card_h - 50, 200,
                fontSize=16, fill="#48BB78"),
         # Product name below card
         _text("{{product_name}}", pad, card_y + card_h + 40, card_w,

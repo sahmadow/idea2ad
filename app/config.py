@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     aws_s3_bucket: str = "idea2ad-images"
     aws_region: str = "us-east-1"
 
+    # HeyGen
+    heygen_api_key: str = ""
+
     # Sentry
     sentry_dsn: Optional[str] = None
 

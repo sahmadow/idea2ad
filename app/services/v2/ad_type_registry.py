@@ -186,6 +186,50 @@ REVIEW_STATIC = AdTypeDefinition(
     ],
 )
 
+REVIEW_STATIC_COMPETITION = AdTypeDefinition(
+    id="review_static_competition",
+    name="Review Static (Competition)",
+    strategy="product_aware",
+    format="static",
+    aspect_ratios=["1:1", "9:16"],
+    required_params=["product_name", "hero_image_url", "social_proof"],
+    optional_params=["testimonials", "brand_colors", "product_category", "key_benefit", "key_differentiator"],
+    skip_condition="!social_proof AND len(testimonials) == 0",
+    external_deps=["competitor_intelligence"],
+    layers=[
+        LayerDefinition(
+            type="review_card",
+            style_variant="ios_message|tweet_card|review_card",
+            style={
+                "author": "{generated_name}",
+                "rating": 5,
+                "verified": True,
+            },
+        ),
+        LayerDefinition(
+            type="product_image",
+            source="{hero_image_url}",
+            position="bottom_center",
+            size="small",
+            processing=["remove_background"],
+        ),
+    ],
+    copy_templates=CopyTemplate(
+        primary_text="Tired of {competitor_complaint}? {social_proof} people already switched to {product_name}",
+        headline="Try {product_name} instead",
+        cta_type="LEARN_MORE",
+        fallbacks={
+            "social_proof": "thousands of",
+            "competitor_complaint": "the same old problems",
+        },
+    ),
+    variants=[
+        VariantRule(vary="style_variant", options=["ios_message", "tweet_card", "review_card"]),
+        VariantRule(vary="testimonials"),
+        VariantRule(vary="review_tone", options=["skeptic_converted", "competitor_frustrated", "switcher"]),
+    ],
+)
+
 US_VS_THEM_SOLUTION = AdTypeDefinition(
     id="us_vs_them_solution",
     name="Us Versus Them (Solution)",
@@ -291,6 +335,22 @@ ORGANIC_STATIC_SOLUTION = AdTypeDefinition(
         "tiktok_comment": [
             "the {product_name} is actually life changing no cap",
             "I was today years old when I discovered {product_name}",
+        ],
+        "saas_instagram_story": [
+            "Just switched our team to {product_name} and productivity is up 📈",
+            "POV: you finally find {product_category} software that doesn't suck",
+        ],
+        "saas_reddit_post": [
+            "PSA: {product_name} is worth the price. Here's why.",
+            "Switched from [competitor] to {product_name} — honest review after 3 months",
+        ],
+        "saas_tweet": [
+            "{product_name} quietly became essential to our workflow",
+            "hot take: {product_name} is the best {product_category} tool right now",
+        ],
+        "saas_tiktok_comment": [
+            "our team switched to {product_name} and we're not going back",
+            "{product_name} actually lives up to the demo",
         ],
     },
     copy_templates=CopyTemplate(
@@ -570,6 +630,22 @@ ORGANIC_STATIC_PROBLEM = AdTypeDefinition(
             "does anyone else deal with {customer_pains[0]} or just me?",
             "currently dealing with {customer_pains[0]} AMA",
         ],
+        "saas_reddit_post": [
+            "Our team wasted months on {customer_pains[0]}. Anyone found a fix?",
+            "{customer_pains[0]} is killing our team's velocity",
+        ],
+        "saas_tweet": [
+            "{customer_pains[0]} is the hidden tax on every growing team",
+            "Still can't believe how much time we lose to {customer_pains[0]}",
+        ],
+        "saas_tiktok_comment": [
+            "tell me your team also struggles with {customer_pains[0]}",
+            "{customer_pains[0]} at scale is a nightmare",
+        ],
+        "saas_instagram_story": [
+            "raise your hand if {customer_pains[0]} is slowing your team down 🙋",
+            "POV: you realize {customer_pains[0]} costs more than you thought",
+        ],
     },
     copy_templates=CopyTemplate(
         primary_text=(
@@ -658,6 +734,57 @@ US_VS_THEM_PROBLEM = AdTypeDefinition(
 
 
 # =====================================================================
+# VIDEO: UGC AVATAR (AI Avatar)
+# =====================================================================
+
+UGC_AVATAR_VIDEO = AdTypeDefinition(
+    id="ugc_avatar_video",
+    name="UGC Avatar Video",
+    strategy="product_aware",
+    format="video",
+    aspect_ratios=["1:1"],
+    duration="15s",
+    required_params=["product_name", "key_benefit"],
+    optional_params=["customer_pains", "brand_name", "social_proof"],
+    skip_condition=None,
+    frames=[
+        {
+            "frame": 1, "duration": "3s", "label": "hook",
+            "script": "{customer_pains[0]}? You need to see this.",
+        },
+        {
+            "frame": 2, "duration": "8s", "label": "pitch",
+            "script": (
+                "{product_name} {key_benefit}. "
+                "{key_differentiator} — and {social_proof}."
+            ),
+        },
+        {
+            "frame": 3, "duration": "4s", "label": "cta",
+            "script": "Try it yourself. Link below.",
+        },
+    ],
+    copy_templates=CopyTemplate(
+        primary_text=(
+            "{customer_pains[0]}?\n"
+            "{product_name} {key_benefit}.\n"
+            "Try it free →"
+        ),
+        headline="{key_benefit}",
+        cta_type="LEARN_MORE",
+        fallbacks={
+            "customer_pains[0]": "Looking for a better solution",
+            "social_proof": "People are already switching",
+            "key_differentiator": "it actually works",
+        },
+    ),
+    variants=[
+        VariantRule(vary="tone", options=["casual", "enthusiastic", "direct"]),
+    ],
+)
+
+
+# =====================================================================
 # FULL REGISTRY
 # =====================================================================
 
@@ -666,9 +793,11 @@ AD_TYPE_REGISTRY: dict[str, AdTypeDefinition] = {
     "product_benefits_static": PRODUCT_BENEFITS_STATIC,
     "product_demo_video": PRODUCT_DEMO_VIDEO,
     "review_static": REVIEW_STATIC,
+    "review_static_competition": REVIEW_STATIC_COMPETITION,
     "us_vs_them_solution": US_VS_THEM_SOLUTION,
     "organic_static_solution": ORGANIC_STATIC_SOLUTION,
     "founder_video_solution": FOUNDER_VIDEO_SOLUTION,
+    "ugc_avatar_video": UGC_AVATAR_VIDEO,
     # Strategy 2: Product Unaware
     "problem_statement_text": PROBLEM_STATEMENT_TEXT,
     "problem_statement_image": PROBLEM_STATEMENT_IMAGE,

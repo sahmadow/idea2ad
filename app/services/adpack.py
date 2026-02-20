@@ -135,25 +135,33 @@ def _build_creatives_from_draft(draft: CampaignDraft) -> List[AdCreative]:
             )
             creatives.append(creative)
 
-    # Then, create additional creative variants from copy pairs
-    # Goal: up to 10 creatives total (5 product aware + 5 product unaware)
+    # Then, create additional creative variants from UNIQUE copy pairs only
+    # Skip combos that duplicate existing creative text
     target_count = 10
     existing_count = len(creatives)
+    seen_copy: set[tuple[str, str]] = {
+        (c.primary_text, c.headline) for c in creatives
+    }
 
     if headlines and primary_texts:
-        for i in range(min(target_count - existing_count, len(headlines) * len(primary_texts))):
+        for i in range(len(headlines) * len(primary_texts)):
             h_idx = i % len(headlines)
-            p_idx = i % len(primary_texts)
+            p_idx = i // len(headlines) % len(primary_texts)
+
+            copy_key = (primary_texts[p_idx].content, headlines[h_idx].content)
+            if copy_key in seen_copy:
+                continue
+            seen_copy.add(copy_key)
 
             strategy_label: str = (
-                "product_aware" if (existing_count + i) % 2 == 0 else "product_unaware"
+                "product_aware" if len(creatives) % 2 == 0 else "product_unaware"
             )
 
             # Use image from existing ads if available
             image_url = None
             image_brief = None
             if draft.ads and len(draft.ads) > 0:
-                source_ad = draft.ads[i % len(draft.ads)]
+                source_ad = draft.ads[len(creatives) % len(draft.ads)]
                 image_url = source_ad.imageUrl
                 image_brief = source_ad.imageBrief
 

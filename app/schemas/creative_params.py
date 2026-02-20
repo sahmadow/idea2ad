@@ -97,6 +97,9 @@ class CreativeParameters(BaseModel):
     scene_solution: str | None = None  # "Person sleeping peacefully"
     scene_lifestyle: str | None = None  # "Bright bedroom, morning light"
 
+    # --- Business Type ---
+    business_type: Literal["ecommerce", "saas", "service"] = "ecommerce"
+
     # --- Tone & Urgency ---
     tone: Literal["premium", "casual", "clinical", "playful", "urgent"] = "casual"
     urgency_hooks: list[str] = []
@@ -115,3 +118,12 @@ class CreativeParameters(BaseModel):
 
     def has_enough_product_images(self, minimum: int = 3) -> bool:
         return len(self.product_images) >= minimum
+
+    def is_saas(self) -> bool:
+        return self.business_type == "saas"
+
+    @property
+    def verified_purchase_label(self) -> str:
+        if self.business_type == "saas":
+            return "Verified User"
+        return "Verified Purchase"

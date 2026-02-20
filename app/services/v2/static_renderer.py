@@ -42,6 +42,12 @@ ASPECT_RATIO_SIZES: dict[str, tuple[int, int]] = {
 }
 
 
+# Template fallback: ad types that reuse another type's seed templates
+TEMPLATE_FALLBACK_MAP: dict[str, str] = {
+    "review_static_competition": "review_static",
+}
+
+
 # =====================================================================
 # Template-based rendering (primary path)
 # =====================================================================
@@ -112,7 +118,8 @@ async def _load_template_from_db(
     ad_type_id: str,
     aspect_ratio: str,
 ) -> dict | None:
-    """Load Fabric.js template JSON from AdTemplate table."""
+    """Load Fabric.js template JSON from AdTemplate table.
+    Falls back to parent type via TEMPLATE_FALLBACK_MAP if no template found."""
     try:
         from prisma import Prisma
         db = Prisma()
@@ -123,10 +130,24 @@ async def _load_template_from_db(
                     "ad_type_id": ad_type_id,
                     "aspect_ratio": aspect_ratio,
                 },
-                order={"is_default": "desc"},  # prefer default templates
+                order={"is_default": "desc"},
             )
             if template:
                 return template.canvas_json
+
+            # Fallback to parent type's template
+            fallback_id = TEMPLATE_FALLBACK_MAP.get(ad_type_id)
+            if fallback_id:
+                logger.debug(f"No template for {ad_type_id}@{aspect_ratio}, trying fallback {fallback_id}")
+                template = await db.adtemplate.find_first(
+                    where={
+                        "ad_type_id": fallback_id,
+                        "aspect_ratio": aspect_ratio,
+                    },
+                    order={"is_default": "desc"},
+                )
+                if template:
+                    return template.canvas_json
         finally:
             await db.disconnect()
     except Exception as e:
@@ -339,6 +360,9 @@ async def _render_product_image(canvas: Image.Image, layer: LayerDefinition, par
         return
     img = Image.open(io.BytesIO(img_bytes)).convert("RGBA")
     for proc in layer.processing:
+        if proc == "remove_background" and params.is_saas():
+            # SaaS OG images are screenshots; bg removal produces garbage
+            continue
         if proc == "remove_background":
             try:
                 from app.services.background_remover import get_background_remover
@@ -405,7 +429,13 @@ def _render_badge(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: LayerDe
     draw.text((x + pad_x, y + pad_y), text, font=font, fill=(255, 255, 255, 255))
 
 
-def _render_review_card(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: LayerDefinition, params: CreativeParameters) -> None:
+def _render_review_card(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    layer: LayerDefinition,
+    params: CreativeParameters,
+    testimonial_override: str | None = None,
+) -> None:
     style = layer.style
     variants = (layer.style_variant or "review_card").split("|")
     variant = random.choice(variants)
@@ -427,8 +457,10 @@ def _render_review_card(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: L
     stars = "\u2605" * rating + "\u2606" * (5 - rating)
     star_font = _load_font("Inter", 24)
     draw.text((card_x + 24, card_y + 50), stars, font=star_font, fill=(255, 180, 0, 255))
-    testimonial = ""
-    if params.testimonials:
+    # Use override (e.g. competition testimonial) if provided
+    if testimonial_override:
+        testimonial = testimonial_override
+    elif params.testimonials:
         testimonial = params.testimonials[0]
     elif params.social_proof:
         testimonial = f"Absolutely love this product. {params.social_proof}."
@@ -440,7 +472,7 @@ def _render_review_card(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: L
         draw.text((card_x + 24, card_y + 90 + i * 34), line, font=body_font, fill=(30, 30, 30, 255))
     if style.get("verified", False):
         verified_font = _load_font("Inter", 18)
-        draw.text((card_x + 24, card_y + card_h - 36), "Verified Purchase", font=verified_font, fill=(100, 160, 100, 255))
+        draw.text((card_x + 24, card_y + card_h - 36), params.verified_purchase_label, font=verified_font, fill=(100, 160, 100, 255))
 
 
 def _render_comparison_layout(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: LayerDefinition, params: CreativeParameters) -> None:
@@ -481,6 +513,7 @@ async def _pillow_render(
     params: CreativeParameters,
     aspect_ratio: str,
     hook_text: str | None,
+    testimonial_override: str | None = None,
 ) -> bytes:
     """Legacy Pillow-based rendering (fallback when no template exists)."""
     w, h = ASPECT_RATIO_SIZES.get(aspect_ratio, (1080, 1080))
@@ -511,7 +544,7 @@ async def _pillow_render(
             elif lt == "badge":
                 _render_badge(canvas, draw, layer, params)
             elif lt == "review_card":
-                _render_review_card(canvas, draw, layer, params)
+                _render_review_card(canvas, draw, layer, params, testimonial_override)
             elif lt == "comparison_layout":
                 _render_comparison_layout(canvas, draw, layer, params)
             elif lt == "social_post_frame":
@@ -541,6 +574,7 @@ class StaticAdRenderer:
         params: CreativeParameters,
         aspect_ratio: str = "1:1",
         hook_text: str | None = None,
+        testimonial_override: str | None = None,
     ) -> bytes:
         """
         Render a single static ad image.
@@ -559,7 +593,7 @@ class StaticAdRenderer:
             logger.info(f"Template render failed for {ad_type.id}@{aspect_ratio}, using Pillow")
 
         # Fallback to Pillow
-        return await _pillow_render(ad_type, params, aspect_ratio, hook_text)
+        return await _pillow_render(ad_type, params, aspect_ratio, hook_text, testimonial_override)
 
     async def render_from_template(
         self,

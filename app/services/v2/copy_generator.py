@@ -100,6 +100,16 @@ def _resolve_variable(template: str, params: CreativeParameters) -> str:
     return re.sub(r"\{(\w+(?:\[\d+\])?(?:\.\w+)?)\}", replacer, template)
 
 
+def _resolve_cta_type(cta_type: str, params: CreativeParameters) -> str:
+    """Remap CTA type based on business_type."""
+    if cta_type == "SHOP_NOW":
+        if params.business_type == "saas":
+            return "SIGN_UP"
+        if params.business_type == "service":
+            return "LEARN_MORE"
+    return cta_type
+
+
 def generate_copy_from_template(
     ad_type: AdTypeDefinition,
     params: CreativeParameters,
@@ -114,7 +124,7 @@ def generate_copy_from_template(
             primary_text="",
             headline="",
             description=None,
-            cta_type="SHOP_NOW",
+            cta_type=_resolve_cta_type("SHOP_NOW", params),
         )
 
     primary_text = _resolve_variable(ct.primary_text, params)
@@ -154,7 +164,7 @@ def generate_copy_from_template(
         primary_text=primary_text,
         headline=headline,
         description=description,
-        cta_type=ct.cta_type,
+        cta_type=_resolve_cta_type(ct.cta_type, params),
     )
 
 
@@ -220,3 +230,127 @@ Return JSON array of objects with primary_text and headline fields."""
 
     # Fallback: return original only
     return [base_copy]
+
+
+async def generate_competition_copy(
+    ad_type: AdTypeDefinition,
+    params: CreativeParameters,
+    competitor_data: dict | None = None,
+) -> GeneratedCopy:
+    """
+    Generate competition-led copy by researching competitor complaints via Gemini.
+
+    If competitor_data is provided (scraped page), uses real competitor info for
+    targeted copy. Otherwise falls back to generic competitor research.
+
+    Returns GeneratedCopy with competition_testimonial for the review card visual.
+    Falls back to template-fill if LLM fails.
+    """
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        logger.warning("No GOOGLE_API_KEY — falling back to template copy for competition")
+        return _competition_fallback(ad_type, params)
+
+    client = genai.Client(api_key=api_key)
+
+    product_name = params.product_name or "this product"
+    product_category = params.product_category or "this category"
+    key_benefit = params.key_benefit or ""
+    key_differentiator = params.key_differentiator or ""
+    social_proof = params.social_proof or "thousands of"
+
+    # Build competitor context section
+    if competitor_data and competitor_data.get("full_text"):
+        comp_text = competitor_data["full_text"][:3000]
+        comp_title = competitor_data.get("title", "Unknown")
+        comp_url = competitor_data.get("url", "")
+        competitor_section = f"""
+COMPETITOR PAGE (scraped from {comp_url}):
+Title: {comp_title}
+Content: {comp_text}
+
+TASK: Compare the competitor's offering above against {product_name}. Identify specific weaknesses,
+missing features, or pain points that {product_name} solves better. Use REAL gaps you can see in
+their page — vague claims, missing features, limited scope, etc."""
+        naming_rules = f"""- Reference the competitor generically (e.g., "other {product_category} tools", "my old tool")
+- Do NOT mention the competitor by name — keep it generic
+- The complaints should be REAL weaknesses you identified from the competitor's page"""
+        logger.info(f"Using scraped competitor data: {comp_title} ({len(comp_text)} chars)")
+    else:
+        competitor_section = f"""
+TASK: Research the competitive landscape for "{product_name}" in the "{product_category}" category.
+Find common competitor frustrations and position {product_name} as the better alternative."""
+        naming_rules = f"""- Do NOT name specific competitor brands
+- Use generic references like "other {product_category} tools", "the old way", "traditional solutions" """
+
+    prompt = f"""You are an ad copywriter generating competition-focused ad copy.
+
+PRODUCT INFO:
+- Name: {product_name}
+- Category: {product_category}
+- Key Benefit: {key_benefit}
+- Key Differentiator: {key_differentiator}
+- Social Proof: {social_proof}
+{competitor_section}
+
+GENERATE:
+1. competition_testimonial: A realistic 1-2 sentence review from someone who switched FROM a competitor TO {product_name}. Should mention a specific competitor pain point they escaped. Max 150 chars.
+2. primary_text: Ad primary text (max {PRIMARY_TEXT_MAX} chars, optimal {PRIMARY_TEXT_OPTIMAL}). Lead with competitor frustration, pivot to {product_name} as solution. Include "switch to {product_name}" or "try {product_name} instead" messaging.
+3. headline: Short punchy headline (max {HEADLINE_MAX} chars). "Try {product_name} instead" or "Switch to {product_name}" style.
+4. competitor_complaint: The specific pain point competitors have (e.g., "overpriced subscriptions", "clunky interfaces"). Max 50 chars.
+
+RULES:
+{naming_rules}
+- Keep tone confident but not aggressive
+- Make the testimonial sound authentic and conversational
+
+Return JSON object with fields: competition_testimonial, primary_text, headline, competitor_complaint"""
+
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            result = await client.aio.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+            data = json.loads(result.text)
+            if isinstance(data, dict):
+                competition_testimonial = str(data.get("competition_testimonial", ""))[:150]
+                primary_text = str(data.get("primary_text", ""))[:PRIMARY_TEXT_MAX]
+                headline = str(data.get("headline", f"Try {product_name} instead"))[:HEADLINE_MAX]
+                competitor_complaint = str(data.get("competitor_complaint", ""))[:50]
+
+                logger.info(f"Competition copy generated for {product_name}: complaint='{competitor_complaint}'")
+
+                return GeneratedCopy(
+                    primary_text=primary_text,
+                    headline=headline,
+                    description=competition_testimonial,
+                    cta_type=_resolve_cta_type("LEARN_MORE", params),
+                    competition_testimonial=competition_testimonial,
+                    competitor_complaint=competitor_complaint,
+                )
+
+        except Exception as e:
+            logger.warning(f"Competition copy generation attempt {attempt + 1} failed: {e}")
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_DELAYS[attempt])
+
+    # Fallback to template fill
+    logger.warning("All competition copy attempts failed — using template fallback")
+    return _competition_fallback(ad_type, params)
+
+
+def _competition_fallback(
+    ad_type: AdTypeDefinition,
+    params: CreativeParameters,
+) -> GeneratedCopy:
+    """Template-based fallback for competition copy when LLM fails."""
+    base = generate_copy_from_template(ad_type, params)
+    # Add generic competition testimonial
+    product_name = params.product_name or "this product"
+    base["competition_testimonial"] = (
+        f"Switched from our old solution and never looked back. {product_name} just works."
+    )
+    base["competitor_complaint"] = "the same old problems"
+    return base

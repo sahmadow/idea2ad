@@ -53,7 +53,7 @@
     },
     {
       "type": "textbox",
-      "text": "Verified Purchase",
+      "text": "{{verified_purchase_label}}",
       "left": 84,
       "top": 339,
       "width": 200,

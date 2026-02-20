@@ -55,8 +55,9 @@ OG IMAGE: {og_image}
 Return a JSON object with EXACTLY these fields:
 
 {{
-    "product_name": "string — the product or service name",
-    "product_category": "string — category (e.g. Sleep/Bedding, SaaS/CRM, Fitness)",
+    "product_name": "string — short brand name as humans say it casually (e.g. 'Storytel' not 'Storytel Audiobook Subscription', 'Slack' not 'Slack Messaging Platform')",
+    "business_type": "string — 'saas' for software/subscription products, 'ecommerce' for physical/digital goods, 'service' for agencies/consultancies",
+    "product_category": "string — simple lowercase category as a normal person would say it (e.g. 'audiobooks', 'CRM software', 'mattresses', 'AI search analytics'). Never use slashes like 'Entertainment/Audiobooks'",
     "product_description_short": "string — max 15 words",
     "price": "string or null — e.g. '$79', '€65/mo'",
     "currency": "string or null — e.g. 'USD'",
@@ -288,6 +289,7 @@ def _merge_params(direct: dict, llm: dict) -> CreativeParameters:
         destination_url=direct.get("destination_url", ""),
         # Product core (LLM)
         product_name=llm.get("product_name", "Product"),
+        business_type=llm.get("business_type", "ecommerce") if llm.get("business_type") in ("ecommerce", "saas", "service") else "ecommerce",
         product_category=llm.get("product_category", "General"),
         product_description_short=llm.get("product_description_short", ""),
         price=llm.get("price"),

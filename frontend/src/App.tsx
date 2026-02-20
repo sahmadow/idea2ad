@@ -12,8 +12,9 @@ import { Skeleton } from './components/ui/Skeleton';
 import { useAuth } from './hooks/useAuth';
 import { useCampaigns } from './hooks/useCampaigns';
 import { analyzeUrl, uploadProductImage, generateQuickAd, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type ToneOption, type QuickAdResponse, type CompetitorIntelligence } from './api';
-import { assembleAdPack } from './api/adpack';
+import { assembleAdPack, analyzeV2, quickGenerateV2 } from './api/adpack';
 import { FBAuthTest } from './pages/FBAuthTest';
+import { ImageEditorTest } from './pages/ImageEditorTest';
 import type { PublishCampaignResponse } from './types/facebook';
 import type { AdPack } from './types/adpack';
 
@@ -136,6 +137,9 @@ function App() {
   const [quickTone, setQuickTone] = useState<ToneOption>('professional');
   const [, setQuickResult] = useState<QuickAdResponse | null>(null);
 
+  // Edit prompt (shared by both modes for image editing)
+  const [editPrompt, setEditPrompt] = useState('');
+
   // Commerce state
   const [productDescription, setProductDescription] = useState('');
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
@@ -237,6 +241,7 @@ function App() {
 
   // Route to test pages
   if (hash === '#/test/fb-auth') return <FBAuthTest />;
+  if (hash === '#/test/image-editor') return <ImageEditorTest />;
 
   const normalizeUrl = (input: string): string => {
     let normalized = input.trim();
@@ -251,60 +256,30 @@ function App() {
     e.preventDefault();
 
     if (generationMode === 'quick') {
-      if (!quickIdea.trim() || quickIdea.trim().length < 10) {
-        setError('Please describe your idea (at least 10 characters)');
+      // Quick Mode V2: at least description or image required
+      const hasDescription = quickIdea.trim().length > 0;
+      const hasImage = !!uploadedImageUrl;
+      if (!hasDescription && !hasImage) {
+        setError('Provide a description and/or upload an image');
         return;
       }
+
       setView('loading');
       setError(null);
       setResult(null);
       setSelectedAd(null);
       setAdPack(null);
       setQuickResult(null);
-      try {
-        const data = await generateQuickAd(quickIdea.trim(), quickTone);
-        setQuickResult(data);
-        const ads: Ad[] = data.ads.map((a, i) => ({
-          id: i + 1,
-          imageUrl: a.imageUrl || undefined,
-          primaryText: a.primaryText,
-          headline: a.headline,
-          description: a.description,
-        }));
-        const campaignDraft: CampaignDraft = {
-          project_url: '',
-          analysis: {
-            summary: quickIdea,
-            unique_selling_proposition: data.ads[0]?.headline || '',
-            pain_points: [],
-            call_to_action: data.ads[0]?.cta || 'Learn More',
-            buyer_persona: {},
-            keywords: [],
-            styling_guide: {
-              primary_colors: [], secondary_colors: [],
-              font_families: [], design_style: '', mood: '',
-            },
-          },
-          targeting: {
-            age_min: 18, age_max: 65, genders: [],
-            geo_locations: [], interests: [],
-          },
-          suggested_creatives: [],
-          image_briefs: [],
-          ads,
-          status: 'ANALYZED',
-        };
-        setResult(campaignDraft);
 
-        // Assemble AdPack from quick mode result
-        try {
-          const pack = await assembleAdPack(campaignDraft);
-          setAdPack(pack);
-          setView('adpack');
-        } catch {
-          // Fallback to results view if AdPack assembly fails
-          setView('results');
-        }
+      try {
+        const pack = await quickGenerateV2({
+          description: hasDescription ? quickIdea.trim() : undefined,
+          image_url: hasImage ? uploadedImageUrl! : undefined,
+          edit_prompt: editPrompt.trim() || undefined,
+        });
+
+        setAdPack(pack);
+        setView('adpack');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Quick generation failed');
         setView('landing');
@@ -323,11 +298,10 @@ function App() {
     try {
       const normalizedUrl = normalizeUrl(url);
 
-      // Run URL analysis and competitor analysis in parallel
-      const analysisPromise = analyzeUrl(normalizedUrl, undefined, {
-        businessType,
-        productDescription: businessType === 'commerce' ? productDescription || undefined : undefined,
-        productImageUrl: businessType === 'commerce' ? uploadedImageUrl || undefined : undefined,
+      // Run V2 pipeline and competitor analysis in parallel
+      const v2Promise = analyzeV2(normalizedUrl, undefined, {
+        image_url: uploadedImageUrl || undefined,
+        edit_prompt: editPrompt.trim() || undefined,
       });
 
       const competitorPromise = competitors.length > 0
@@ -338,20 +312,11 @@ function App() {
           })
         : Promise.resolve(null);
 
-      const [data, compData] = await Promise.all([analysisPromise, competitorPromise]);
+      const [pack, compData] = await Promise.all([v2Promise, competitorPromise]);
 
-      setResult(data);
       setCompetitorData(compData);
-
-      // Assemble AdPack from full mode result
-      try {
-        const pack = await assembleAdPack(data);
-        setAdPack(pack);
-        setView('adpack');
-      } catch {
-        // Fallback to results view if AdPack assembly fails
-        setView('results');
-      }
+      setAdPack(pack);
+      setView('adpack');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
       setView('landing');
@@ -376,6 +341,7 @@ function App() {
     setCompetitorData(null);
     setCompetitors([]);
     setProductDescription('');
+    setEditPrompt('');
     clearProductImage();
     try {
       localStorage.removeItem(STORAGE_KEYS.VIEW);
@@ -606,8 +572,6 @@ function App() {
           onUrlChange={setUrl}
           quickIdea={quickIdea}
           onQuickIdeaChange={setQuickIdea}
-          quickTone={quickTone}
-          onQuickToneChange={setQuickTone}
           generationMode={generationMode}
           onGenerationModeChange={setGenerationMode}
           businessType={businessType}
@@ -619,6 +583,8 @@ function App() {
           isUploading={isUploading}
           uploadedImageUrl={uploadedImageUrl}
           onImageSelect={handleImageSelect}
+          editPrompt={editPrompt}
+          onEditPromptChange={setEditPrompt}
           competitors={competitors}
           onCompetitorsChange={setCompetitors}
           onClearImage={clearProductImage}
