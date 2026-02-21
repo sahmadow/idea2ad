@@ -119,7 +119,7 @@ def bridge_problem_statement(params: CreativeParameters, copy: dict):
     if params.language and params.language != "en" and copy.get("headline"):
         headline = copy["headline"]
     elif params.customer_pains:
-        headline = params.customer_pains[0]
+        headline = params.customer_pains[0].rstrip(".!;,")
         if not headline.endswith("?"):
             headline += "?"
     else:

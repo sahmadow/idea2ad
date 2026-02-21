@@ -199,9 +199,8 @@ export default function ReviewPage() {
             <div className="space-y-3">
               <label className="text-sm font-mono text-white flex items-center gap-2">
                 <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
-                  Unaware
+                  Problem-Unaware Users
                 </span>
-                Problem-Unaware Users
               </label>
               <textarea
                 value={messagingUnaware}
@@ -215,9 +214,8 @@ export default function ReviewPage() {
             <div className="space-y-3">
               <label className="text-sm font-mono text-white flex items-center gap-2">
                 <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Aware
+                  Problem-Aware Users
                 </span>
-                Problem-Aware Users
               </label>
               <textarea
                 value={messagingAware}
