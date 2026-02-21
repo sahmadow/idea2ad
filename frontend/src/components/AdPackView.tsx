@@ -59,11 +59,13 @@ function CreativeCard({
   creative,
   pageName,
   websiteUrl,
+  logoUrl,
   onExpand,
 }: {
   creative: AdCreative;
   pageName: string;
   websiteUrl: string;
+  logoUrl?: string;
   onExpand: () => void;
 }) {
   // Convert AdCreative to Ad shape for MetaAdPreview
@@ -88,6 +90,7 @@ function CreativeCard({
           ad={ad}
           pageName={pageName}
           websiteUrl={websiteUrl}
+          logoUrl={logoUrl}
           onSelect={onExpand}
         />
       </div>
@@ -184,6 +187,7 @@ function ExpandedCreativeView({
   onPublish,
   pageName,
   websiteUrl,
+  logoUrl,
 }: {
   creative: AdCreative;
   onClose: () => void;
@@ -191,6 +195,7 @@ function ExpandedCreativeView({
   onPublish?: () => void;
   pageName: string;
   websiteUrl: string;
+  logoUrl?: string;
 }) {
   const ad: Ad = {
     id: parseInt(creative.id, 16) || 1,
@@ -235,6 +240,7 @@ function ExpandedCreativeView({
                 ad={ad}
                 pageName={pageName}
                 websiteUrl={websiteUrl}
+                logoUrl={logoUrl}
               />
             </div>
           </div>
@@ -538,6 +544,15 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
 
         {/* Title */}
         <div className="text-center mb-12">
+          {adPack.brand_logo_url && (
+            <div className="flex justify-center mb-4">
+              <img
+                src={adPack.brand_logo_url}
+                alt="Brand logo"
+                className="max-h-12 max-w-[200px] w-auto h-auto object-contain"
+              />
+            </div>
+          )}
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gray border border-white/10 text-xs font-mono text-brand-lime uppercase tracking-wider mb-4">
             <Grid3X3 className="w-3 h-3" />
             Ad Pack
@@ -613,6 +628,7 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
                   creative={creative}
                   pageName={pageName}
                   websiteUrl={adPack.project_url}
+                  logoUrl={adPack.brand_logo_url}
                   onExpand={() => setExpandedCreative(creative)}
                 />
               </motion.div>
@@ -644,6 +660,7 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
             creative={expandedCreative}
             pageName={pageName}
             websiteUrl={adPack.project_url}
+            logoUrl={adPack.brand_logo_url}
             onClose={() => setExpandedCreative(null)}
             onSave={(field, value) => {
               handleCreativeSave(expandedCreative.id, field, value);

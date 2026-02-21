@@ -61,7 +61,7 @@ def derive_smart_broad_targeting(
     else:
         genders = ["all"]
 
-    # Geographic targeting
+    # Geographic targeting (use passed geo_locations, not hardcoded US)
     geo = geo_locations if geo_locations else ["US"]
 
     # Build rationale

@@ -8,6 +8,7 @@ interface MetaAdPreviewProps {
   ad: Ad;
   pageName?: string;
   websiteUrl?: string;
+  logoUrl?: string;
   selected?: boolean;
   onSelect?: () => void;
 }
@@ -16,11 +17,13 @@ export function MetaAdPreview({
   ad,
   pageName = "Your Page",
   websiteUrl = "yourwebsite.com",
+  logoUrl,
   selected = false,
   onSelect,
 }: MetaAdPreviewProps) {
   const [textExpanded, setTextExpanded] = useState(false);
   const [imageState, setImageState] = useState({ loaded: false, error: false, url: ad.imageUrl });
+  const [logoError, setLogoError] = useState(false);
 
   const imageLoaded = imageState.url === ad.imageUrl ? imageState.loaded : false;
   const imageError = imageState.url === ad.imageUrl ? imageState.error : false;
@@ -87,10 +90,19 @@ export function MetaAdPreview({
       {/* Header */}
       <div className="p-3 flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-10 h-10 rounded-full bg-white p-0.5 overflow-hidden">
-            <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg">
-              {pageName.charAt(0).toUpperCase()}
-            </div>
+          <div className="w-10 h-10 rounded-full bg-white p-0.5 overflow-hidden flex items-center justify-center">
+            {logoUrl && !logoError ? (
+              <img
+                src={logoUrl}
+                alt={`${pageName} logo`}
+                className="max-w-full max-h-full object-contain"
+                onError={() => setLogoError(true)}
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg rounded-full">
+                {pageName.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1">

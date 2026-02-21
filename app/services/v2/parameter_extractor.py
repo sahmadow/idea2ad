@@ -52,6 +52,9 @@ EXTRACTED FONTS: {fonts}
 
 OG IMAGE: {og_image}
 
+HTML LANG ATTRIBUTE: {html_lang}
+SOURCE URL: {source_url}
+
 Return a JSON object with EXACTLY these fields:
 
 {{
@@ -105,7 +108,9 @@ Return a JSON object with EXACTLY these fields:
     }},
     "scene_problem": "string — visual description of the problem state (e.g. 'Person rubbing stiff neck at desk')",
     "scene_solution": "string — visual description of the solved state",
-    "scene_lifestyle": "string — aspirational lifestyle visual"
+    "scene_lifestyle": "string — aspirational lifestyle visual",
+    "language": "string — ISO 639-1 code of the page content language (e.g. 'en', 'az', 'de', 'fr', 'es'). Detect from actual text content, not just HTML attributes.",
+    "target_countries": ["ISO 3166-1 alpha-2 country codes for the primary target market, inferred from language, currency, domain TLD, and content (e.g. ['AZ'] for .az domain with Azerbaijani content, ['US'] for English .com)"]
 }}
 
 RULES:
@@ -115,6 +120,8 @@ RULES:
 - key_differentiator is what NO competitor offers
 - scene descriptions should be specific enough for AI image generation
 - If data is missing from the page, infer intelligently from context
+- For language: detect from actual page text content. Use html_lang as a hint if available, but verify against content
+- For target_countries: infer from domain TLD (.az→AZ, .de→DE, .co.uk→GB), currency, language, and content context
 - Always return valid JSON
 """
 
@@ -138,7 +145,7 @@ async def extract_creative_parameters(
     direct_params = _extract_direct_params(scraped_data, source_url)
 
     # --- Step 2: Call Gemini for inferred fields ---
-    llm_params = await _extract_llm_params(scraped_data, api_key)
+    llm_params = await _extract_llm_params(scraped_data, api_key, source_url=source_url)
 
     # --- Step 3: Merge and build CreativeParameters ---
     params = _merge_params(direct_params, llm_params)
@@ -184,10 +191,11 @@ def _extract_direct_params(scraped_data: dict, source_url: str | None) -> dict:
         "hero_image_url": scraped_data.get("og_image") or None,
         "headline": (scraped_data.get("headers", [None]) or [None])[0] or scraped_data.get("title", ""),
         "subheadline": (scraped_data.get("headers", [None, None]) or [None, None])[1] if len(scraped_data.get("headers", [])) > 1 else None,
+        "html_lang": scraped_data.get("language"),
     }
 
 
-async def _extract_llm_params(scraped_data: dict, api_key: str) -> dict:
+async def _extract_llm_params(scraped_data: dict, api_key: str, source_url: str | None = None) -> dict:
     """Call Gemini to infer marketing parameters from scraped content."""
     client = genai.Client(api_key=api_key)
     styling = scraped_data.get("styling", {})
@@ -199,6 +207,8 @@ async def _extract_llm_params(scraped_data: dict, api_key: str) -> dict:
         accent_colors=styling.get("accents", []),
         fonts=styling.get("fonts", []),
         og_image=scraped_data.get("og_image", ""),
+        html_lang=scraped_data.get("language") or "not set",
+        source_url=source_url or "unknown",
     )
 
     last_error = None
@@ -326,4 +336,7 @@ def _merge_params(direct: dict, llm: dict) -> CreativeParameters:
         # Tone (LLM)
         tone=llm.get("tone", "casual"),
         urgency_hooks=llm.get("urgency_hooks", []),
+        # Language & Geo (LLM with scraper hint)
+        language=llm.get("language") or direct.get("html_lang") or "en",
+        target_countries=llm.get("target_countries") if isinstance(llm.get("target_countries"), list) and llm.get("target_countries") else ["US"],
     )

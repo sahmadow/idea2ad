@@ -174,6 +174,7 @@ class AdPack(BaseModel):
     meta_campaign_id: Optional[str] = None
     meta_adset_id: Optional[str] = None
     created_from: Optional[str] = None  # Source CampaignDraft job_id
+    brand_logo_url: Optional[str] = None
 
 
 class AdPackUpdateRequest(BaseModel):

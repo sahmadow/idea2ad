@@ -197,6 +197,8 @@ function mapV2AdPack(raw: any, url: string): AdPack {
       ad_count: (raw.creatives || []).length,
     },
     status: raw.status || 'draft',
+    brand_logo_url: raw.brand_logo_url || undefined,
+    language: raw.language || 'en',
   };
 }
 

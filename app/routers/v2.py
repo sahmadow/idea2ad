@@ -36,6 +36,8 @@ from app.services.v2.template_selector import select_templates
 from app.services.v2.copy_generator import (
     generate_copy_from_template,
     generate_competition_copy,
+    translate_copy,
+    translate_params,
     _resolve_variable,
 )
 from app.services.v2.ad_type_registry import get_registry, get_ad_type
@@ -133,13 +135,15 @@ def _register_v2_pack_in_v1_store(pack: AdPack, source_url: str) -> None:
             ))
 
         t = pack.targeting
+        geo_countries = t.geo_locations.get("countries", ["US"]) if t and t.geo_locations else ["US"]
         v1_targeting = SmartBroadTargeting(
             age_min=t.age_min if t else 18,
             age_max=t.age_max if t else 65,
             genders=["all"],
+            geo_locations=geo_countries,
             rationale=TargetingRationale(
                 age_range_reason=t.targeting_rationale or "" if t else "",
-                geo_reason="Smart Broad targeting",
+                geo_reason=f"Targeting {', '.join(geo_countries)}",
             ),
         )
 
@@ -156,6 +160,7 @@ def _register_v2_pack_in_v1_store(pack: AdPack, source_url: str) -> None:
                 ad_count=len(v1_creatives),
             ),
             status=pack.status or "draft",
+            brand_logo_url=pack.brand_logo_url,
         )
 
         _ad_packs[pack.id] = v1_pack
@@ -239,6 +244,10 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
         logger.error(f"Parameter extraction failed for {body.url}: {e}")
         raise HTTPException(status_code=422, detail=f"Parameter extraction failed: {e}")
 
+    # 2b. Translate params for non-English
+    if params.language and params.language != "en":
+        params = await translate_params(params)
+
     # 3. Select templates
     selected = select_templates(params)
     if not selected:
@@ -246,12 +255,15 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
 
     # 4. Generate copy and build creatives
     creatives: list[GeneratedCreative] = []
+    needs_translation = params.language and params.language != "en"
     for template in selected:
-        # Competition type uses LLM-generated copy
+        # Competition type uses LLM-generated copy (already language-aware)
         if template.id == "review_static_competition":
             base_copy = await generate_competition_copy(template, params, competitor_data)
         else:
             base_copy = generate_copy_from_template(template, params)
+            if needs_translation:
+                base_copy = await translate_copy(base_copy, params)
 
         creative = GeneratedCreative(
             id=str(uuid.uuid4())[:12],
@@ -283,6 +295,8 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
         created_at=datetime.now(timezone.utc),
         source_url=body.url,
         product_name=params.product_name,
+        brand_logo_url=params.brand_logo_url,
+        language=params.language or "en",
         creatives=creatives,
         targeting=targeting,
         campaign_name=f"{params.product_name} — {datetime.now().strftime('%b %Y')}",
@@ -372,6 +386,10 @@ async def _run_v2_job(
         # 2. Extract parameters
         params = await extract_creative_parameters(scraped_data, source_url=url)
 
+        # 2b. Translate params for non-English
+        if params.language and params.language != "en":
+            params = await translate_params(params)
+
         # 3. Select templates
         selected = select_templates(params)
         if not selected:
@@ -379,12 +397,15 @@ async def _run_v2_job(
 
         # 4. Generate copy + build creatives (1:1 only per template)
         creatives: list[GeneratedCreative] = []
+        needs_translation = params.language and params.language != "en"
         for template in selected:
-            # Competition type uses LLM-generated copy (with optional competitor data)
+            # Competition type uses LLM-generated copy (already language-aware)
             if template.id == "review_static_competition":
                 base_copy = await generate_competition_copy(template, params, competitor_data)
             else:
                 base_copy = generate_copy_from_template(template, params)
+                if needs_translation:
+                    base_copy = await translate_copy(base_copy, params)
             creative = GeneratedCreative(
                 id=str(uuid.uuid4())[:12],
                 ad_type_id=template.id,
@@ -422,6 +443,8 @@ async def _run_v2_job(
             created_at=datetime.now(timezone.utc),
             source_url=url,
             product_name=params.product_name,
+            brand_logo_url=params.brand_logo_url,
+            language=params.language or "en",
             creatives=creatives,
             targeting=targeting,
             campaign_name=f"{params.product_name} — {datetime.now().strftime('%b %Y')}",
@@ -963,18 +986,16 @@ async def _render_competition_blog(
     complaint = comp_copy.get("competitor_complaint", "")
 
     # Build natural blog body from competition copy fields
-    if complaint and testimonial:
-        body = (
-            f"I've been using various {category} for years and honestly "
-            f"most of them are terrible. {complaint}.\n\n"
-            f"{testimonial}\n\n"
-            f"If you're still dealing with {complaint.lower()}, "
-            f"just try {product_name}. It's not even close."
-        )
+    # comp_copy comes from generate_competition_copy which is already language-aware
+    # Use primary_text directly (LLM generated in target language) as the body
+    if comp_copy.get("primary_text"):
+        body = comp_copy["primary_text"]
+    elif complaint and testimonial:
+        body = f"{testimonial}\n\n{complaint}."
     elif testimonial:
         body = testimonial
     else:
-        body = comp_copy.get("primary_text", f"After switching to {product_name}, everything changed.")
+        body = product_name
 
     # Derive accent color from brand (skip near-white primaries)
     accent = "#3B82F6"
@@ -985,12 +1006,15 @@ async def _render_competition_blog(
                 accent = c
                 break
 
+    # Use LLM-generated headline as blog title (already in target language)
+    blog_title = comp_copy.get("headline") or f"Why I switched to {product_name}"
+
     blog_params = BlogReviewParams(
         author_name="Sarah Chen",
         author_title="Marketing Lead",
-        blog_title=f"Why I switched to {product_name} (and never looked back)",
+        blog_title=blog_title,
         body=body,
-        read_time="3 min read",
+        read_time="3 min",
         date=datetime.now().strftime("%b %Y"),
         accent_color=accent,
         claps=random.randint(150, 400),
@@ -1138,15 +1162,18 @@ async def _upload_video_to_s3(
 def _build_targeting(params: CreativeParameters) -> TargetingSpec:
     """Derive targeting spec from persona analysis (Smart Broad strategy)."""
     persona = params.persona_primary
+    geo = {"countries": params.target_countries} if params.target_countries else {"countries": ["US"]}
 
     if persona:
         demo = persona.demographics
+        countries_str = ", ".join(params.target_countries) if params.target_countries else "US"
         rationale = (
-            f"Targeting adults {demo.age_min}-{demo.age_max} "
+            f"Targeting adults {demo.age_min}-{demo.age_max} in {countries_str} "
             f"based on {persona.label}. "
             f"Using Advantage+ broad targeting to let Meta's algorithm optimize."
         )
         return TargetingSpec(
+            geo_locations=geo,
             age_min=demo.age_min,
             age_max=demo.age_max,
             genders=None if demo.gender_skew == "neutral" else (
@@ -1156,5 +1183,6 @@ def _build_targeting(params: CreativeParameters) -> TargetingSpec:
         )
 
     return TargetingSpec(
+        geo_locations=geo,
         targeting_rationale="Using broad targeting — no persona data available.",
     )

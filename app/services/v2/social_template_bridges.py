@@ -52,9 +52,10 @@ def bridge_branded_static(
     btn = css_assets.get("button_styles", {})
     border_radius = design_tokens.get("border_radius", "12px") or "12px"
 
-    # Headline: use raw scraped headers[0] (exact words from site)
+    # Headline: use raw scraped headers[0] (exact words from site — native language)
     headers = scraped_data.get("headers", [])
     headline = headers[0] if headers else params.headline or params.product_name
+    # Description: scraped meta description (native language) or translated param
     description = scraped_data.get("description", "") or params.product_description_short or ""
     brand_name = params.brand_name or ""
 
@@ -113,8 +114,11 @@ def bridge_problem_statement(params: CreativeParameters, copy: dict):
     """Map CreativeParameters → ProblemStatementParams."""
     from app.services.v2.social_templates.problem_statement import ProblemStatementParams
 
-    # Headline from pains or copy
-    if params.customer_pains:
+    # For non-English: prefer translated copy headline (fully translated by translate_copy)
+    # For English: use pain point from params (already English)
+    if params.language and params.language != "en" and copy.get("headline"):
+        headline = copy["headline"]
+    elif params.customer_pains:
         headline = params.customer_pains[0]
         if not headline.endswith("?"):
             headline += "?"
@@ -141,13 +145,17 @@ def bridge_review_static(params: CreativeParameters, copy: dict):
     """Map CreativeParameters → ReviewStaticParams."""
     from app.services.v2.social_templates.review_static import ReviewStaticParams
 
-    # Pick testimonial text
+    # Pick testimonial text (testimonials from scraping are already in native language)
     if params.testimonials:
         review_text = params.testimonials[0]
     elif params.social_proof:
-        review_text = f"Absolutely love this product. {params.social_proof}."
+        # social_proof is translated by translate_params for non-English
+        review_text = params.social_proof
+    elif params.key_benefit:
+        # key_benefit is translated by translate_params for non-English
+        review_text = params.key_benefit
     else:
-        review_text = f"The {params.product_name} has completely changed my routine. Highly recommend!"
+        review_text = copy.get("primary_text", params.product_name)
 
     # Accent color (skip near-white)
     accent = "#FF6B35"
@@ -175,13 +183,17 @@ def bridge_service_hero(params: CreativeParameters, copy: dict):
     """Map CreativeParameters → ServiceHeroParams."""
     from app.services.v2.social_templates.service_hero import ServiceHeroParams
 
+    # params.headline is from scraping (native language)
+    # params.key_benefit is translated by translate_params
     headline = params.headline or params.key_benefit or params.product_name
+    # params.product_description_short is translated by translate_params
+    subtext = params.subheadline or params.product_description_short or None
     scene_url = params.hero_image_url or ""
 
     return ServiceHeroParams(
         scene_image_url=scene_url,
         headline=headline,
-        subtext=params.subheadline or params.product_description_short or None,
+        subtext=subtext,
         cta_text=params.cta_text if params.cta_text != "Shop Now" else None,
         brand_name=params.brand_name or None,
         text_position="bottom",
@@ -214,6 +226,7 @@ def bridge_branded_static_video(
 
     headers = scraped_data.get("headers", [])
     headline = headers[0] if headers else params.headline or params.product_name
+    # Scraped description (native lang) or translated param
     description = scraped_data.get("description", "") or params.product_description_short or ""
     brand_name = params.brand_name or ""
 
@@ -239,6 +252,7 @@ def bridge_service_hero_video(
     copy: dict,
 ) -> dict:
     """Map CreativeParameters → Remotion ServiceHero props dict."""
+    # params.headline is scraped (native lang), params.key_benefit is translated
     headline = params.headline or params.key_benefit or params.product_name
     scene_url = params.hero_image_url or ""
 
@@ -246,7 +260,7 @@ def bridge_service_hero_video(
         "sceneImageUrl": scene_url,
         "headline": headline,
         "subtext": params.subheadline or params.product_description_short or None,
-        "ctaText": params.cta_text if params.cta_text != "Shop Now" else "Learn More",
+        "ctaText": params.cta_text,
         "brandName": params.brand_name or None,
         "accentColor": "#FFFFFF",
     }

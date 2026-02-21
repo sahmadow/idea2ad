@@ -29,6 +29,30 @@ DESCRIPTION_MAX = 30
 MAX_RETRIES = 2
 RETRY_DELAYS = [1, 2]
 
+# ISO 639-1 → human-readable language name
+LANGUAGE_NAMES: dict[str, str] = {
+    "en": "English", "az": "Azerbaijani", "de": "German", "fr": "French",
+    "es": "Spanish", "it": "Italian", "pt": "Portuguese", "ru": "Russian",
+    "tr": "Turkish", "ar": "Arabic", "zh": "Chinese", "ja": "Japanese",
+    "ko": "Korean", "nl": "Dutch", "pl": "Polish", "sv": "Swedish",
+    "da": "Danish", "fi": "Finnish", "no": "Norwegian", "uk": "Ukrainian",
+    "cs": "Czech", "ro": "Romanian", "hu": "Hungarian", "el": "Greek",
+    "he": "Hebrew", "th": "Thai", "vi": "Vietnamese", "id": "Indonesian",
+    "ms": "Malay", "hi": "Hindi", "bn": "Bengali", "ka": "Georgian",
+}
+
+
+def _language_instruction(params: CreativeParameters) -> str:
+    """Build language instruction for LLM prompts."""
+    lang = params.language or "en"
+    name = LANGUAGE_NAMES.get(lang, lang.upper())
+    if lang == "en":
+        return ""
+    return (
+        f"\nIMPORTANT: Write ALL ad copy in {name} ({lang}). "
+        f"Do not translate brand names or product names.\n"
+    )
+
 
 class GeneratedCopy(dict):
     """Copy output for a single creative variant."""
@@ -185,9 +209,10 @@ async def generate_copy_variants(
 
     client = genai.Client(api_key=api_key)
 
+    lang_inst = _language_instruction(params)
     prompt = f"""Generate {num_variants} tonal variants of this ad copy.
 Keep the same structure and message, but vary the tone.
-
+{lang_inst}
 ORIGINAL:
 Primary Text: {base_copy['primary_text']}
 Headline: {base_copy['headline']}
@@ -283,8 +308,9 @@ Find common competitor frustrations and position {product_name} as the better al
         naming_rules = f"""- Do NOT name specific competitor brands
 - Use generic references like "other {product_category} tools", "the old way", "traditional solutions" """
 
+    lang_inst = _language_instruction(params)
     prompt = f"""You are an ad copywriter generating competition-focused ad copy.
-
+{lang_inst}
 PRODUCT INFO:
 - Name: {product_name}
 - Category: {product_category}
@@ -339,6 +365,144 @@ Return JSON object with fields: competition_testimonial, primary_text, headline,
     # Fallback to template fill
     logger.warning("All competition copy attempts failed — using template fallback")
     return _competition_fallback(ad_type, params)
+
+
+async def translate_params(params: CreativeParameters) -> CreativeParameters:
+    """
+    Translate user-facing text fields in CreativeParameters to the target language.
+    Called ONCE after extraction for non-English pages. This ensures bridges and
+    template variable resolution both produce target-language text.
+    """
+    lang = params.language or "en"
+    if lang == "en":
+        return params
+
+    lang_name = LANGUAGE_NAMES.get(lang, lang.upper())
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        logger.warning("No GOOGLE_API_KEY — skipping params translation")
+        return params
+
+    client = genai.Client(api_key=api_key)
+
+    # Collect user-facing text to translate in one batch
+    texts = {
+        "key_benefit": params.key_benefit,
+        "key_differentiator": params.key_differentiator,
+        "product_description_short": params.product_description_short,
+        "cta_text": params.cta_text,
+        "social_proof": params.social_proof or "",
+        "customer_pains": params.customer_pains,
+        "customer_desires": params.customer_desires,
+        "value_props": params.value_props,
+        "objections": params.objections,
+        "urgency_hooks": params.urgency_hooks,
+    }
+
+    prompt = f"""Translate these marketing texts to {lang_name} ({lang}).
+
+{json.dumps(texts, ensure_ascii=False)}
+
+RULES:
+- Translate ALL text to {lang_name}
+- Do NOT translate brand names or product names — keep them as-is
+- If any text is already in {lang_name}, keep it unchanged
+- Keep the same tone and emotional impact
+- Return the SAME JSON structure with translated values
+
+Return valid JSON."""
+
+    try:
+        result = await client.aio.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        data = json.loads(result.text)
+        if not isinstance(data, dict):
+            return params
+
+        # Apply translations back to a copy of params
+        params_dict = params.model_dump()
+
+        for key in ["key_benefit", "key_differentiator", "product_description_short", "cta_text", "social_proof"]:
+            if data.get(key) and isinstance(data[key], str) and data[key].strip():
+                params_dict[key] = data[key]
+
+        for key in ["customer_pains", "customer_desires", "value_props", "objections", "urgency_hooks"]:
+            if isinstance(data.get(key), list) and data[key]:
+                params_dict[key] = [str(v) for v in data[key]]
+
+        translated = CreativeParameters(**params_dict)
+        logger.info(f"Translated {len(texts)} param fields to {lang_name}")
+        return translated
+
+    except Exception as e:
+        logger.warning(f"Params translation to {lang_name} failed: {e}")
+        return params
+
+
+async def translate_copy(
+    copy: GeneratedCopy,
+    params: CreativeParameters,
+) -> GeneratedCopy:
+    """
+    Translate template-filled copy to the target language via LLM.
+    Only called when params.language != 'en'. Returns translated copy,
+    or original if LLM fails.
+    """
+    lang = params.language or "en"
+    if lang == "en":
+        return copy
+
+    lang_name = LANGUAGE_NAMES.get(lang, lang.upper())
+
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        logger.warning("No GOOGLE_API_KEY — skipping copy translation")
+        return copy
+
+    client = genai.Client(api_key=api_key)
+
+    prompt = f"""Translate this ad copy to {lang_name} ({lang}).
+
+PRIMARY TEXT: {copy['primary_text']}
+HEADLINE: {copy['headline']}
+DESCRIPTION: {copy.get('description') or ''}
+
+RULES:
+- Translate ALL text to {lang_name}
+- Do NOT translate brand names or product names — keep them as-is
+- If parts of the text are already in {lang_name}, keep them unchanged
+- Keep the same tone, urgency, and emotional impact
+- Respect character limits: primary_text max {PRIMARY_TEXT_MAX}, headline max {HEADLINE_MAX}, description max {DESCRIPTION_MAX}
+- Return valid JSON
+
+Return JSON object with fields: primary_text, headline, description"""
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            result = await client.aio.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+            data = json.loads(result.text)
+            if isinstance(data, dict) and data.get("primary_text"):
+                return GeneratedCopy(
+                    primary_text=str(data["primary_text"])[:PRIMARY_TEXT_MAX],
+                    headline=str(data.get("headline", copy["headline"]))[:HEADLINE_MAX],
+                    description=str(data["description"])[:DESCRIPTION_MAX] if data.get("description") else copy.get("description"),
+                    cta_type=copy["cta_type"],
+                )
+        except Exception as e:
+            logger.warning(f"Copy translation attempt {attempt + 1} failed: {e}")
+            if attempt < MAX_RETRIES - 1:
+                await asyncio.sleep(RETRY_DELAYS[attempt])
+
+    logger.warning(f"Copy translation to {lang_name} failed — using English")
+    return copy
 
 
 def _competition_fallback(

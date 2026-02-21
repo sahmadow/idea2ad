@@ -65,6 +65,8 @@ class AdPack(BaseModel):
     # Source parameters
     source_url: str | None = None
     product_name: str = ""
+    brand_logo_url: str | None = None
+    language: str = "en"
 
     # Generated assets
     creatives: list[GeneratedCreative] = []

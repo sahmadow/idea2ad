@@ -58,6 +58,8 @@ export interface AdPack {
   meta_campaign_id?: string;
   meta_adset_id?: string;
   created_from?: string;
+  brand_logo_url?: string;
+  language?: string;
 }
 
 export interface AdPackUpdateRequest {

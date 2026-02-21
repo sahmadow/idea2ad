@@ -100,6 +100,10 @@ class CreativeParameters(BaseModel):
     # --- Business Type ---
     business_type: Literal["ecommerce", "saas", "service"] = "ecommerce"
 
+    # --- Language & Geo ---
+    language: str = "en"  # ISO 639-1
+    target_countries: list[str] = Field(default_factory=lambda: ["US"])
+
     # --- Tone & Urgency ---
     tone: Literal["premium", "casual", "clinical", "playful", "urgent"] = "casual"
     urgency_hooks: list[str] = []

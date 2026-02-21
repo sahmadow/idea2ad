@@ -117,6 +117,9 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
             load_strategy = await navigate_with_fallback(page, url)
             logger.info(f"Page loaded via {load_strategy} for {url}")
             
+            # Extract html lang attribute
+            html_lang = await page.evaluate("() => document.documentElement.lang || ''")
+
             # Extract basic metadata
             title = await page.title()
             
@@ -655,6 +658,7 @@ async def scrape_landing_page(url: str) -> Dict[str, Any]:
                 "design_tokens": design_tokens,
                 "css_assets": css_assets,  # For HTML template rendering
                 "hero_screenshot": hero_screenshot,  # Base64 encoded, ephemeral
+                "language": html_lang.split("-")[0].lower() if html_lang else None,
                 # Combined context for the LLM
                 "full_text": f"Title: {title}\nDescription: {description}\nHeaders: {headers}\nContent: {body_text}"
             }
