@@ -13,6 +13,20 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+def _perceived_brightness(hex_color: str) -> float:
+    """Perceived brightness 0-255 using ITU-R BT.601 weights."""
+    h = hex_color.lstrip("#")
+    if len(h) == 3:
+        h = "".join(c * 2 for c in h)
+    r, g, b = int(h[:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return 0.299 * r + 0.587 * g + 0.114 * b
+
+
+def _text_on(bg_hex: str) -> str:
+    """Return white or dark text color based on background brightness."""
+    return "#FFFFFF" if _perceived_brightness(bg_hex) < 150 else "#1C1C1C"
+
+
 @dataclass
 class ReviewStaticParams:
     reviewer_name: str = "Sarah K."
@@ -48,7 +62,8 @@ def _build_html(params: ReviewStaticParams) -> str:
         avatar_html = f'<img src="{html.escape(params.avatar_url)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
     else:
         initials = "".join(w[0].upper() for w in params.reviewer_name.split()[:2])
-        avatar_html = f"""<div style="width:100%;height:100%;border-radius:50%;background:{accent};display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#FFFFFF;">{html.escape(initials)}</div>"""
+        initials_color = _text_on(accent)
+        avatar_html = f"""<div style="width:100%;height:100%;border-radius:50%;background:{accent};display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:{initials_color};">{html.escape(initials)}</div>"""
 
     # Stars
     star_full = f"""<svg viewBox="0 0 20 20" width="28" height="28" fill="{star_color}">

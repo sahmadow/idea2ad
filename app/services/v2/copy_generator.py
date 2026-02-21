@@ -367,14 +367,17 @@ Return JSON object with fields: competition_testimonial, primary_text, headline,
     return _competition_fallback(ad_type, params)
 
 
-async def translate_params(params: CreativeParameters) -> CreativeParameters:
+async def translate_params(params: CreativeParameters, force: bool = False) -> CreativeParameters:
     """
     Translate user-facing text fields in CreativeParameters to the target language.
     Called ONCE after extraction for non-English pages. This ensures bridges and
     template variable resolution both produce target-language text.
+
+    When force=True, translates even to English (needed when user overrides
+    a non-English auto-detected language back to English).
     """
     lang = params.language or "en"
-    if lang == "en":
+    if lang == "en" and not force:
         return params
 
     lang_name = LANGUAGE_NAMES.get(lang, lang.upper())

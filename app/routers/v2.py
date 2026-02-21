@@ -555,9 +555,9 @@ async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
         if body.language:
             params.language = body.language
 
-        # Re-translate params if user changed the language
-        if params.language != original_language and params.language != "en":
-            params = await translate_params(params)
+        # Re-translate params if user changed the language (including to English)
+        if params.language != original_language:
+            params = await translate_params(params, force=True)
 
         # Build targeting from params (not user-editable at this stage)
         targeting = _build_targeting(params)
