@@ -72,6 +72,11 @@ export interface AdPackUpdateRequest {
 }
 
 // Unified flow types
+export interface CompetitorInsight {
+  name: string;
+  weakness: string;
+}
+
 export interface PreparedCampaign {
   session_id: string;
   product_name: string;
@@ -80,13 +85,11 @@ export interface PreparedCampaign {
   business_type: string;
   language: string;
   target_countries: string[];
-  targeting: {
-    geo_locations: { countries: string[] };
-    age_min: number;
-    age_max: number;
-    genders: number[] | null;
-    targeting_rationale: string;
-  };
-  budget_daily_cents: number;
-  duration_days: number;
+
+  // Enhanced analysis
+  target_audience: string;
+  main_pain_point: string;
+  messaging_unaware: string;
+  messaging_aware: string;
+  competitors: CompetitorInsight[];
 }

@@ -93,12 +93,17 @@ class AdPack(BaseModel):
 
 # --- Unified Flow: Prepare & Generate ---
 
+class CompetitorInsight(BaseModel):
+    """Auto-detected competitor with weakness for ad differentiation."""
+    name: str
+    weakness: str  # from negative review analysis
+
+
 class PrepareRequest(BaseModel):
     """Input for the prepare step — URL or freeform description."""
     url: str | None = None
     description: str | None = None
     image_url: str | None = None
-    competitor_urls: list[str] = Field(default_factory=list)
 
 
 class PreparedCampaign(BaseModel):
@@ -111,18 +116,24 @@ class PreparedCampaign(BaseModel):
     language: str = "en"
     target_countries: list[str] = Field(default_factory=lambda: ["US"])
 
-    # Suggested targeting (editable by user)
-    targeting: TargetingSpec = TargetingSpec()
-    budget_daily_cents: int = 1500
-    duration_days: int = 3
+    # Enhanced analysis fields
+    target_audience: str = ""  # who this is for
+    main_pain_point: str = ""  # what it solves / opportunity
+    messaging_unaware: str = ""  # messaging for problem-unaware users
+    messaging_aware: str = ""  # messaging for problem-aware users
+
+    # Auto-detected competitors (max 3)
+    competitors: list[CompetitorInsight] = Field(default_factory=list)
 
 
 class GenerateRequest(BaseModel):
     """Input for the generate step — session_id + user overrides from review page."""
     session_id: str
 
-    # User-editable overrides
-    targeting: TargetingSpec | None = None
-    budget_daily_cents: int | None = None
-    duration_days: int | None = None
+    # User-editable overrides from review page
     product_summary: str | None = None
+    target_audience: str | None = None
+    main_pain_point: str | None = None
+    messaging_unaware: str | None = None
+    messaging_aware: str | None = None
+    competitors: list[CompetitorInsight] | None = None

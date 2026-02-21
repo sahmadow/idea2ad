@@ -4,7 +4,6 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Upload, X, Loader2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
-import { CompetitorInput } from '../components/CompetitorInput';
 import { useAppContext } from '../context/AppContext';
 
 export default function UploadPage() {
@@ -101,14 +100,6 @@ export default function UploadPage() {
                 </button>
               </div>
             )}
-          </div>
-
-          {/* Competitor URLs */}
-          <div className="space-y-3 pt-4 border-t border-white/10">
-            <CompetitorInput
-              competitors={ctx.competitors}
-              onCompetitorsChange={ctx.setCompetitors}
-            />
           </div>
 
           {/* Error */}

@@ -11,7 +11,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useCampaigns } from '../hooks/useCampaigns';
-import { uploadProductImage, analyzeCompetitors, type CampaignDraft, type Ad, type CompetitorIntelligence } from '../api';
+import { uploadProductImage, type CampaignDraft, type Ad, type CompetitorIntelligence } from '../api';
 import { prepareCampaign, generateFromPrepared } from '../api/adpack';
 import type { PublishCampaignResponse } from '../types/facebook';
 import type { AdPack, PreparedCampaign } from '../types/adpack';
@@ -103,10 +103,12 @@ interface AppContextValue {
   // Actions
   startAnalysis: () => Promise<void>;
   startGeneration: (overrides: {
-    targeting?: PreparedCampaign['targeting'];
-    budget_daily_cents?: number;
-    duration_days?: number;
     product_summary?: string;
+    target_audience?: string;
+    main_pain_point?: string;
+    messaging_unaware?: string;
+    messaging_aware?: string;
+    competitors?: { name: string; weakness: string }[];
   }) => Promise<void>;
   cancelGeneration: () => void;
   resetSession: () => void;
@@ -288,19 +290,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         url: isUrl ? normalizeUrl(input) : undefined,
         description: isUrl ? undefined : input.trim(),
         image_url: uploadedImageUrl || undefined,
-        competitor_urls: competitors.length > 0 ? competitors : undefined,
       });
-
-      // Run competitor analysis in parallel if URLs provided
-      if (competitors.length > 0 && isUrl) {
-        analyzeCompetitors(competitors, normalizeUrl(input)).then(
-          (data) => setCompetitorData(data),
-          (err) => {
-            console.warn('Competitor analysis failed:', err);
-            toast.error('Competitor analysis failed');
-          }
-        );
-      }
 
       setPreparedCampaign(prepared);
     } catch (err) {
@@ -312,10 +302,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Step 2: Generate creatives ---
   const startGeneration = async (overrides: {
-    targeting?: PreparedCampaign['targeting'];
-    budget_daily_cents?: number;
-    duration_days?: number;
     product_summary?: string;
+    target_audience?: string;
+    main_pain_point?: string;
+    messaging_unaware?: string;
+    messaging_aware?: string;
+    competitors?: { name: string; weakness: string }[];
   }) => {
     if (!preparedCampaign) return;
 
@@ -328,10 +320,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const pack = await generateFromPrepared({
         session_id: preparedCampaign.session_id,
-        targeting: overrides.targeting || undefined,
-        budget_daily_cents: overrides.budget_daily_cents,
-        duration_days: overrides.duration_days,
         product_summary: overrides.product_summary,
+        target_audience: overrides.target_audience,
+        main_pain_point: overrides.main_pain_point,
+        messaging_unaware: overrides.messaging_unaware,
+        messaging_aware: overrides.messaging_aware,
+        competitors: overrides.competitors,
       });
 
       setAdPack(pack);

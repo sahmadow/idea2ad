@@ -290,7 +290,6 @@ interface PrepareParams {
   url?: string;
   description?: string;
   image_url?: string;
-  competitor_urls?: string[];
 }
 
 export async function prepareCampaign(params: PrepareParams): Promise<PreparedCampaign> {
@@ -310,16 +309,12 @@ export async function prepareCampaign(params: PrepareParams): Promise<PreparedCa
 
 interface GenerateParams {
   session_id: string;
-  targeting?: {
-    geo_locations: { countries: string[] };
-    age_min: number;
-    age_max: number;
-    genders: number[] | null;
-    targeting_rationale?: string;
-  };
-  budget_daily_cents?: number;
-  duration_days?: number;
   product_summary?: string;
+  target_audience?: string;
+  main_pain_point?: string;
+  messaging_unaware?: string;
+  messaging_aware?: string;
+  competitors?: { name: string; weakness: string }[];
 }
 
 export async function generateFromPrepared(

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, Users, Calendar, DollarSign, Loader2, Package } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { Terminal } from '../components/ui/Terminal';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
@@ -23,26 +23,22 @@ export default function ReviewPage() {
 
   // Editable state initialized from prepared campaign
   const [productSummary, setProductSummary] = useState('');
-  const [ageMin, setAgeMin] = useState(18);
-  const [ageMax, setAgeMax] = useState(65);
-  const [countries, setCountries] = useState('US');
-  const [gender, setGender] = useState<'all' | 'male' | 'female'>('all');
-  const [budgetDaily, setBudgetDaily] = useState(15);
-  const [durationDays, setDurationDays] = useState(3);
+  const [targetAudience, setTargetAudience] = useState('');
+  const [mainPainPoint, setMainPainPoint] = useState('');
+  const [messagingUnaware, setMessagingUnaware] = useState('');
+  const [messagingAware, setMessagingAware] = useState('');
+  const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>([]);
+  const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
   // Initialize from prepared campaign
   useEffect(() => {
     if (!pc) return;
     setProductSummary(pc.product_summary || '');
-    setAgeMin(pc.targeting.age_min);
-    setAgeMax(pc.targeting.age_max);
-    setCountries((pc.targeting.geo_locations?.countries || ['US']).join(', '));
-    setGender(
-      pc.targeting.genders === null ? 'all'
-        : pc.targeting.genders?.includes(1) ? 'male' : 'female'
-    );
-    setBudgetDaily(pc.budget_daily_cents / 100);
-    setDurationDays(pc.duration_days);
+    setTargetAudience(pc.target_audience || '');
+    setMainPainPoint(pc.main_pain_point || '');
+    setMessagingUnaware(pc.messaging_unaware || '');
+    setMessagingAware(pc.messaging_aware || '');
+    setCompetitors(pc.competitors?.map(c => ({ ...c })) || []);
   }, [pc]);
 
   // Track generation and navigate when done
@@ -61,24 +57,24 @@ export default function ReviewPage() {
   if (!pc) return <Navigate to="/" replace />;
 
   const handleConfirm = async () => {
-    const countryList = countries.split(',').map(c => c.trim().toUpperCase()).filter(Boolean);
-    const genderValues = gender === 'all' ? null : gender === 'male' ? [1] : [2];
-
     await ctx.startGeneration({
-      targeting: {
-        geo_locations: { countries: countryList },
-        age_min: ageMin,
-        age_max: ageMax,
-        genders: genderValues,
-        targeting_rationale: pc.targeting.targeting_rationale,
-      },
-      budget_daily_cents: Math.round(budgetDaily * 100),
-      duration_days: durationDays,
       product_summary: productSummary,
+      target_audience: targetAudience,
+      main_pain_point: mainPainPoint,
+      messaging_unaware: messagingUnaware,
+      messaging_aware: messagingAware,
+      competitors: competitors.length > 0 ? competitors : undefined,
     });
   };
 
-  const totalBudget = budgetDaily * durationDays;
+  const handleDeleteCompetitor = (index: number) => {
+    setCompetitors(prev => prev.filter((_, i) => i !== index));
+    if (editingCompetitor === index) setEditingCompetitor(null);
+  };
+
+  const handleCompetitorChange = (index: number, field: 'name' | 'weakness', value: string) => {
+    setCompetitors(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
+  };
 
   // Show loading screen when generating
   if (ctx.isGenerating) {
@@ -166,113 +162,132 @@ export default function ReviewPage() {
             />
           </section>
 
-          {/* Targeting */}
-          <section className="space-y-4 pt-6 border-t border-white/10">
-            <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
+          {/* Target Audience */}
+          <section className="space-y-3 pt-6 border-t border-white/10">
+            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
               <Users className="w-4 h-4 text-brand-lime" />
-              Targeting
-            </h3>
+              Target Audience
+            </label>
+            <textarea
+              value={targetAudience}
+              onChange={(e) => setTargetAudience(e.target.value)}
+              rows={2}
+              placeholder="Who is this product for?"
+              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+            />
+          </section>
 
-            <div className="grid grid-cols-2 gap-4">
-              {/* Age Range */}
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-gray-500">Age Min</label>
-                <input
-                  type="number"
-                  value={ageMin}
-                  onChange={(e) => setAgeMin(Number(e.target.value))}
-                  min={13}
-                  max={65}
-                  className="w-full h-10 bg-brand-gray border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-gray-500">Age Max</label>
-                <input
-                  type="number"
-                  value={ageMax}
-                  onChange={(e) => setAgeMax(Number(e.target.value))}
-                  min={13}
-                  max={65}
-                  className="w-full h-10 bg-brand-gray border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
-                />
-              </div>
-            </div>
+          {/* Main Pain Point */}
+          <section className="space-y-3 pt-6 border-t border-white/10">
+            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-brand-lime" />
+              Main Pain Point
+            </label>
+            <textarea
+              value={mainPainPoint}
+              onChange={(e) => setMainPainPoint(e.target.value)}
+              rows={2}
+              placeholder="What problem does it solve or opportunity does it create?"
+              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+            />
+          </section>
 
-            {/* Countries */}
-            <div className="space-y-2">
-              <label className="text-xs font-mono text-gray-500 flex items-center gap-1">
-                <Globe className="w-3 h-3" /> Countries (comma-separated ISO codes)
-              </label>
-              <input
-                type="text"
-                value={countries}
-                onChange={(e) => setCountries(e.target.value)}
-                placeholder="US, CA, GB"
-                className="w-full h-10 bg-brand-gray border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
+          {/* Messaging */}
+          <section className="space-y-4 pt-6 border-t border-white/10">
+            <h3 className="text-sm font-mono text-gray-300">Messaging Strategy</h3>
+
+            <div className="space-y-3">
+              <label className="text-xs font-mono text-gray-500">Problem-Unaware Users</label>
+              <textarea
+                value={messagingUnaware}
+                onChange={(e) => setMessagingUnaware(e.target.value)}
+                rows={2}
+                placeholder="How to reach users who don't know they have this problem"
+                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
               />
             </div>
 
-            {/* Gender */}
-            <div className="space-y-2">
-              <label className="text-xs font-mono text-gray-500">Gender</label>
-              <div className="flex gap-2">
-                {(['all', 'male', 'female'] as const).map((g) => (
-                  <button
-                    key={g}
-                    type="button"
-                    onClick={() => setGender(g)}
-                    className={`px-4 py-2 text-xs font-mono border transition-colors ${
-                      gender === g
-                        ? 'bg-brand-lime text-brand-dark border-brand-lime'
-                        : 'bg-brand-gray border-white/10 text-gray-400 hover:border-white/20'
-                    }`}
-                  >
-                    {g.charAt(0).toUpperCase() + g.slice(1)}
-                  </button>
-                ))}
-              </div>
+            <div className="space-y-3">
+              <label className="text-xs font-mono text-gray-500">Problem-Aware Users</label>
+              <textarea
+                value={messagingAware}
+                onChange={(e) => setMessagingAware(e.target.value)}
+                rows={2}
+                placeholder="How to reach users actively comparing solutions"
+                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+              />
             </div>
           </section>
 
-          {/* Budget & Duration */}
+          {/* Competitive Landscape */}
           <section className="space-y-4 pt-6 border-t border-white/10">
-            <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
-              <DollarSign className="w-4 h-4 text-brand-lime" />
-              Budget & Duration
-            </h3>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-gray-500">Daily Budget ($)</label>
-                <input
-                  type="number"
-                  value={budgetDaily}
-                  onChange={(e) => setBudgetDaily(Number(e.target.value))}
-                  min={1}
-                  step={1}
-                  className="w-full h-10 bg-brand-gray border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-mono text-gray-500 flex items-center gap-1">
-                  <Calendar className="w-3 h-3" /> Duration (days)
-                </label>
-                <input
-                  type="number"
-                  value={durationDays}
-                  onChange={(e) => setDurationDays(Number(e.target.value))}
-                  min={1}
-                  max={90}
-                  className="w-full h-10 bg-brand-gray border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
-                />
-              </div>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
+                <Swords className="w-4 h-4 text-brand-lime" />
+                Competitive Landscape
+              </h3>
+              <span className="text-xs font-mono text-gray-600">{competitors.length}/3 detected</span>
             </div>
 
-            <div className="flex items-center justify-between p-3 bg-brand-gray border border-white/10">
-              <span className="text-xs font-mono text-gray-400">Total Budget</span>
-              <span className="text-lg font-display font-bold text-brand-lime">${totalBudget.toFixed(0)}</span>
-            </div>
+            {competitors.length === 0 ? (
+              <p className="text-xs font-mono text-gray-600 py-4 text-center">
+                No competitors auto-detected. This won't affect ad generation.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {competitors.map((comp, i) => (
+                  <div key={i} className="bg-brand-gray border border-white/10 p-4">
+                    {editingCompetitor === i ? (
+                      <div className="space-y-3">
+                        <input
+                          type="text"
+                          value={comp.name}
+                          onChange={(e) => handleCompetitorChange(i, 'name', e.target.value)}
+                          className="w-full h-9 bg-brand-dark border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
+                          placeholder="Competitor name"
+                        />
+                        <textarea
+                          value={comp.weakness}
+                          onChange={(e) => handleCompetitorChange(i, 'weakness', e.target.value)}
+                          rows={2}
+                          className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+                          placeholder="Their weakness"
+                        />
+                        <button
+                          onClick={() => setEditingCompetitor(null)}
+                          className="text-xs font-mono text-brand-lime hover:underline"
+                        >
+                          Done
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-mono text-white font-medium">{comp.name}</p>
+                          <p className="text-xs font-mono text-gray-400 mt-1">{comp.weakness}</p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => setEditingCompetitor(i)}
+                            className="p-1.5 hover:bg-white/10 transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3.5 h-3.5 text-gray-400" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteCompetitor(i)}
+                            className="p-1.5 hover:bg-red-500/20 transition-colors"
+                            title="Remove"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </section>
 
           {/* Error */}

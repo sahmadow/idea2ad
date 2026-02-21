@@ -29,6 +29,7 @@ from app.schemas.ad_types import AdTypeDefinition
 from app.schemas.ad_pack import (
     AdPack, GeneratedCreative, TargetingSpec,
     PrepareRequest, PreparedCampaign, GenerateRequest,
+    CompetitorInsight,
 )
 from app.services.scraper import scrape_landing_page
 from app.services.v2.parameter_extractor import (
@@ -240,13 +241,24 @@ Extract ALL parameters needed for ad creative generation. Return a JSON object w
     "scene_lifestyle": "string — aspirational lifestyle visual",
     "language": "{language_hint}",
     "target_countries": ["{country_hint}"],
-    "product_summary": "string — 1-2 sentence summary of the product for user review"
+    "product_summary": "string — 1-2 sentence summary of the product for user review",
+    "target_audience": "string — who this product is for (e.g. 'Small business owners who need accounting automation')",
+    "main_pain_point": "string — the core problem it solves or opportunity it creates",
+    "messaging_unaware": "string — ad messaging angle for users who don't know they have this problem yet",
+    "messaging_aware": "string — ad messaging angle for users who know the problem and are comparing solutions",
+    "competitors": [
+        {{"name": "string — competitor name", "weakness": "string — their main weakness from customer perspective"}}
+    ]
 }}
 
 RULES:
 - Infer intelligently from the description
 - customer_pains in customer's voice
 - product_summary should be a clear, concise explanation a user can review and edit
+- competitors: identify up to 3 main competitors. For each, find their weakness from typical negative customer feedback (something we can use as ad differentiation). If you can't identify competitors, return empty array.
+- target_audience: describe the ideal customer profile concisely
+- messaging_unaware: angle for people who don't realize they need this yet
+- messaging_aware: angle for people actively comparing solutions
 - Always return valid JSON
 """
 
@@ -285,6 +297,11 @@ async def _extract_params_from_description(description: str) -> tuple[CreativePa
         data = data[0]
 
     product_summary = data.pop("product_summary", description[:200])
+    target_audience = data.pop("target_audience", "")
+    main_pain_point = data.pop("main_pain_point", "")
+    messaging_unaware = data.pop("messaging_unaware", "")
+    messaging_aware = data.pop("messaging_aware", "")
+    raw_competitors = data.pop("competitors", [])
 
     # Build CreativeParameters from LLM output
     from app.schemas.creative_params import BrandColors, PersonaDemographics, TargetPersona
@@ -334,7 +351,74 @@ async def _extract_params_from_description(description: str) -> tuple[CreativePa
         headline=data.get("product_name", "Product"),
     )
 
-    return params, product_summary
+    return params, product_summary, target_audience, main_pain_point, messaging_unaware, messaging_aware, raw_competitors
+
+
+REVIEW_ANALYSIS_PROMPT = """You are a world-class performance marketer analyzing a product for ad creation.
+
+Product: {product_name}
+Category: {product_category}
+Key Benefit: {key_benefit}
+Key Differentiator: {key_differentiator}
+Customer Pains: {customer_pains}
+Description: {product_description}
+
+Based on this analysis, return a JSON object:
+
+{{
+    "product_summary": "string — 1-2 sentence description of the product",
+    "target_audience": "string — who this product is for (concise ideal customer profile)",
+    "main_pain_point": "string — the core problem it solves or opportunity it creates",
+    "messaging_unaware": "string — ad messaging angle for users who don't know they have this problem",
+    "messaging_aware": "string — ad messaging angle for users who know the problem and are comparing solutions",
+    "competitors": [
+        {{"name": "string — competitor name", "weakness": "string — their main weakness based on common negative customer feedback"}}
+    ]
+}}
+
+RULES:
+- competitors: identify up to 3 main competitors in this space. For each, identify their weakness from typical negative customer reviews (something we can use for ad differentiation). If unknown, return empty array.
+- target_audience: describe the ideal customer concisely
+- messaging_unaware: angle for people who don't realize they need this yet
+- messaging_aware: angle for people actively comparing solutions
+- Write in {language}
+- Always return valid JSON
+"""
+
+
+async def _extract_review_analysis(params: CreativeParameters) -> dict:
+    """Extract target audience, pain point, messaging, and competitors from params via Gemini."""
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        return {}
+
+    from google import genai
+    client = genai.Client(api_key=api_key)
+
+    language_name = params.language or "en"
+    prompt = REVIEW_ANALYSIS_PROMPT.format(
+        product_name=params.product_name,
+        product_category=params.product_category or "general",
+        key_benefit=params.key_benefit or "",
+        key_differentiator=params.key_differentiator or "",
+        customer_pains=", ".join(params.customer_pains[:5]) if params.customer_pains else "unknown",
+        product_description=params.product_description_short or "",
+        language=language_name,
+    )
+
+    try:
+        result = await client.aio.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt,
+            config={"response_mime_type": "application/json"},
+        )
+        data = json.loads(result.text)
+        if isinstance(data, list) and data:
+            data = data[0]
+        return data
+    except Exception as e:
+        logger.warning(f"Review analysis extraction failed: {e}")
+        return {}
 
 
 @router.post("/prepare", response_model=PreparedCampaign)
@@ -351,19 +435,17 @@ async def prepare_campaign(body: PrepareRequest):
 
     session_id = str(uuid.uuid4())[:12]
     scraped_data = {}
-    competitor_data = None
     product_summary = ""
+    target_audience = ""
+    main_pain_point = ""
+    messaging_unaware = ""
+    messaging_aware = ""
+    raw_competitors: list[dict] = []
 
     if body.url:
         # URL path: scrape + extract
         try:
-            scrape_tasks = [scrape_landing_page(body.url)]
-            for comp_url in (body.competitor_urls or [])[:3]:
-                scrape_tasks.append(scrape_landing_page(comp_url))
-
-            results = await asyncio.gather(*scrape_tasks, return_exceptions=True)
-            scraped_data = results[0] if not isinstance(results[0], Exception) else {}
-            competitor_data = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else None
+            scraped_data = await scrape_landing_page(body.url)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -375,13 +457,19 @@ async def prepare_campaign(body: PrepareRequest):
         except ExtractionError as e:
             raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
 
-        # Generate product summary from params
-        product_summary = params.product_description_short or f"{params.product_name} — {params.key_benefit}"
+        # Extract enhanced review fields (target audience, competitors, etc.)
+        review_data = await _extract_review_analysis(params)
+        product_summary = review_data.get("product_summary") or params.product_description_short or f"{params.product_name} — {params.key_benefit}"
+        target_audience = review_data.get("target_audience", "")
+        main_pain_point = review_data.get("main_pain_point", "")
+        messaging_unaware = review_data.get("messaging_unaware", "")
+        messaging_aware = review_data.get("messaging_aware", "")
+        raw_competitors = review_data.get("competitors", [])
 
     else:
         # Description-only path: LLM extraction from freeform text
         try:
-            params, product_summary = await _extract_params_from_description(body.description)
+            params, product_summary, target_audience, main_pain_point, messaging_unaware, messaging_aware, raw_competitors = await _extract_params_from_description(body.description)
         except Exception as e:
             logger.error(f"Description extraction failed: {e}", exc_info=True)
             raise HTTPException(status_code=422, detail=f"Could not analyze description: {e}")
@@ -390,14 +478,19 @@ async def prepare_campaign(body: PrepareRequest):
     if params.language and params.language != "en":
         params = await translate_params(params)
 
-    # Build targeting
-    targeting = _build_targeting(params)
+    # Build competitors list (max 3)
+    competitors = []
+    for c in (raw_competitors or [])[:3]:
+        if isinstance(c, dict) and c.get("name"):
+            competitors.append(CompetitorInsight(
+                name=c["name"],
+                weakness=c.get("weakness", ""),
+            ))
 
     # Cache session for generate step
     _prepared_sessions[session_id] = {
         "params": params,
         "scraped_data": scraped_data,
-        "competitor_data": competitor_data,
         "image_url": body.image_url,
         "ts": time.time(),
     }
@@ -410,7 +503,11 @@ async def prepare_campaign(body: PrepareRequest):
         business_type=params.business_type,
         language=params.language or "en",
         target_countries=params.target_countries or ["US"],
-        targeting=targeting,
+        target_audience=target_audience,
+        main_pain_point=main_pain_point,
+        messaging_unaware=messaging_unaware,
+        messaging_aware=messaging_aware,
+        competitors=competitors,
     )
 
 
@@ -449,25 +546,23 @@ async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
 
         params: CreativeParameters = session["params"]
         scraped_data: dict = session.get("scraped_data", {})
-        competitor_data = session.get("competitor_data")
         image_url = session.get("image_url")
 
-        # Apply user overrides from review page
-        if body.targeting:
-            targeting = body.targeting
-            # Update params.target_countries to match user's geo override
-            if body.targeting.geo_locations:
-                params.target_countries = body.targeting.geo_locations.get("countries", params.target_countries)
-        else:
-            targeting = _build_targeting(params)
-
-        budget_cents = body.budget_daily_cents or 1500
-        duration = body.duration_days or 3
+        # Build targeting from params (not user-editable at this stage)
+        targeting = _build_targeting(params)
+        budget_cents = 1500
+        duration = 3
 
         # Template selection
         selected = select_templates(params)
         if not selected:
             raise ValueError("No templates could be selected")
+
+        # Apply user overrides from review page to params
+        if body.product_summary:
+            params.product_description_short = body.product_summary
+        # Competitor info stored for potential use in competition copy
+        competitor_data = None  # auto-detected competitors are informational only
 
         # Copy generation
         creatives: list[GeneratedCreative] = []
