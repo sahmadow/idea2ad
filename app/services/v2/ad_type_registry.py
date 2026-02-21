@@ -47,8 +47,8 @@ ORGANIC_STATIC_REDDIT = AdTypeDefinition(
     layers=[],  # rendered by social_templates/reddit_post.py
     copy_templates=CopyTemplate(
         primary_text=(
-            "PSA: {product_name} actually lives up to the hype. "
-            "{key_benefit}. Worth trying if you deal with {customer_pains[0]}."
+            "Genuinely surprised by {product_name}. "
+            "{key_benefit}. If you deal with {customer_pains[0]}, check it out."
         ),
         headline="{product_name}",
         description="{key_benefit}",

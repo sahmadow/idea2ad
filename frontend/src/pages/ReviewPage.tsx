@@ -197,24 +197,34 @@ export default function ReviewPage() {
             <h3 className="text-sm font-mono text-gray-300">Messaging Strategy</h3>
 
             <div className="space-y-3">
-              <label className="text-xs font-mono text-gray-500">Problem-Unaware Users</label>
+              <label className="text-sm font-mono text-white flex items-center gap-2">
+                <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                  Unaware
+                </span>
+                Problem-Unaware Users
+              </label>
               <textarea
                 value={messagingUnaware}
                 onChange={(e) => setMessagingUnaware(e.target.value)}
                 rows={2}
                 placeholder="How to reach users who don't know they have this problem"
-                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-violet-400 transition-colors resize-none"
               />
             </div>
 
             <div className="space-y-3">
-              <label className="text-xs font-mono text-gray-500">Problem-Aware Users</label>
+              <label className="text-sm font-mono text-white flex items-center gap-2">
+                <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  Aware
+                </span>
+                Problem-Aware Users
+              </label>
               <textarea
                 value={messagingAware}
                 onChange={(e) => setMessagingAware(e.target.value)}
                 rows={2}
                 placeholder="How to reach users actively comparing solutions"
-                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
+                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-emerald-400 transition-colors resize-none"
               />
             </div>
           </section>

@@ -41,8 +41,11 @@ export function MetaAdPreview({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ad.imageUrl, imageLoaded, imageError]);
 
+  const [retryCount, setRetryCount] = useState(0);
+
   const handleRetry = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
+    setRetryCount(c => c + 1);
     setImageError(false);
     setImageLoaded(false);
   };
@@ -144,13 +147,22 @@ export function MetaAdPreview({
       <div className="relative w-full aspect-square bg-brand-gray overflow-hidden">
         {ad.imageUrl && !imageError && isVideo ? (
           <video
-            src={ad.imageUrl}
+            key={`${ad.imageUrl}-${retryCount}`}
+            src={retryCount > 0 ? `${ad.imageUrl}${ad.imageUrl.includes('?') ? '&' : '?'}r=${retryCount}` : ad.imageUrl}
             autoPlay
             loop
             muted
             playsInline
+            preload="auto"
             onLoadedData={() => setImageLoaded(true)}
-            onError={() => setImageError(true)}
+            onError={() => {
+              // Auto-retry once for videos (S3 may need a moment)
+              if (retryCount === 0) {
+                setTimeout(() => { setRetryCount(1); setImageError(false); setImageLoaded(false); }, 1000);
+              } else {
+                setImageError(true);
+              }
+            }}
             className={cn(
               'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
               imageLoaded ? 'opacity-100' : 'opacity-0'

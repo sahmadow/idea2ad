@@ -84,7 +84,7 @@ def bridge_reddit(params: CreativeParameters, copy: dict):
     from app.services.v2.social_templates.reddit_post import RedditPostParams
 
     # Build post body from copy
-    body = copy.get("primary_text", f"PSA: {params.product_name} actually lives up to the hype.")
+    body = copy.get("primary_text", f"Genuinely surprised by {params.product_name}. It actually lives up to the hype.")
 
     # Subreddit based on category
     category = params.product_category or "technology"

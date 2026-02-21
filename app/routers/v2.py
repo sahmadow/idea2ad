@@ -255,7 +255,7 @@ RULES:
 - Infer intelligently from the description
 - customer_pains in customer's voice
 - product_summary should be a clear, concise explanation a user can review and edit
-- competitors: identify up to 3 main competitors. For each, find their weakness from typical negative customer feedback (something we can use as ad differentiation). If you can't identify competitors, return empty array.
+- competitors: Think about what someone would find if they searched "[product_name] alternatives" or "[product_name] vs". Identify the top 3 most commonly cited competitors or alternatives. For each, find their key weakness from typical negative customer feedback (something we can use as ad differentiation). You MUST try hard — most products have known alternatives. Only return empty array for truly novel categories.
 - target_audience: describe the ideal customer profile concisely
 - messaging_unaware: angle for people who don't realize they need this yet
 - messaging_aware: angle for people actively comparing solutions
@@ -362,6 +362,7 @@ Key Benefit: {key_benefit}
 Key Differentiator: {key_differentiator}
 Customer Pains: {customer_pains}
 Description: {product_description}
+Source URL: {source_url}
 
 Based on this analysis, return a JSON object:
 
@@ -377,7 +378,7 @@ Based on this analysis, return a JSON object:
 }}
 
 RULES:
-- competitors: identify up to 3 main competitors in this space. For each, identify their weakness from typical negative customer reviews (something we can use for ad differentiation). If unknown, return empty array.
+- competitors: Think about what someone would find if they searched "[product_name] alternatives" or "[product_name] vs". Identify the top 3 most commonly cited competitors or alternatives in this product category. For each competitor, identify their key weakness based on common negative customer feedback, reviews, and complaints (something we can use for ad differentiation). You MUST try hard to find competitors — most products have known alternatives. Only return empty array if this is a truly novel category with no alternatives.
 - target_audience: describe the ideal customer concisely
 - messaging_unaware: angle for people who don't realize they need this yet
 - messaging_aware: angle for people actively comparing solutions
@@ -386,7 +387,7 @@ RULES:
 """
 
 
-async def _extract_review_analysis(params: CreativeParameters) -> dict:
+async def _extract_review_analysis(params: CreativeParameters, source_url: str = "") -> dict:
     """Extract target audience, pain point, messaging, and competitors from params via Gemini."""
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
@@ -403,6 +404,7 @@ async def _extract_review_analysis(params: CreativeParameters) -> dict:
         key_differentiator=params.key_differentiator or "",
         customer_pains=", ".join(params.customer_pains[:5]) if params.customer_pains else "unknown",
         product_description=params.product_description_short or "",
+        source_url=source_url,
         language=language_name,
     )
 
@@ -458,7 +460,7 @@ async def prepare_campaign(body: PrepareRequest):
             raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
 
         # Extract enhanced review fields (target audience, competitors, etc.)
-        review_data = await _extract_review_analysis(params)
+        review_data = await _extract_review_analysis(params, source_url=body.url)
         product_summary = review_data.get("product_summary") or params.product_description_short or f"{params.product_name} — {params.key_benefit}"
         target_audience = review_data.get("target_audience", "")
         main_pain_point = review_data.get("main_pain_point", "")
