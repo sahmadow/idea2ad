@@ -1,73 +1,51 @@
-# React + TypeScript + Vite
+# LaunchAd Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript + Vite SPA for the LaunchAd ad generation platform.
 
-Currently, two official plugins are available:
+## Routing
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Uses `react-router-dom` with `BrowserRouter`. Vercel handles SPA fallback natively.
 
-## React Compiler
+### Routes
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Path | Page | Lazy | Auth |
+|------|------|------|------|
+| `/` | LandingPage | No | No |
+| `/adpack` | AdPackPage | Yes | No |
+| `/results` | ResultsPage | Yes | No |
+| `/publish` | PublishPage | Yes | No |
+| `/success` | SuccessPage | Yes | No |
+| `/dashboard` | DashboardPage | Yes | Yes |
+| `/campaigns/:id` | CampaignDetailPage | Yes | Yes |
+| `/test/fb-auth` | FBAuthTest | Yes | No |
+| `/test/image-editor` | ImageEditorTest | Yes | No |
+| `*` | Redirect to `/` | -- | -- |
 
-## Expanding the ESLint configuration
+### Data guards
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Pages with session data dependencies redirect to `/` if data is missing (e.g. `/adpack` without an adPack in context, `/dashboard` without auth).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Session data
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+Session state lives in `AppContext` (`src/context/AppContext.tsx`). Transient data (adPack, result, selectedAd) uses localStorage with a 4-hour TTL. Form inputs (URL, businessType, generationMode) persist indefinitely.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Architecture
+
+```
+src/
+  context/AppContext.tsx   -- All shared session state + generation logic
+  AppRoutes.tsx            -- Route definitions, AnimatePresence, global modals
+  pages/                   -- Thin page wrappers (guards + navigation glue)
+  components/              -- View components (unchanged, callback-based APIs)
+  hooks/                   -- useAuth, useCampaigns, useFacebookAuth
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Page wrappers read from context and pass props to existing view components. Zero business logic in pages -- all routing concerns only.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Dev
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev     # localhost:5173
+npm run build   # tsc -b && vite build
 ```

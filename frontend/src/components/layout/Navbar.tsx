@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Menu, X, LayoutDashboard, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/Button';
@@ -20,7 +21,8 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
         <nav className="fixed top-0 left-0 right-0 z-50 bg-brand-dark/90 backdrop-blur-md border-b border-white/5" aria-label="Main navigation">
             <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                 {/* Logo */}
-                <button
+                <Link
+                    to="/"
                     onClick={onLogoClick}
                     className="flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime"
                 >
@@ -30,20 +32,21 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                     <span className="font-display font-bold text-xl tracking-tight text-white">
                         LAUNCHAD
                     </span>
-                </button>
+                </Link>
 
                 {/* Desktop links */}
                 <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
                     <a href="#features" className="hover:text-brand-lime transition-colors">Features</a>
                     <a href="#pricing" className="hover:text-brand-lime transition-colors">Pricing</a>
                     {isAuthenticated && (
-                        <button
+                        <Link
+                            to="/dashboard"
                             onClick={onDashboardClick}
                             className="flex items-center gap-1.5 hover:text-brand-lime transition-colors"
                         >
                             <LayoutDashboard className="w-4 h-4" />
                             My Campaigns
-                        </button>
+                        </Link>
                     )}
                     <a href="#" className="hover:text-brand-lime transition-colors">Docs</a>
                 </div>
@@ -106,13 +109,14 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                             <a href="#features" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Features</a>
                             <a href="#pricing" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Pricing</a>
                             {isAuthenticated && (
-                                <button
+                                <Link
+                                    to="/dashboard"
                                     onClick={() => { setMobileOpen(false); onDashboardClick?.(); }}
                                     className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2 text-left"
                                 >
                                     <LayoutDashboard className="w-4 h-4" />
                                     My Campaigns
-                                </button>
+                                </Link>
                             )}
                             <a href="#" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Docs</a>
                             <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
