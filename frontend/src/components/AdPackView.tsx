@@ -3,20 +3,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Download,
-  Target,
-  DollarSign,
-  Clock,
   Sparkles,
   Grid3X3,
   X,
   Check,
   Pencil,
-  ChevronDown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Button } from './ui/Button';
-import { Card } from './ui/Card';
 import { MetaAdPreview } from './ui/MetaAdPreview';
 import { updateAdPack } from '../api/adpack';
 import type { AdPack, AdCreative, AdStrategy } from '../types/adpack';
@@ -288,170 +283,6 @@ function ExpandedCreativeView({
   );
 }
 
-function TargetingSummary({ adPack }: { adPack: AdPack }) {
-  const [expanded, setExpanded] = useState(false);
-  const { targeting } = adPack;
-
-  return (
-    <Card>
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-left p-6"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-brand-gray border border-white/10 flex items-center justify-center text-brand-lime">
-              <Target className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="text-lg font-bold font-display text-white">Smart Broad Targeting</h3>
-              <p className="text-xs text-gray-500 font-mono uppercase">
-                {targeting.rationale.methodology}
-              </p>
-            </div>
-          </div>
-          <ChevronDown
-            className={`w-5 h-5 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          />
-        </div>
-
-        {/* Summary row */}
-        <div className="flex flex-wrap gap-4 mt-4 text-sm">
-          <div>
-            <span className="text-gray-500">Age:</span>{' '}
-            <span className="text-white">{targeting.age_min} - {targeting.age_max}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Geo:</span>{' '}
-            <span className="text-white">{targeting.geo_locations.join(', ')}</span>
-          </div>
-          <div>
-            <span className="text-gray-500">Gender:</span>{' '}
-            <span className="text-white capitalize">{targeting.genders.join(', ')}</span>
-          </div>
-        </div>
-      </button>
-
-      {/* Expanded rationale */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="px-6 pb-6 space-y-3 border-t border-white/5 pt-4">
-              <div className="p-3 bg-brand-gray/50 border border-white/5">
-                <div className="text-xs text-gray-500 uppercase mb-1">Age Range Rationale</div>
-                <p className="text-sm text-gray-300">{targeting.rationale.age_range_reason}</p>
-              </div>
-              <div className="p-3 bg-brand-gray/50 border border-white/5">
-                <div className="text-xs text-gray-500 uppercase mb-1">Geographic Rationale</div>
-                <p className="text-sm text-gray-300">{targeting.rationale.geo_reason}</p>
-              </div>
-              {targeting.rationale.exclusion_reason && (
-                <div className="p-3 bg-brand-gray/50 border border-white/5">
-                  <div className="text-xs text-gray-500 uppercase mb-1">Exclusion Strategy</div>
-                  <p className="text-sm text-gray-300">{targeting.rationale.exclusion_reason}</p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </Card>
-  );
-}
-
-function BudgetControls({
-  adPack,
-  onUpdate,
-}: {
-  adPack: AdPack;
-  onUpdate: (field: 'budget_daily' | 'duration_days', value: number) => void;
-}) {
-  const totalBudget = adPack.budget_daily * adPack.duration_days;
-
-  return (
-    <Card>
-      <div className="p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 bg-brand-gray border border-white/10 flex items-center justify-center text-brand-lime">
-            <DollarSign className="w-5 h-5" />
-          </div>
-          <h3 className="text-lg font-bold font-display text-white">Budget & Duration</h3>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {/* Daily Budget */}
-          <div>
-            <label className="text-xs text-gray-500 uppercase tracking-wide block mb-2">
-              Daily Budget
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
-              <input
-                type="number"
-                value={adPack.budget_daily}
-                onChange={(e) => {
-                  const val = parseFloat(e.target.value);
-                  if (!isNaN(val) && val >= 1) onUpdate('budget_daily', val);
-                }}
-                min={1}
-                step={1}
-                className="w-full bg-brand-gray border border-white/20 text-white text-sm p-2 pl-7 focus:border-brand-lime focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Duration */}
-          <div>
-            <label className="text-xs text-gray-500 uppercase tracking-wide block mb-2">
-              Duration (Days)
-            </label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="number"
-                value={adPack.duration_days}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  if (!isNaN(val) && val >= 1) onUpdate('duration_days', val);
-                }}
-                min={1}
-                step={1}
-                className="w-full bg-brand-gray border border-white/20 text-white text-sm p-2 pl-9 focus:border-brand-lime focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Total */}
-          <div>
-            <label className="text-xs text-gray-500 uppercase tracking-wide block mb-2">
-              Total Budget
-            </label>
-            <div className="bg-brand-gray border border-brand-lime/30 p-2 text-center">
-              <span className="text-brand-lime text-lg font-bold font-mono">
-                ${totalBudget.toFixed(2)}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Campaign structure info */}
-        <div className="mt-4 pt-4 border-t border-white/5 flex flex-wrap gap-4 text-xs text-gray-500">
-          <span>1 Campaign</span>
-          <span>1 Ad Set</span>
-          <span>{adPack.creatives.length} Ads</span>
-          <span className="text-gray-600">|</span>
-          <span>{adPack.campaign_structure.campaign_name}</span>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
 export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPackViewProps) {
   const [filterStrategy, setFilterStrategy] = useState<FilterStrategy>('all');
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
@@ -482,18 +313,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
         toast.success('Creative updated');
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to update');
-      }
-    },
-    [adPack.id, onAdPackChange]
-  );
-
-  const handleBudgetUpdate = useCallback(
-    async (field: 'budget_daily' | 'duration_days', value: number) => {
-      try {
-        const updated = await updateAdPack(adPack.id, { [field]: value });
-        onAdPackChange(updated);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to update budget');
       }
     },
     [adPack.id, onAdPackChange]
@@ -564,12 +383,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
             {adPack.creatives.length} creatives &middot; ${adPack.budget_daily}/day &middot;{' '}
             {adPack.duration_days} day{adPack.duration_days !== 1 ? 's' : ''}
           </p>
-        </div>
-
-        {/* Targeting + Budget Row */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-12">
-          <TargetingSummary adPack={adPack} />
-          <BudgetControls adPack={adPack} onUpdate={handleBudgetUpdate} />
         </div>
 
         {/* Creative Grid */}

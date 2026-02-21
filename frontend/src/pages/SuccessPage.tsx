@@ -28,7 +28,7 @@ export default function SuccessPage() {
       <SuccessView
         result={ctx.publishResult}
         onNewCampaign={() => {
-          ctx.setUrl('');
+          ctx.setInput('');
           ctx.resetSession();
           navigate('/');
         }}

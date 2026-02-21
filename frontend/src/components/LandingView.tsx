@@ -1,5 +1,5 @@
-import { type FormEvent, type ChangeEvent, useRef } from 'react';
-import { ArrowRight, Check, Sparkles, Target, Zap, Layout, Upload, X, Pencil } from 'lucide-react';
+import { type FormEvent } from 'react';
+import { ArrowRight, Check, Sparkles, Target, Zap, Layout } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Navbar } from './layout/Navbar';
 import { Footer } from './layout/Footer';
@@ -7,46 +7,14 @@ import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { Terminal } from './ui/Terminal';
 import { AdPreview } from './ui/AdPreview';
-import { SegmentedControl } from './ui/SegmentedControl';
 import { ErrorBanner } from './ui/ErrorBanner';
-import { CompetitorInput } from './CompetitorInput';
-import type { BusinessType } from '../api';
-
-type GenerationMode = 'full' | 'quick';
 
 interface LandingViewProps {
-  // Form state
-  url: string;
-  onUrlChange: (url: string) => void;
-  quickIdea: string;
-  onQuickIdeaChange: (idea: string) => void;
-  generationMode: GenerationMode;
-  onGenerationModeChange: (mode: GenerationMode) => void;
-  businessType: BusinessType;
-  onBusinessTypeChange: (type: BusinessType) => void;
-
-  // Image + edit prompt (shared by both modes)
-  productDescription: string;
-  onProductDescriptionChange: (desc: string) => void;
-  productImagePreview: string | null;
-  productImageFileName: string | null;
-  isUploading: boolean;
-  uploadedImageUrl: string | null;
-  onImageSelect: (e: ChangeEvent<HTMLInputElement>) => void;
-  onClearImage: () => void;
-  editPrompt: string;
-  onEditPromptChange: (prompt: string) => void;
-
-  // Competitor intel
-  competitors: string[];
-  onCompetitorsChange: (competitors: string[]) => void;
-
-  // Actions
+  input: string;
+  onInputChange: (val: string) => void;
   onSubmit: (e: FormEvent) => void;
   error: string | null;
   onDismissError: () => void;
-
-  // Auth
   userName?: string | null;
   onSignInClick?: () => void;
   onDashboardClick?: () => void;
@@ -64,26 +32,8 @@ const slideUp = {
 };
 
 export function LandingView({
-  url,
-  onUrlChange,
-  quickIdea,
-  onQuickIdeaChange,
-  generationMode,
-  onGenerationModeChange,
-  businessType,
-  onBusinessTypeChange,
-  productDescription: _productDescription,
-  onProductDescriptionChange: _onProductDescriptionChange,
-  productImagePreview,
-  productImageFileName,
-  isUploading,
-  uploadedImageUrl,
-  onImageSelect,
-  competitors,
-  onCompetitorsChange,
-  onClearImage,
-  editPrompt,
-  onEditPromptChange,
+  input,
+  onInputChange,
   onSubmit,
   error,
   onDismissError,
@@ -92,16 +42,11 @@ export function LandingView({
   onDashboardClick,
   onLogout,
 }: LandingViewProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Quick Mode requires at least description or image
-  const quickModeValid = !!(quickIdea.trim() || uploadedImageUrl);
-  // AI Led requires URL
-  const fullModeValid = !!url.trim();
+  const isValid = !!input.trim();
 
   return (
     <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-lime selection:text-brand-dark">
@@ -133,256 +78,30 @@ export function LandingView({
               Turn any landing page into a <span className="text-white font-medium">Meta Ads campaign</span> in 60 seconds.
             </p>
 
-            {/* Mode Toggle */}
-            <SegmentedControl
-              options={[
-                { value: 'full' as GenerationMode, label: 'AI Led' },
-                { value: 'quick' as GenerationMode, label: 'Quick Mode' },
-              ]}
-              value={generationMode}
-              onChange={onGenerationModeChange}
-            />
-            <p className="text-xs text-gray-500 font-mono">
-              {generationMode === 'quick'
-                ? 'Description and/or image — get an ad instantly'
-                : 'Analyze a landing page for brand-matched creatives'}
-            </p>
-
-            {/* =============== QUICK MODE =============== */}
-            {generationMode === 'quick' ? (
-              <form onSubmit={onSubmit} className="flex flex-col gap-4 max-w-lg mx-auto">
-                {/* Description (optional) */}
-                <div className="relative">
-                  <textarea
-                    value={quickIdea}
-                    onChange={(e) => onQuickIdeaChange(e.target.value)}
-                    placeholder="Describe your product or service (optional if image provided)..."
-                    rows={3}
-                    maxLength={2000}
-                    aria-label="Product description"
-                    className="w-full bg-brand-gray border border-white/10 px-6 py-4 text-white focus:outline-none focus:border-brand-lime focus:border-l-4 focus:border-l-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors resize-none"
-                  />
-                  <span className="absolute bottom-2 right-3 text-xs text-gray-600 font-mono">
-                    {quickIdea.length}/2000
-                  </span>
-                </div>
-
-                {/* Image upload (optional) */}
+            {/* Single unified input */}
+            <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
+              <div className="flex-1 relative">
                 <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={onImageSelect}
-                  className="hidden"
-                  id="quick-image-upload"
+                  type="text"
+                  value={input}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  placeholder="Enter your product URL or describe your idea..."
+                  aria-label="Product URL or description"
+                  className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime focus:border-l-4 focus:border-l-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
                 />
+              </div>
+              <Button type="submit" size="lg" className="shrink-0 group" disabled={!isValid}>
+                Continue
+                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </form>
 
-                {!productImagePreview ? (
-                  <label
-                    htmlFor="quick-image-upload"
-                    className="flex items-center justify-center gap-2 w-full h-20 bg-brand-gray border border-dashed border-white/20 hover:border-brand-lime/50 cursor-pointer transition-colors"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        fileInputRef.current?.click();
-                      }
-                    }}
-                  >
-                    <Upload className="w-5 h-5 text-gray-400" />
-                    <span className="text-sm font-mono text-gray-400">Upload product image (optional)</span>
-                  </label>
-                ) : (
-                  <div className="flex items-center gap-4 p-3 bg-brand-gray border border-white/10">
-                    <img src={productImagePreview} alt="Product preview" className="w-12 h-12 object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono text-white truncate">{productImageFileName}</p>
-                      <p className="text-xs text-gray-500 font-mono">
-                        {isUploading ? 'Uploading...' : uploadedImageUrl ? 'Uploaded' : 'Ready'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={onClearImage} className="p-1 hover:bg-white/10 transition-colors">
-                      <X className="w-4 h-4 text-gray-400" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Edit prompt (shown only when image uploaded) */}
-                {uploadedImageUrl && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                  >
-                    <div className="relative">
-                      <Pencil className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
-                      <input
-                        type="text"
-                        value={editPrompt}
-                        onChange={(e) => onEditPromptChange(e.target.value)}
-                        placeholder="Edit prompt (e.g. 'Change background to beach sunset')..."
-                        aria-label="Image edit prompt"
-                        maxLength={500}
-                        className="w-full h-12 bg-brand-gray border border-white/10 pl-10 pr-4 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
-                      />
-                    </div>
-                  </motion.div>
-                )}
-
-                <Button
-                  type="submit"
-                  size="lg"
-                  className="w-full group"
-                  disabled={!quickModeValid || isUploading}
-                >
-                  Generate Ad
-                  <Zap className="w-4 h-4 ml-2" />
-                </Button>
-
-                {!quickModeValid && (
-                  <p className="text-xs text-gray-600 font-mono text-center">
-                    Provide a description and/or upload an image to get started
-                  </p>
-                )}
-              </form>
-            ) : (
-              /* =============== AI LED MODE =============== */
-              <>
-                {/* Business Type Tabs */}
-                <div className="flex justify-center gap-6 mb-2">
-                  <button
-                    type="button"
-                    onClick={() => onBusinessTypeChange('saas')}
-                    className={`pb-1 text-sm font-mono transition-all border-b-2 ${
-                      businessType === 'saas'
-                        ? 'text-white border-brand-lime'
-                        : 'text-gray-500 border-transparent hover:text-gray-300'
-                    }`}
-                  >
-                    SaaS
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onBusinessTypeChange('commerce')}
-                    className={`pb-1 text-sm font-mono transition-all border-b-2 ${
-                      businessType === 'commerce'
-                        ? 'text-white border-brand-lime'
-                        : 'text-gray-500 border-transparent hover:text-gray-300'
-                    }`}
-                  >
-                    Service
-                  </button>
-                </div>
-
-                <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => onUrlChange(e.target.value)}
-                      placeholder="Paste your landing page URL..."
-                      aria-label="Landing page URL"
-                      className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime focus:border-l-4 focus:border-l-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
-                    />
-                  </div>
-                  <Button type="submit" size="lg" className="shrink-0 group" disabled={!fullModeValid || isUploading}>
-                    Generate Ad
-                    <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                  </Button>
-                </form>
-              </>
-            )}
+            <p className="text-xs text-gray-500 font-mono">
+              Paste a URL to analyze your landing page, or describe your product in your own words
+            </p>
 
             {error && (
               <ErrorBanner message={error} onDismiss={onDismissError} className="max-w-lg mx-auto" />
-            )}
-
-            {/* Optional Image Upload for AI Led (all business types) */}
-            {generationMode === 'full' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="max-w-lg mx-auto space-y-4 pt-4 border-t border-white/10"
-              >
-                <p className="text-xs text-gray-500 font-mono text-center">
-                  Optional: Upload a product image to add a custom creative
-                </p>
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onChange={onImageSelect}
-                  className="hidden"
-                  id="product-image-upload"
-                />
-
-                {!productImagePreview ? (
-                  <label
-                    htmlFor="product-image-upload"
-                    className="flex items-center justify-center gap-2 w-full h-24 bg-brand-gray border border-dashed border-white/20 hover:border-brand-lime/50 cursor-pointer transition-colors"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        fileInputRef.current?.click();
-                      }
-                    }}
-                  >
-                    <Upload className="w-5 h-5 text-gray-400" />
-                    <span className="text-sm font-mono text-gray-400">Upload product image</span>
-                  </label>
-                ) : (
-                  <div className="flex items-center gap-4 p-3 bg-brand-gray border border-white/10">
-                    <img src={productImagePreview} alt="Product preview" className="w-12 h-12 object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono text-white truncate">{productImageFileName}</p>
-                      <p className="text-xs text-gray-500 font-mono">
-                        {isUploading ? 'Uploading...' : uploadedImageUrl ? 'Uploaded' : 'Ready'}
-                      </p>
-                    </div>
-                    <button type="button" onClick={onClearImage} className="p-1 hover:bg-white/10 transition-colors">
-                      <X className="w-4 h-4 text-gray-400" />
-                    </button>
-                  </div>
-                )}
-
-                {/* Edit prompt (shown only when image uploaded) */}
-                {uploadedImageUrl && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                  >
-                    <div className="relative">
-                      <Pencil className="absolute left-3 top-3 w-4 h-4 text-gray-500" />
-                      <input
-                        type="text"
-                        value={editPrompt}
-                        onChange={(e) => onEditPromptChange(e.target.value)}
-                        placeholder="Edit prompt (e.g. 'Remove background, add gradient')..."
-                        aria-label="Image edit prompt"
-                        maxLength={500}
-                        className="w-full h-12 bg-brand-gray border border-white/10 pl-10 pr-4 text-white focus:outline-none focus:border-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
-                      />
-                    </div>
-                  </motion.div>
-                )}
-              </motion.div>
-            )}
-
-            {/* Competitor Input (AI Led only) */}
-            {generationMode === 'full' && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="max-w-lg mx-auto pt-4 border-t border-white/10"
-              >
-                <CompetitorInput
-                  competitors={competitors}
-                  onCompetitorsChange={onCompetitorsChange}
-                />
-              </motion.div>
             )}
 
             <div className="flex items-center justify-center gap-4 text-sm text-gray-500 font-mono">

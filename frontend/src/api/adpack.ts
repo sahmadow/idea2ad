@@ -2,7 +2,7 @@
  * AdPack API client (Phase 5 + V2 pipeline)
  */
 
-import type { AdPack, AdCreative, AdPackUpdateRequest } from '../types/adpack';
+import type { AdPack, AdCreative, AdPackUpdateRequest, PreparedCampaign } from '../types/adpack';
 import type { CampaignDraft } from '../api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
@@ -279,4 +279,87 @@ export async function analyzeV2(
   }
 
   throw new Error('Analysis timed out');
+}
+
+
+// =====================================================================
+// Unified Flow: Prepare & Generate
+// =====================================================================
+
+interface PrepareParams {
+  url?: string;
+  description?: string;
+  image_url?: string;
+  competitor_urls?: string[];
+}
+
+export async function prepareCampaign(params: PrepareParams): Promise<PreparedCampaign> {
+  const res = await fetch(`${API_URL}/v2/prepare`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to analyze');
+  }
+
+  return res.json();
+}
+
+interface GenerateParams {
+  session_id: string;
+  targeting?: {
+    geo_locations: { countries: string[] };
+    age_min: number;
+    age_max: number;
+    genders: number[] | null;
+    targeting_rationale?: string;
+  };
+  budget_daily_cents?: number;
+  duration_days?: number;
+  product_summary?: string;
+}
+
+export async function generateFromPrepared(
+  params: GenerateParams,
+  onProgress?: (status: string) => void,
+): Promise<AdPack> {
+  // Start generation job
+  const res = await fetch(`${API_URL}/v2/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    throw new Error(err.detail || 'Failed to start generation');
+  }
+
+  const { job_id } = await res.json();
+  onProgress?.('pending');
+
+  // Poll for completion
+  let attempts = 0;
+  while (attempts < MAX_POLL_ATTEMPTS) {
+    const pollRes = await fetch(`${API_URL}/jobs/${job_id}`);
+    if (!pollRes.ok) throw new Error('Failed to check job status');
+
+    const job = await pollRes.json();
+    onProgress?.(job.status);
+
+    if (job.status === 'complete' && job.result?.ad_pack) {
+      return mapV2AdPack(job.result.ad_pack, params.session_id);
+    }
+    if (job.status === 'failed') {
+      throw new Error(job.error || 'Generation failed');
+    }
+
+    await sleep(POLL_INTERVAL_MS);
+    attempts++;
+  }
+
+  throw new Error('Generation timed out');
 }

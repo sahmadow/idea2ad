@@ -26,7 +26,10 @@ from pydantic import BaseModel
 
 from app.schemas.creative_params import CreativeParameters
 from app.schemas.ad_types import AdTypeDefinition
-from app.schemas.ad_pack import AdPack, GeneratedCreative, TargetingSpec
+from app.schemas.ad_pack import (
+    AdPack, GeneratedCreative, TargetingSpec,
+    PrepareRequest, PreparedCampaign, GenerateRequest,
+)
 from app.services.scraper import scrape_landing_page
 from app.services.v2.parameter_extractor import (
     extract_creative_parameters,
@@ -61,6 +64,11 @@ _pack_params: dict[str, CreativeParameters] = {}  # pack_id → params
 _pack_scraped: dict[str, dict] = {}  # pack_id → scraped_data
 _render_cache: dict[str, tuple[bytes, float]] = {}  # render_id → (PNG bytes, timestamp)
 _competition_copy_store: dict[str, dict] = {}  # creative_id → competition copy dict
+
+# Unified flow: session cache for prepare → generate handoff
+# session_id → { params, scraped_data, competitor_data, image_url, ts }
+SESSION_TTL = 1800  # 30 minutes
+_prepared_sessions: dict[str, dict] = {}
 
 # Persist paths (survive restarts)
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
@@ -190,6 +198,344 @@ class TemplateInfo(BaseModel):
     strategy: str
     format: str
     aspect_ratios: list[str]
+
+
+# --- Unified Flow: Prepare & Generate ---
+
+DESCRIPTION_EXTRACTION_PROMPT = """You are a world-class performance marketer.
+
+The user described their product/business in their own words:
+"{description}"
+
+Extract ALL parameters needed for ad creative generation. Return a JSON object with these fields:
+
+{{
+    "product_name": "string — short brand name",
+    "business_type": "saas|ecommerce|service",
+    "product_category": "string — simple lowercase category",
+    "product_description_short": "string — max 15 words",
+    "brand_name": "string — company/brand name",
+    "key_benefit": "string — single most important benefit",
+    "key_differentiator": "string — what makes it unique",
+    "value_props": ["3-5 value propositions"],
+    "customer_pains": ["3-5 pain points in customer's voice"],
+    "customer_desires": ["3-5 desired outcomes"],
+    "objections": ["common buying objections"],
+    "tone": "premium|casual|clinical|playful|urgent",
+    "cta_text": "string — best CTA for this product",
+    "social_proof": "null",
+    "testimonials": [],
+    "urgency_hooks": [],
+    "persona_primary": {{
+        "label": "string — e.g. 'Health-conscious professional, 30-45'",
+        "demographics": {{"age_min": 25, "age_max": 55, "gender_skew": "neutral|male|female"}},
+        "psychographics": [],
+        "scenes": ["visual scene 1", "scene 2"],
+        "language_style": "string",
+        "specific_pains": [],
+        "specific_desires": []
+    }},
+    "scene_problem": "string — visual description of problem state",
+    "scene_solution": "string — visual description of solved state",
+    "scene_lifestyle": "string — aspirational lifestyle visual",
+    "language": "{language_hint}",
+    "target_countries": ["{country_hint}"],
+    "product_summary": "string — 1-2 sentence summary of the product for user review"
+}}
+
+RULES:
+- Infer intelligently from the description
+- customer_pains in customer's voice
+- product_summary should be a clear, concise explanation a user can review and edit
+- Always return valid JSON
+"""
+
+
+def _cleanup_sessions():
+    """Evict expired prepare sessions."""
+    now = time.time()
+    expired = [k for k, v in _prepared_sessions.items() if now - v.get("ts", 0) > SESSION_TTL]
+    for k in expired:
+        del _prepared_sessions[k]
+
+
+async def _extract_params_from_description(description: str) -> tuple[CreativeParameters, str]:
+    """Extract CreativeParameters from freeform text description via Gemini.
+    Returns (params, product_summary)."""
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise ExtractionError("GOOGLE_API_KEY not configured")
+
+    from google import genai
+    client = genai.Client(api_key=api_key)
+
+    prompt = DESCRIPTION_EXTRACTION_PROMPT.format(
+        description=description[:4000],
+        language_hint="en",
+        country_hint="US",
+    )
+
+    result = await client.aio.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+        config={"response_mime_type": "application/json"},
+    )
+    data = json.loads(result.text)
+    if isinstance(data, list) and data:
+        data = data[0]
+
+    product_summary = data.pop("product_summary", description[:200])
+
+    # Build CreativeParameters from LLM output
+    from app.schemas.creative_params import BrandColors, PersonaDemographics, TargetPersona
+
+    persona_primary = None
+    if data.get("persona_primary"):
+        p = data["persona_primary"]
+        demo = p.get("demographics", {})
+        persona_primary = TargetPersona(
+            label=p.get("label", "General audience"),
+            demographics=PersonaDemographics(
+                age_min=demo.get("age_min", 18),
+                age_max=demo.get("age_max", 65),
+                gender_skew=demo.get("gender_skew", "neutral"),
+            ),
+            psychographics=p.get("psychographics", []),
+            scenes=p.get("scenes", []),
+            language_style=p.get("language_style", "Conversational"),
+            specific_pains=p.get("specific_pains", []),
+            specific_desires=p.get("specific_desires", []),
+        )
+
+    params = CreativeParameters(
+        source_description=description,
+        product_name=data.get("product_name", "Product"),
+        business_type=data.get("business_type", "ecommerce") if data.get("business_type") in ("ecommerce", "saas", "service") else "ecommerce",
+        product_category=data.get("product_category", "General"),
+        product_description_short=data.get("product_description_short", ""),
+        brand_name=data.get("brand_name", ""),
+        key_benefit=data.get("key_benefit", ""),
+        key_differentiator=data.get("key_differentiator", ""),
+        value_props=data.get("value_props", []),
+        customer_pains=data.get("customer_pains", []),
+        customer_desires=data.get("customer_desires", []),
+        objections=data.get("objections", []),
+        tone=data.get("tone", "casual"),
+        cta_text=data.get("cta_text", "Learn More"),
+        social_proof=data.get("social_proof"),
+        testimonials=data.get("testimonials", []),
+        urgency_hooks=data.get("urgency_hooks", []),
+        persona_primary=persona_primary,
+        scene_problem=data.get("scene_problem"),
+        scene_solution=data.get("scene_solution"),
+        scene_lifestyle=data.get("scene_lifestyle"),
+        language=data.get("language", "en"),
+        target_countries=data.get("target_countries", ["US"]),
+        headline=data.get("product_name", "Product"),
+    )
+
+    return params, product_summary
+
+
+@router.post("/prepare", response_model=PreparedCampaign)
+async def prepare_campaign(body: PrepareRequest):
+    """
+    Step 1 of unified flow: analyze input (URL or description),
+    extract parameters, return summary for user review.
+    No creatives generated yet.
+    """
+    _cleanup_sessions()
+
+    if not body.url and not body.description:
+        raise HTTPException(status_code=400, detail="Provide url or description")
+
+    session_id = str(uuid.uuid4())[:12]
+    scraped_data = {}
+    competitor_data = None
+    product_summary = ""
+
+    if body.url:
+        # URL path: scrape + extract
+        try:
+            scrape_tasks = [scrape_landing_page(body.url)]
+            for comp_url in (body.competitor_urls or [])[:3]:
+                scrape_tasks.append(scrape_landing_page(comp_url))
+
+            results = await asyncio.gather(*scrape_tasks, return_exceptions=True)
+            scraped_data = results[0] if not isinstance(results[0], Exception) else {}
+            competitor_data = results[1] if len(results) > 1 and not isinstance(results[1], Exception) else None
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        if not scraped_data.get("full_text"):
+            raise HTTPException(status_code=400, detail="Failed to scrape URL")
+
+        try:
+            params = await extract_creative_parameters(scraped_data, source_url=body.url)
+        except ExtractionError as e:
+            raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
+
+        # Generate product summary from params
+        product_summary = params.product_description_short or f"{params.product_name} — {params.key_benefit}"
+
+    else:
+        # Description-only path: LLM extraction from freeform text
+        try:
+            params, product_summary = await _extract_params_from_description(body.description)
+        except Exception as e:
+            logger.error(f"Description extraction failed: {e}", exc_info=True)
+            raise HTTPException(status_code=422, detail=f"Could not analyze description: {e}")
+
+    # Translate params for non-English
+    if params.language and params.language != "en":
+        params = await translate_params(params)
+
+    # Build targeting
+    targeting = _build_targeting(params)
+
+    # Cache session for generate step
+    _prepared_sessions[session_id] = {
+        "params": params,
+        "scraped_data": scraped_data,
+        "competitor_data": competitor_data,
+        "image_url": body.image_url,
+        "ts": time.time(),
+    }
+
+    return PreparedCampaign(
+        session_id=session_id,
+        product_name=params.product_name,
+        product_summary=product_summary,
+        brand_logo_url=params.brand_logo_url,
+        business_type=params.business_type,
+        language=params.language or "en",
+        target_countries=params.target_countries or ["US"],
+        targeting=targeting,
+    )
+
+
+@router.post("/generate")
+async def generate_from_prepared(body: GenerateRequest):
+    """
+    Step 2 of unified flow: generate creatives using cached params + user overrides.
+    Returns full AdPack with rendered creatives.
+    """
+    from app.services.jobs import create_job, cleanup_old_jobs
+
+    session = _prepared_sessions.get(body.session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session expired or not found. Please re-analyze.")
+
+    if time.time() - session.get("ts", 0) > SESSION_TTL:
+        _prepared_sessions.pop(body.session_id, None)
+        raise HTTPException(status_code=410, detail="Session expired. Please re-analyze.")
+
+    # Start as background job (same pattern as analyze/async)
+    cleanup_old_jobs()
+    job_id = create_job(session["params"].source_url or "description")
+    asyncio.create_task(_run_generate_job(job_id, body, session))
+
+    # Clean up session after launching job
+    _prepared_sessions.pop(body.session_id, None)
+
+    return {"job_id": job_id, "status": "pending"}
+
+
+async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
+    """Background task: run creative pipeline with prepared params + user overrides."""
+    from app.services.jobs import update_job, JobStatus
+    try:
+        update_job(job_id, JobStatus.PROCESSING)
+
+        params: CreativeParameters = session["params"]
+        scraped_data: dict = session.get("scraped_data", {})
+        competitor_data = session.get("competitor_data")
+        image_url = session.get("image_url")
+
+        # Apply user overrides from review page
+        if body.targeting:
+            targeting = body.targeting
+            # Update params.target_countries to match user's geo override
+            if body.targeting.geo_locations:
+                params.target_countries = body.targeting.geo_locations.get("countries", params.target_countries)
+        else:
+            targeting = _build_targeting(params)
+
+        budget_cents = body.budget_daily_cents or 1500
+        duration = body.duration_days or 3
+
+        # Template selection
+        selected = select_templates(params)
+        if not selected:
+            raise ValueError("No templates could be selected")
+
+        # Copy generation
+        creatives: list[GeneratedCreative] = []
+        needs_translation = params.language and params.language != "en"
+        for template in selected:
+            if template.id == "review_static_competition":
+                base_copy = await generate_competition_copy(template, params, competitor_data)
+            else:
+                base_copy = generate_copy_from_template(template, params)
+                if needs_translation:
+                    base_copy = await translate_copy(base_copy, params)
+
+            creative = GeneratedCreative(
+                id=str(uuid.uuid4())[:12],
+                ad_type_id=template.id,
+                strategy=template.strategy,
+                format=template.format,
+                aspect_ratio="1:1",
+                primary_text=base_copy["primary_text"],
+                headline=base_copy["headline"],
+                description=base_copy.get("description"),
+                cta_type=base_copy["cta_type"],
+                created_at=datetime.now(timezone.utc),
+            )
+            creatives.append(creative)
+
+            if template.id == "review_static_competition":
+                _competition_copy_store[creative.id] = dict(base_copy)
+
+        # Render statics
+        creatives = await _render_static_creatives(creatives, selected, params, scraped_data)
+
+        # Add manual image creative if user uploaded
+        if image_url:
+            await _add_manual_image_creative(creatives, image_url, None, params)
+
+        # Assemble AdPack
+        source = params.source_url or "description"
+        pack = AdPack(
+            id=str(uuid.uuid4())[:12],
+            created_at=datetime.now(timezone.utc),
+            source_url=params.source_url,
+            product_name=params.product_name,
+            brand_logo_url=params.brand_logo_url,
+            language=params.language or "en",
+            creatives=creatives,
+            targeting=targeting,
+            budget_daily_cents=budget_cents,
+            duration_days=duration,
+            campaign_name=f"{params.product_name} — {datetime.now().strftime('%b %Y')}",
+            status="draft",
+        )
+
+        _pack_params[pack.id] = params
+        _pack_scraped[pack.id] = scraped_data
+        _persist_params(params)
+        _register_v2_pack_in_v1_store(pack, source)
+
+        result = {
+            "parameters": params.model_dump(mode="json"),
+            "ad_pack": pack.model_dump(mode="json"),
+        }
+        update_job(job_id, JobStatus.COMPLETE, result=result)
+        logger.info(f"Generate job {job_id} completed: {len(creatives)} creatives")
+
+    except Exception as e:
+        logger.error(f"Generate job {job_id} failed: {e}", exc_info=True)
+        update_job(job_id, JobStatus.FAILED, error=str(e))
 
 
 # --- Endpoints ---

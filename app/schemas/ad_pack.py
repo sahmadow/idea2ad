@@ -4,7 +4,7 @@ AdPack and related models — the output of the creative assembly pipeline.
 An AdPack is a complete set of ad creatives ready for preview and Meta API submission.
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Literal
 from datetime import datetime
 
@@ -89,3 +89,40 @@ class AdPack(BaseModel):
     meta_campaign_id: str | None = None
     meta_adset_id: str | None = None
     meta_ad_ids: list[str] = []
+
+
+# --- Unified Flow: Prepare & Generate ---
+
+class PrepareRequest(BaseModel):
+    """Input for the prepare step — URL or freeform description."""
+    url: str | None = None
+    description: str | None = None
+    image_url: str | None = None
+    competitor_urls: list[str] = Field(default_factory=list)
+
+
+class PreparedCampaign(BaseModel):
+    """Lightweight summary returned after prepare — shown on review page."""
+    session_id: str
+    product_name: str = ""
+    product_summary: str = ""  # 1-2 sentence description
+    brand_logo_url: str | None = None
+    business_type: str = "ecommerce"
+    language: str = "en"
+    target_countries: list[str] = Field(default_factory=lambda: ["US"])
+
+    # Suggested targeting (editable by user)
+    targeting: TargetingSpec = TargetingSpec()
+    budget_daily_cents: int = 1500
+    duration_days: int = 3
+
+
+class GenerateRequest(BaseModel):
+    """Input for the generate step — session_id + user overrides from review page."""
+    session_id: str
+
+    # User-editable overrides
+    targeting: TargetingSpec | None = None
+    budget_daily_cents: int | None = None
+    duration_days: int | None = None
+    product_summary: str | None = None

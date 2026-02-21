@@ -70,3 +70,23 @@ export interface AdPackUpdateRequest {
   budget_daily?: number;
   duration_days?: number;
 }
+
+// Unified flow types
+export interface PreparedCampaign {
+  session_id: string;
+  product_name: string;
+  product_summary: string;
+  brand_logo_url?: string;
+  business_type: string;
+  language: string;
+  target_countries: string[];
+  targeting: {
+    geo_locations: { countries: string[] };
+    age_min: number;
+    age_max: number;
+    genders: number[] | null;
+    targeting_rationale: string;
+  };
+  budget_daily_cents: number;
+  duration_days: number;
+}

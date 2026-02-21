@@ -6,26 +6,21 @@ import {
   useEffect,
   useRef,
   type ReactNode,
-  type FormEvent,
   type ChangeEvent,
 } from 'react';
 import { toast } from 'sonner';
 import { useAuth } from '../hooks/useAuth';
 import { useCampaigns } from '../hooks/useCampaigns';
-import { uploadProductImage, analyzeCompetitors, type CampaignDraft, type Ad, type BusinessType, type CompetitorIntelligence } from '../api';
-import { analyzeV2, quickGenerateV2 } from '../api/adpack';
+import { uploadProductImage, analyzeCompetitors, type CampaignDraft, type Ad, type CompetitorIntelligence } from '../api';
+import { prepareCampaign, generateFromPrepared } from '../api/adpack';
 import type { PublishCampaignResponse } from '../types/facebook';
-import type { AdPack } from '../types/adpack';
-
-type GenerationMode = 'full' | 'quick';
+import type { AdPack, PreparedCampaign } from '../types/adpack';
 
 // --- localStorage TTL helpers ---
 const STORAGE_KEYS = {
   RESULT: 'idea2ad_result',
   SELECTED_AD: 'idea2ad_selectedAd',
-  URL: 'idea2ad_url',
-  BUSINESS_TYPE: 'idea2ad_businessType',
-  GENERATION_MODE: 'idea2ad_generationMode',
+  INPUT: 'idea2ad_input',
   AD_PACK: 'idea2ad_adPack',
 };
 
@@ -65,19 +60,10 @@ interface AppContextValue {
   isSaving: boolean;
   handleSaveCampaign: () => Promise<void>;
 
-  // Form state
-  url: string;
-  setUrl: (url: string) => void;
-  quickIdea: string;
-  setQuickIdea: (idea: string) => void;
-  generationMode: GenerationMode;
-  setGenerationMode: (mode: GenerationMode) => void;
-  businessType: BusinessType;
-  setBusinessType: (type: BusinessType) => void;
-  editPrompt: string;
-  setEditPrompt: (prompt: string) => void;
-  productDescription: string;
-  setProductDescription: (desc: string) => void;
+  // Unified input
+  input: string;
+  setInput: (val: string) => void;
+  isInputUrl: boolean;
 
   // Image handling
   productImageFile: File | null;
@@ -93,6 +79,10 @@ interface AppContextValue {
   setCompetitors: (c: string[]) => void;
   competitorData: CompetitorIntelligence | null;
 
+  // Prepared campaign (from /v2/prepare)
+  preparedCampaign: PreparedCampaign | null;
+  setPreparedCampaign: (pc: PreparedCampaign | null) => void;
+
   // Session data
   result: CampaignDraft | null;
   setResult: (r: CampaignDraft | null) => void;
@@ -106,11 +96,18 @@ interface AppContextValue {
   setError: (e: string | null) => void;
 
   // Loading
+  isAnalyzing: boolean;
   isGenerating: boolean;
   loadingStage: number;
 
-  // Generation
-  startGeneration: (e: FormEvent) => Promise<void>;
+  // Actions
+  startAnalysis: () => Promise<void>;
+  startGeneration: (overrides: {
+    targeting?: PreparedCampaign['targeting'];
+    budget_daily_cents?: number;
+    duration_days?: number;
+    product_summary?: string;
+  }) => Promise<void>;
   cancelGeneration: () => void;
   resetSession: () => void;
 
@@ -127,6 +124,15 @@ export function useAppContext() {
   return ctx;
 }
 
+/** Detect if input looks like a URL */
+function looksLikeUrl(s: string): boolean {
+  const t = s.trim();
+  if (t.match(/^https?:\/\//i)) return true;
+  // Has a dot followed by TLD-like chars + optional path
+  if (t.match(/^[a-z0-9-]+\.[a-z]{2,}/i)) return true;
+  return false;
+}
+
 export function AppProvider({ children }: { children: ReactNode }) {
   // Auth
   const auth = useAuth();
@@ -136,22 +142,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const campaignsHook = useCampaigns();
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form state (persisted without TTL)
-  const [url, setUrl] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEYS.URL) || ''; } catch { return ''; }
+  // Unified input (persisted without TTL)
+  const [input, setInput] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEYS.INPUT) || ''; } catch { return ''; }
   });
-  const [businessType, setBusinessType] = useState<BusinessType>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.BUSINESS_TYPE);
-      return (stored === 'commerce' ? 'commerce' : 'saas') as BusinessType;
-    } catch { return 'saas'; }
-  });
-  const [generationMode, setGenerationMode] = useState<GenerationMode>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEYS.GENERATION_MODE);
-      return (stored === 'quick' ? 'quick' : 'full') as GenerationMode;
-    } catch { return 'full'; }
-  });
+
+  const isInputUrl = looksLikeUrl(input);
 
   // Session data (persisted with TTL)
   const [result, setResult] = useState<CampaignDraft | null>(() => {
@@ -176,12 +172,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [publishResult, setPublishResult] = useState<PublishCampaignResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Quick mode state
-  const [quickIdea, setQuickIdea] = useState('');
-  const [editPrompt, setEditPrompt] = useState('');
-  const [productDescription, setProductDescription] = useState('');
+  // Prepared campaign (in-memory only, no localStorage)
+  const [preparedCampaign, setPreparedCampaign] = useState<PreparedCampaign | null>(null);
 
-  // Commerce / image state
+  // Image state
   const [productImageFile, setProductImageFile] = useState<File | null>(null);
   const [productImagePreview, setProductImagePreview] = useState<string | null>(null);
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
@@ -193,6 +187,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [competitorData, setCompetitorData] = useState<CompetitorIntelligence | null>(null);
 
   // Loading state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [loadingStage, setLoadingStage] = useState(0);
 
@@ -200,7 +195,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   // --- Persist to localStorage ---
-  useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.URL, url); } catch { /* */ } }, [url]);
+  useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.INPUT, input); } catch { /* */ } }, [input]);
   useEffect(() => {
     try {
       if (result) setWithTTL(STORAGE_KEYS.RESULT, JSON.stringify(result));
@@ -219,10 +214,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       else localStorage.removeItem(STORAGE_KEYS.AD_PACK);
     } catch { /* */ }
   }, [adPack]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.BUSINESS_TYPE, businessType); } catch { /* */ } }, [businessType]);
-  useEffect(() => { try { localStorage.setItem(STORAGE_KEYS.GENERATION_MODE, generationMode); } catch { /* */ } }, [generationMode]);
 
-  // Loading stage progression
+  // Loading stage progression (for generation phase)
   useEffect(() => {
     if (!isGenerating) return;
     setLoadingStage(0);
@@ -273,87 +266,85 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // --- URL normalizer ---
-  const normalizeUrl = (input: string): string => {
-    let normalized = input.trim();
+  const normalizeUrl = (val: string): string => {
+    let normalized = val.trim();
     if (!normalized.match(/^https?:\/\//i)) {
       normalized = 'https://' + normalized;
-      toast.info('URL normalized to https://');
     }
     return normalized;
   };
 
-  // --- Generation (returns true on success for navigation) ---
-  const startGeneration = async (e: FormEvent) => {
-    e.preventDefault();
+  // --- Step 1: Analyze (prepare) ---
+  const startAnalysis = async () => {
+    if (!input.trim()) return;
 
-    if (generationMode === 'quick') {
-      const hasDescription = quickIdea.trim().length > 0;
-      const hasImage = !!uploadedImageUrl;
-      if (!hasDescription && !hasImage) {
-        setError('Provide a description and/or upload an image');
-        return;
+    setIsAnalyzing(true);
+    setError(null);
+    setPreparedCampaign(null);
+
+    try {
+      const isUrl = looksLikeUrl(input);
+      const prepared = await prepareCampaign({
+        url: isUrl ? normalizeUrl(input) : undefined,
+        description: isUrl ? undefined : input.trim(),
+        image_url: uploadedImageUrl || undefined,
+        competitor_urls: competitors.length > 0 ? competitors : undefined,
+      });
+
+      // Run competitor analysis in parallel if URLs provided
+      if (competitors.length > 0 && isUrl) {
+        analyzeCompetitors(competitors, normalizeUrl(input)).then(
+          (data) => setCompetitorData(data),
+          (err) => {
+            console.warn('Competitor analysis failed:', err);
+            toast.error('Competitor analysis failed');
+          }
+        );
       }
 
-      setIsGenerating(true);
-      setError(null);
-      setResult(null);
-      setSelectedAd(null);
-      setAdPack(null);
-
-      try {
-        const pack = await quickGenerateV2({
-          description: hasDescription ? quickIdea.trim() : undefined,
-          image_url: hasImage ? uploadedImageUrl! : undefined,
-          edit_prompt: editPrompt.trim() || undefined,
-        });
-
-        setAdPack(pack);
-        setIsGenerating(false);
-        // Caller (LandingPage) handles navigation
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Quick generation failed');
-        setIsGenerating(false);
-      }
-      return;
+      setPreparedCampaign(prepared);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Analysis failed');
+    } finally {
+      setIsAnalyzing(false);
     }
+  };
 
-    // Full mode
-    if (!url.trim()) return;
+  // --- Step 2: Generate creatives ---
+  const startGeneration = async (overrides: {
+    targeting?: PreparedCampaign['targeting'];
+    budget_daily_cents?: number;
+    duration_days?: number;
+    product_summary?: string;
+  }) => {
+    if (!preparedCampaign) return;
+
     setIsGenerating(true);
     setError(null);
     setResult(null);
     setSelectedAd(null);
-    setCompetitorData(null);
     setAdPack(null);
-    try {
-      const normalizedUrl = normalizeUrl(url);
 
-      const v2Promise = analyzeV2(normalizedUrl, undefined, {
-        image_url: uploadedImageUrl || undefined,
-        edit_prompt: editPrompt.trim() || undefined,
+    try {
+      const pack = await generateFromPrepared({
+        session_id: preparedCampaign.session_id,
+        targeting: overrides.targeting || undefined,
+        budget_daily_cents: overrides.budget_daily_cents,
+        duration_days: overrides.duration_days,
+        product_summary: overrides.product_summary,
       });
 
-      const competitorPromise = competitors.length > 0
-        ? analyzeCompetitors(competitors, normalizedUrl).catch((err) => {
-            console.warn('Competitor analysis failed:', err);
-            toast.error('Competitor analysis failed - showing results without competitor intel');
-            return null;
-          })
-        : Promise.resolve(null);
-
-      const [pack, compData] = await Promise.all([v2Promise, competitorPromise]);
-
-      setCompetitorData(compData);
       setAdPack(pack);
-      setIsGenerating(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
+      setError(err instanceof Error ? err.message : 'Generation failed');
+    } finally {
       setIsGenerating(false);
     }
   };
 
   const cancelGeneration = () => {
     setIsGenerating(false);
+    setIsAnalyzing(false);
   };
 
   const resetSession = () => {
@@ -363,8 +354,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setPublishResult(null);
     setCompetitorData(null);
     setCompetitors([]);
-    setProductDescription('');
-    setEditPrompt('');
+    setPreparedCampaign(null);
     clearProductImage();
     try {
       localStorage.removeItem(STORAGE_KEYS.RESULT);
@@ -418,12 +408,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     isSaving,
     handleSaveCampaign,
 
-    url, setUrl,
-    quickIdea, setQuickIdea,
-    generationMode, setGenerationMode,
-    businessType, setBusinessType,
-    editPrompt, setEditPrompt,
-    productDescription, setProductDescription,
+    input, setInput,
+    isInputUrl,
 
     productImageFile,
     productImagePreview,
@@ -436,15 +422,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     competitors, setCompetitors,
     competitorData,
 
+    preparedCampaign, setPreparedCampaign,
+
     result, setResult,
     selectedAd, setSelectedAd,
     adPack, setAdPack,
     publishResult, setPublishResult,
     error, setError,
 
+    isAnalyzing,
     isGenerating,
     loadingStage,
 
+    startAnalysis,
     startGeneration,
     cancelGeneration,
     resetSession,
