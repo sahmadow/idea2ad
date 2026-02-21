@@ -3,7 +3,7 @@
  * Shows font, color, size, position controls based on object type.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import type { FabricObject, Textbox } from 'fabric';
 
 interface PropertiesPanelProps {
@@ -26,9 +26,10 @@ export function PropertiesPanel({ selectedObject, onUpdate }: PropertiesPanelPro
   const [width, setWidth] = useState(100);
   const [height, setHeight] = useState(100);
 
-  // Sync state from selected object
-  useEffect(() => {
-    if (!selectedObject) return;
+  // Sync state from selected object (React docs pattern: setState during render)
+  const [prevObj, setPrevObj] = useState(selectedObject);
+  if (selectedObject && selectedObject !== prevObj) {
+    setPrevObj(selectedObject);
     setFill((selectedObject.fill as string) || '#FFFFFF');
     setLeft(Math.round(selectedObject.left || 0));
     setTop(Math.round(selectedObject.top || 0));
@@ -41,7 +42,7 @@ export function PropertiesPanel({ selectedObject, onUpdate }: PropertiesPanelPro
       setFontWeight((selectedObject.fontWeight as string) || 'normal');
       setTextAlign(selectedObject.textAlign || 'left');
     }
-  }, [selectedObject]);
+  }
 
   const updateProp = useCallback(
     (prop: string, value: unknown) => {

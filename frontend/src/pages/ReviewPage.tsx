@@ -57,9 +57,10 @@ export default function ReviewPage() {
   const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>([]);
   const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
-  // Initialize from prepared campaign — language defaults to 'en'
-  useEffect(() => {
-    if (!pc) return;
+  // Sync editable fields when prepared campaign changes (React docs pattern)
+  const [prevPc, setPrevPc] = useState(pc);
+  if (pc && pc !== prevPc) {
+    setPrevPc(pc);
     setLanguage('en');
     setProductSummary(pc.product_summary || '');
     setTargetAudience(pc.target_audience || '');
@@ -67,7 +68,7 @@ export default function ReviewPage() {
     setMessagingUnaware(pc.messaging_unaware || '');
     setMessagingAware(pc.messaging_aware || '');
     setCompetitors(pc.competitors?.map(c => ({ ...c })) || []);
-  }, [pc]);
+  }
 
   // Track generation and navigate when done
   useEffect(() => {
