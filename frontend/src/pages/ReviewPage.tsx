@@ -1,18 +1,44 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2, Globe } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-import { Terminal } from '../components/ui/Terminal';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
+import { AnalysisLoadingBlueprint } from '../components/ui/AnalysisLoadingBlueprint';
 import { useAppContext } from '../context/AppContext';
 
-const LOADING_STAGES = [
-  'Generating Copy',
-  'Creating Images',
-  'Rendering Videos',
-  'Building Ad Pack',
-];
+const LANGUAGES = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Spanish' },
+  { code: 'fr', name: 'French' },
+  { code: 'de', name: 'German' },
+  { code: 'it', name: 'Italian' },
+  { code: 'pt', name: 'Portuguese' },
+  { code: 'nl', name: 'Dutch' },
+  { code: 'ru', name: 'Russian' },
+  { code: 'ja', name: 'Japanese' },
+  { code: 'ko', name: 'Korean' },
+  { code: 'zh', name: 'Chinese' },
+  { code: 'ar', name: 'Arabic' },
+  { code: 'hi', name: 'Hindi' },
+  { code: 'tr', name: 'Turkish' },
+  { code: 'pl', name: 'Polish' },
+  { code: 'sv', name: 'Swedish' },
+  { code: 'da', name: 'Danish' },
+  { code: 'no', name: 'Norwegian' },
+  { code: 'fi', name: 'Finnish' },
+  { code: 'az', name: 'Azerbaijani' },
+  { code: 'uk', name: 'Ukrainian' },
+  { code: 'ro', name: 'Romanian' },
+  { code: 'cs', name: 'Czech' },
+  { code: 'el', name: 'Greek' },
+  { code: 'he', name: 'Hebrew' },
+  { code: 'th', name: 'Thai' },
+  { code: 'vi', name: 'Vietnamese' },
+  { code: 'id', name: 'Indonesian' },
+  { code: 'ms', name: 'Malay' },
+  { code: 'ka', name: 'Georgian' },
+] as const;
 
 export default function ReviewPage() {
   const ctx = useAppContext();
@@ -22,6 +48,7 @@ export default function ReviewPage() {
   const pc = ctx.preparedCampaign;
 
   // Editable state initialized from prepared campaign
+  const [language, setLanguage] = useState('en');
   const [productSummary, setProductSummary] = useState('');
   const [targetAudience, setTargetAudience] = useState('');
   const [mainPainPoint, setMainPainPoint] = useState('');
@@ -30,9 +57,10 @@ export default function ReviewPage() {
   const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>([]);
   const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
-  // Initialize from prepared campaign
+  // Initialize from prepared campaign — language defaults to 'en'
   useEffect(() => {
     if (!pc) return;
+    setLanguage('en');
     setProductSummary(pc.product_summary || '');
     setTargetAudience(pc.target_audience || '');
     setMainPainPoint(pc.main_pain_point || '');
@@ -58,6 +86,7 @@ export default function ReviewPage() {
 
   const handleConfirm = async () => {
     await ctx.startGeneration({
+      language,
       product_summary: productSummary,
       target_audience: targetAudience,
       main_pain_point: mainPainPoint,
@@ -76,35 +105,14 @@ export default function ReviewPage() {
     setCompetitors(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
   };
 
-  // Show loading screen when generating
+  // Show Blueprint Builder loading screen when generating
   if (ctx.isGenerating) {
     return (
-      <div className="min-h-screen bg-brand-dark text-white flex flex-col items-center justify-center px-6">
-        <div className="text-center space-y-8 max-w-md w-full">
-          <div className="w-16 h-16 border-2 border-brand-lime/30 border-t-brand-lime rounded-full animate-spin mx-auto" />
-          <div>
-            <h2 className="text-2xl font-display font-bold mb-2">Generating Your Ads</h2>
-            <p className="text-gray-400 font-mono text-sm">{pc.product_name}</p>
-          </div>
-
-          <div className="flex justify-center gap-3">
-            {LOADING_STAGES.map((stage, i) => (
-              <div key={stage} className="flex items-center gap-2">
-                <div className={`w-2 h-2 ${i <= ctx.loadingStage ? 'bg-brand-lime' : 'bg-white/20'} transition-colors`} />
-                <span className={`text-xs font-mono ${i <= ctx.loadingStage ? 'text-white' : 'text-gray-600'} hidden sm:inline transition-colors`}>
-                  {stage}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <Terminal />
-
-          <Button variant="ghost" size="sm" onClick={ctx.cancelGeneration}>
-            Cancel
-          </Button>
-        </div>
-      </div>
+      <AnalysisLoadingBlueprint
+        title="Generating Your Ads"
+        productLabel={pc.product_name}
+        onCancel={ctx.cancelGeneration}
+      />
     );
   }
 
@@ -144,12 +152,32 @@ export default function ReviewPage() {
             )}
             <h2 className="text-2xl font-display font-bold">{pc.product_name}</h2>
             <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gray border border-white/10 text-xs font-mono text-gray-400">
-              {pc.business_type} &middot; {pc.language.toUpperCase()}
+              {pc.business_type}
             </div>
           </div>
 
-          {/* Product Summary */}
+          {/* Ad Language */}
           <section className="space-y-3">
+            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
+              <Globe className="w-4 h-4 text-brand-lime" />
+              Ad Language
+            </label>
+            <select
+              value={language}
+              onChange={(e) => setLanguage(e.target.value)}
+              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors appearance-none cursor-pointer"
+            >
+              {LANGUAGES.map((lang) => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.name} ({lang.code.toUpperCase()})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs font-mono text-gray-600">All ad copy will be generated in this language</p>
+          </section>
+
+          {/* Product Summary */}
+          <section className="space-y-3 pt-6 border-t border-white/10">
             <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
               <Package className="w-4 h-4 text-brand-lime" />
               Product Summary

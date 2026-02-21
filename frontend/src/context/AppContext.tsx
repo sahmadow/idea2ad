@@ -103,6 +103,7 @@ interface AppContextValue {
   // Actions
   startAnalysis: () => Promise<void>;
   startGeneration: (overrides: {
+    language: string;
     product_summary?: string;
     target_audience?: string;
     main_pain_point?: string;
@@ -302,6 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // --- Step 2: Generate creatives ---
   const startGeneration = async (overrides: {
+    language: string;
     product_summary?: string;
     target_audience?: string;
     main_pain_point?: string;
@@ -320,6 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const pack = await generateFromPrepared({
         session_id: preparedCampaign.session_id,
+        language: overrides.language,
         product_summary: overrides.product_summary,
         target_audience: overrides.target_audience,
         main_pain_point: overrides.main_pain_point,

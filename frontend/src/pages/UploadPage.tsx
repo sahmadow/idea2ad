@@ -1,9 +1,10 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRight, Upload, X, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Upload, X } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
+import { AnalysisLoadingOrbit } from '../components/ui/AnalysisLoadingOrbit';
 import { useAppContext } from '../context/AppContext';
 
 export default function UploadPage() {
@@ -25,6 +26,16 @@ export default function UploadPage() {
   if (ctx.preparedCampaign && !ctx.isAnalyzing) {
     navigate('/review', { replace: true });
     return null;
+  }
+
+  // Full-screen Orbit Scanner during analysis
+  if (ctx.isAnalyzing) {
+    return (
+      <AnalysisLoadingOrbit
+        productLabel={ctx.input.trim()}
+        onCancel={ctx.cancelGeneration}
+      />
+    );
   }
 
   return (
@@ -121,19 +132,10 @@ export default function UploadPage() {
               variant="primary"
               className="flex-1 group"
               onClick={handleAnalyze}
-              disabled={ctx.isAnalyzing || ctx.isUploading}
+              disabled={ctx.isUploading}
             >
-              {ctx.isAnalyzing ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  Analyze
-                  <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-                </>
-              )}
+              Analyze
+              <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
             </Button>
           </div>
 

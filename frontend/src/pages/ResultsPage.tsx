@@ -24,7 +24,7 @@ export default function ResultsPage() {
       onSelectAd={ctx.setSelectedAd}
       onBack={handleBack}
       onNext={() => ctx.selectedAd && navigate('/publish')}
-      onRegenerate={() => ctx.startGeneration({})}
+      onRegenerate={() => ctx.startGeneration({ language: 'en' })}
       competitorData={ctx.competitorData}
       onSave={ctx.handleSaveCampaign}
       isSaving={ctx.isSaving}

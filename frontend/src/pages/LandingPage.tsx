@@ -1,17 +1,24 @@
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { LandingView } from '../components/LandingView';
+import { AnalysisLoadingTerminal } from '../components/ui/AnalysisLoadingTerminal';
 import { useAppContext } from '../context/AppContext';
 
 export default function LandingPage() {
   const ctx = useAppContext();
   const navigate = useNavigate();
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!ctx.input.trim()) return;
-    // Navigate to upload page (step 2)
-    navigate('/upload');
+    setIsTransitioning(true);
   };
+
+  // Navigate only after the terminal animation finishes
+  const handleAnimationComplete = useCallback(() => {
+    navigate('/upload');
+  }, [navigate]);
 
   const handleDashboardClick = () => {
     if (!ctx.auth.isAuthenticated) {
@@ -20,6 +27,16 @@ export default function LandingPage() {
     }
     navigate('/dashboard');
   };
+
+  if (isTransitioning) {
+    return (
+      <AnalysisLoadingTerminal
+        productLabel={ctx.input.trim()}
+        onCancel={() => setIsTransitioning(false)}
+        onComplete={handleAnimationComplete}
+      />
+    );
+  }
 
   return (
     <LandingView

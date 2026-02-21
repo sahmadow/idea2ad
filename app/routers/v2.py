@@ -550,6 +550,15 @@ async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
         scraped_data: dict = session.get("scraped_data", {})
         image_url = session.get("image_url")
 
+        # Apply user-selected language override (mandatory on frontend)
+        original_language = params.language or "en"
+        if body.language:
+            params.language = body.language
+
+        # Re-translate params if user changed the language
+        if params.language != original_language and params.language != "en":
+            params = await translate_params(params)
+
         # Build targeting from params (not user-editable at this stage)
         targeting = _build_targeting(params)
         budget_cents = 1500

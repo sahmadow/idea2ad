@@ -130,6 +130,9 @@ class GenerateRequest(BaseModel):
     """Input for the generate step — session_id + user overrides from review page."""
     session_id: str
 
+    # User-selected language (mandatory on frontend, overrides auto-detected)
+    language: str | None = None  # ISO 639-1 code
+
     # User-editable overrides from review page
     product_summary: str | None = None
     target_audience: str | None = None
