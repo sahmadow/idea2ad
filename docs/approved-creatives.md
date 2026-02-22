@@ -4,11 +4,11 @@ Statics use **Approach 4**: inline HTML/CSS → Playwright screenshot at 2x DPR.
 Videos use **Remotion**: React compositions → headless Chrome → H.264 MP4. No LLM calls.
 UGC avatar videos use **HeyGen**: AI avatar + TTS → MP4 via REST API.
 
-**AI Led (9 types):**
+**AI Led (11 types):**
 
 | #   | Creative               | ID                       | Format | Renderer                                   | Business Type | Cost/100 | Status |
 | --- | ---------------------- | ------------------------ | ------ | ------------------------------------------ | ------------- | -------- | ------ |
-| 1   | Branded Static         | `branded_static`         | Static | `scripts/ad_approach_comparison.py`         | All           | ~$0      | Active |
+| 1   | Branded Static         | `branded_static`         | Static | `social_templates/branded_static.py`        | All           | ~$0      | Active |
 | 2   | Organic Static — Reddit | `organic_static_reddit` | Static | `social_templates/reddit_post.py`           | All           | ~$0      | Active |
 | 3   | Problem Statement Text | `problem_statement_text` | Static | `social_templates/problem_statement.py`     | All           | ~$0      | Active |
 | 4   | Review Static          | `review_static`          | Static | `social_templates/review_static.py`         | All           | ~$0      | Active |
@@ -17,6 +17,8 @@ UGC avatar videos use **HeyGen**: AI avatar + TTS → MP4 via REST API.
 | 6   | Service Hero Video     | `service_hero_video`     | Video  | `remotion/src/compositions/ServiceHero.tsx` | Service       | ~$0      | Active |
 | 7   | Branded Static Video   | `branded_static_video`   | Video  | `remotion/src/compositions/BrandedStatic.tsx` | All         | ~$0      | Active |
 | 8   | UGC Avatar Video       | `ugc_avatar_video`       | Video  | HeyGen API → `ugc_avatar_renderer.py`         | All         | ~$400    | **OFF** |
+| 10  | Product Centric        | `product_centric`        | Static | `social_templates/product_centric.py`       | All           | ~$0      | Active |
+| 11  | Person Centric         | `person_centric`         | Static | `social_templates/person_centric.py` + Gemini image | All  | ~$2.00   | Active |
 
 **Manual Upload (1 type):**
 
@@ -34,7 +36,7 @@ UGC avatar videos use **HeyGen**: AI avatar + TTS → MP4 via REST API.
 
 The frontend offers two landing page modes that determine how creatives are generated:
 
-- **AI Led** — User provides a landing page URL. The system scrapes the page, extracts design tokens and copy, then generates creatives #1–#8 automatically. No user-supplied images needed (except Service Hero which uses a scraped/generated scene image).
+- **AI Led** — User provides a landing page URL. The system scrapes the page, extracts design tokens and copy, then generates creatives #1–#8, #10–#11 automatically. Product Centric (#10) requires scraped product images. Person Centric (#11) generates an AI person image via Gemini.
 - **Manual Upload** — User uploads their own product/brand image. The system uses Gemini 2.5 Flash to edit the image (background removal, enhancement) and optionally overlays text via Playwright. Produces creative #9.
 
 ---
@@ -388,18 +390,19 @@ All estimates as of Feb 2026. Prices change — verify against provider pricing 
 
 | Creative | API calls | Tokens/call | Cost/call | Cost/100 |
 |----------|-----------|-------------|-----------|----------|
-| #1-4, #5-7 (statics + videos) | 0 | — | $0 | **~$0** |
+| #1-4, #5-7, #10 (statics + videos) | 0 | — | $0 | **~$0** |
 | #4b Review Static (Competition) | 1x Gemini 2.0 Flash | ~800 in / ~300 out | ~$0.0002 | **~$0.02** |
 | #8 UGC Avatar Video | 1x HeyGen API | — | ~$4.00 | **~$400** |
 | #9 Manual Image Upload | 1x Gemini 2.5 Flash | ~1K in / ~300 out + image I/O | ~$0.001 | **~$0.10** |
+| #11 Person Centric | 1x Gemini 2.5 Flash Image | image generation | ~$0.02 | **~$2.00** |
 
 ### Full pack cost (1 URL → ~10 creatives)
 
 | Scenario | API cost | Notes |
 |----------|----------|-------|
-| Without UGC avatar (default) | **~$0.002** | 1 Gemini extraction + 1 Gemini competition copy |
-| With UGC avatar | **~$4.00** | + 1 HeyGen video render |
-| With manual upload | **~$0.003** | + 1 Gemini image edit |
+| Without UGC avatar (default) | **~$0.022** | 1 Gemini extraction + 1 competition copy + 1 person image |
+| With UGC avatar | **~$4.02** | + 1 HeyGen video render |
+| With manual upload | **~$0.023** | + 1 Gemini image edit |
 
 ### Scaling estimate (100 packs/month)
 
@@ -408,9 +411,9 @@ All estimates as of Feb 2026. Prices change — verify against provider pricing 
 | Railway (API + renderer + DB) | ~$35 |
 | Vercel (frontend) | $0 |
 | AWS S3 (~1000 images, ~150MB) | ~$0.50 |
-| Gemini API (100 extractions + 100 competition copies) | ~$0.12 |
+| Gemini API (100 extractions + 100 competition copies + 100 person images) | ~$2.12 |
 | HeyGen (0 videos, OFF) | $0 |
-| **Total** | **~$36/mo** |
+| **Total** | **~$38/mo** |
 
 ### Pricing basis (Feb 2026)
 
@@ -525,3 +528,102 @@ User uploads their own product/brand image. Gemini edits the image (background r
 - `app/services/v2/social_templates/product_showcase.py` — text overlay HTML builder
 
 **Output:** PNG, ~100-300KB
+
+---
+
+## 10. Product Centric
+
+**ID:** `product_centric`
+**Renderer:** `app/services/v2/social_templates/product_centric.py`
+**Aspect ratios:** 1:1 (1080x1080)
+**Business Type:** All
+**Condition:** Only generated when product images or hero image are available
+
+Pain point + headline + product image + CTA. Uses scraped product image (first available from `product_images` or `hero_image_url`). Styled with scraped design tokens.
+
+**Inputs (`ProductCentricParams`):**
+| Param | Type | Default |
+|-------|------|---------|
+| `headline` | str | `"Your headline here"` |
+| `pain_point` | str \| None | None |
+| `subheadline` | str \| None | None |
+| `cta_text` | str | `"Get Started"` |
+| `product_image_url` | str \| None | None |
+| `product_image_bytes` | bytes \| None | None |
+| `logo_url` | str \| None | None |
+| `bg_color` | str | `"#0f172a"` |
+| `bg_gradient` | str \| None | None |
+| `accent_color` | str | `"#3b82f6"` |
+| `text_color` | str | `"#ffffff"` |
+| `btn_bg` | str \| None | None |
+| `btn_color` | str | `"#ffffff"` |
+| `btn_radius` | str | `"12px"` |
+
+**Visual structure:**
+- Decorative circles (accent, low opacity)
+- Logo (top-left)
+- Pain point (italic, muted, centered)
+- Headline (large, bold, centered)
+- Subheadline (below headline)
+- Product image (center, object-contain, drop-shadow)
+- CTA button (bottom, accent-colored)
+
+**Key files:**
+- `app/services/v2/social_templates/product_centric.py` — renderer
+- `app/services/v2/social_template_bridges.py` — `bridge_product_centric()`
+
+**Output:** PNG, ~100-300KB
+
+---
+
+## 11. Person Centric
+
+**ID:** `person_centric`
+**Renderer:** `app/services/v2/social_templates/person_centric.py`
+**Aspect ratios:** 1:1 (1080x1080)
+**Business Type:** All
+**Condition:** Always generated (AI person image via Gemini)
+
+Headline + AI-generated person image + subheadline + CTA. Uses Gemini 2.5 Flash Image to generate a lifestyle photo of a person actively using the product, based on target persona.
+
+**Pipeline:**
+1. `generate_person_image()` builds prompt from `persona_primary` + `product_name` + `product_category`
+2. Gemini 2.5 Flash Image generates a lifestyle photograph
+3. Image embedded as base64 data URI in HTML
+4. Playwright screenshots at 2x DPR
+
+**Person image prompt:** "Professional lifestyle photograph of a {persona} actively using {product} ({category}). {scene_context}. Clean composition, commercial photography, studio lighting, 4K quality."
+
+**Inputs (`PersonCentricParams`):**
+| Param | Type | Default |
+|-------|------|---------|
+| `headline` | str | `"Your headline here"` |
+| `subheadline` | str \| None | None |
+| `cta_text` | str | `"Get Started"` |
+| `person_image_bytes` | bytes \| None | None |
+| `logo_url` | str \| None | None |
+| `bg_color` | str | `"#0f172a"` |
+| `bg_gradient` | str \| None | None |
+| `accent_color` | str | `"#3b82f6"` |
+| `text_color` | str | `"#ffffff"` |
+| `btn_bg` | str \| None | None |
+| `btn_color` | str | `"#ffffff"` |
+| `btn_radius` | str | `"12px"` |
+
+**Visual structure:**
+- Decorative circles (accent, low opacity)
+- Logo (top-left)
+- Headline (top zone, large)
+- Person image (center, dominant, border-radius, drop-shadow)
+- Subheadline + CTA (bottom zone)
+
+**Graceful degradation:** If Gemini fails or `GOOGLE_API_KEY` is unset, renders with a placeholder circle instead of a person image. Pipeline does not crash.
+
+**Env vars:**
+- `GOOGLE_API_KEY` — required for person image generation (skipped gracefully if missing)
+
+**Key files:**
+- `app/services/v2/social_templates/person_centric.py` — renderer + `generate_person_image()`
+- `app/services/v2/social_template_bridges.py` — `bridge_person_centric()`
+
+**Output:** PNG, ~200-500KB

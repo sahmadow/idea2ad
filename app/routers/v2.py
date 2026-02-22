@@ -51,6 +51,8 @@ from app.services.v2.social_template_bridges import (
     bridge_problem_statement,
     bridge_review_static,
     bridge_service_hero,
+    bridge_product_centric,
+    bridge_person_centric,
     bridge_branded_static_video,
     bridge_service_hero_video,
 )
@@ -1560,6 +1562,19 @@ async def _dispatch_render(
     if ad_type_id == "service_hero":
         from app.services.v2.social_templates.service_hero import render_service_hero
         return await render_service_hero(bridge_service_hero(params, copy))
+
+    if ad_type_id == "product_centric":
+        from app.services.v2.social_templates.product_centric import render_product_centric
+        return await render_product_centric(bridge_product_centric(params, scraped_data, copy))
+
+    if ad_type_id == "person_centric":
+        from app.services.v2.social_templates.person_centric import (
+            render_person_centric, generate_person_image,
+        )
+        bridged = bridge_person_centric(params, copy)
+        person_bytes = await generate_person_image(params)
+        bridged.person_image_bytes = person_bytes
+        return await render_person_centric(bridged)
 
     # Video types (Remotion-rendered)
     if ad_type_id == "branded_static_video":

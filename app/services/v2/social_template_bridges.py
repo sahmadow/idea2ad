@@ -201,6 +201,99 @@ def bridge_service_hero(params: CreativeParameters, copy: dict):
     )
 
 
+def bridge_product_centric(
+    params: CreativeParameters,
+    scraped_data: dict,
+    copy: dict,
+):
+    """Map CreativeParameters + scraped data → ProductCentricParams."""
+    from app.services.v2.social_templates.product_centric import ProductCentricParams
+
+    styling = scraped_data.get("styling", {})
+
+    # Colors — same pattern as bridge_branded_static
+    bgs = styling.get("backgrounds", [])
+    accents = styling.get("accents", [])
+    texts = styling.get("text", [])
+
+    bg_color = bgs[0] if bgs else "#0f172a"
+    accent = accents[0] if accents else "#3b82f6"
+    text_color = "#ffffff"
+    bg_lower = bg_color.lower()
+    if bg_lower.startswith("#f") or bg_lower.startswith("#e") or bg_lower.startswith("#d") or bg_lower.startswith("#c") or bg_lower == "#ffffff":
+        text_color = texts[0] if texts else "#1a202c"
+
+    # Gradient or solid
+    design_tokens = scraped_data.get("design_tokens", {})
+    gradients = design_tokens.get("gradients", [])
+    bg_gradient = gradients[0]["raw"] if gradients else None
+
+    # Headline
+    headline = copy.get("headline") or params.headline or params.key_benefit or params.product_name
+
+    # Pain point
+    pain_point = None
+    if params.customer_pains:
+        pain_point = params.customer_pains[0].rstrip(".!;,")
+
+    # Product image — first available
+    product_image_url = None
+    if params.product_images:
+        product_image_url = params.product_images[0]
+    elif params.hero_image_url:
+        product_image_url = params.hero_image_url
+
+    # Button styling
+    css_assets = scraped_data.get("css_assets", {})
+    btn = css_assets.get("button_styles", {})
+
+    return ProductCentricParams(
+        headline=headline,
+        pain_point=pain_point,
+        subheadline=params.subheadline or params.product_description_short or None,
+        cta_text=params.cta_text or "Get Started",
+        product_image_url=product_image_url,
+        logo_url=params.brand_logo_url,
+        bg_color=bg_color,
+        bg_gradient=bg_gradient,
+        accent_color=accent,
+        text_color=text_color,
+        btn_bg=btn.get("backgroundColor"),
+        btn_color=btn.get("color", "#ffffff"),
+        btn_radius=btn.get("borderRadius", design_tokens.get("border_radius", "12px") or "12px"),
+    )
+
+
+def bridge_person_centric(params: CreativeParameters, copy: dict):
+    """Map CreativeParameters + copy → PersonCentricParams."""
+    from app.services.v2.social_templates.person_centric import PersonCentricParams
+
+    headline = copy.get("headline") or params.headline or params.product_name
+    subheadline = params.key_benefit or copy.get("description") or params.product_description_short or None
+
+    # Colors from brand_colors
+    bg_color = "#0f172a"
+    accent = "#3b82f6"
+    if params.brand_colors:
+        bc = params.brand_colors
+        if bc.primary and bc.primary.lower() not in ("#ffffff", "#f7f7f7", "#fafafa"):
+            bg_color = bc.primary
+        if bc.accent:
+            accent = bc.accent
+        elif bc.secondary:
+            accent = bc.secondary
+
+    return PersonCentricParams(
+        headline=headline,
+        subheadline=subheadline,
+        cta_text=params.cta_text or "Get Started",
+        person_image_bytes=None,  # set later in dispatch after generation
+        logo_url=params.brand_logo_url,
+        bg_color=bg_color,
+        accent_color=accent,
+    )
+
+
 # =====================================================================
 # VIDEO BRIDGES (Remotion props — plain dicts, not dataclasses)
 # =====================================================================

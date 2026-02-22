@@ -5,6 +5,8 @@ Selection logic:
 - branded_static, organic_static_reddit, problem_statement_text: always
 - review_static, review_static_competition: only if social proof exists
 - service_hero: only if hero_image_url exists
+- product_centric: only if product images or hero image exist
+- person_centric: always (generates AI person image)
 - branded_static_video: always (video counterpart of branded_static)
 - service_hero_video: only if hero_image_url exists
 """
@@ -34,6 +36,13 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
     # Conditional: hero image
     if params.hero_image_url:
         _try_add(selected, "service_hero", params)
+
+    # Conditional: product images available
+    if params.product_images or params.hero_image_url:
+        _try_add(selected, "product_centric", params)
+
+    # Person centric: always (generates AI person image)
+    _try_add(selected, "person_centric", params)
 
     # Video types (Remotion-rendered)
     _try_add(selected, "branded_static_video", params)

@@ -1,5 +1,5 @@
 """
-Ad Type Registry — 6 approved static + 2 video creative types for V2 pipeline.
+Ad Type Registry — 8 approved static + 2 video creative types for V2 pipeline.
 
 Static types dispatch to HTML+Playwright social template renderers.
 Video types dispatch to Remotion server-side rendering (MP4).
@@ -13,7 +13,7 @@ from app.schemas.ad_types import (
 
 
 # =====================================================================
-# 6 APPROVED STATIC TYPES
+# 8 APPROVED STATIC TYPES
 # =====================================================================
 
 BRANDED_STATIC = AdTypeDefinition(
@@ -147,6 +147,44 @@ SERVICE_HERO = AdTypeDefinition(
     ),
 )
 
+PRODUCT_CENTRIC = AdTypeDefinition(
+    id="product_centric",
+    name="Product Centric",
+    strategy="product_aware",
+    format="static",
+    aspect_ratios=["1:1"],
+    required_params=["product_name"],
+    optional_params=["customer_pains", "headline", "brand_logo_url", "brand_colors"],
+    skip_condition=None,  # gated by selector: only if product images exist
+    layers=[],  # rendered by social_templates/product_centric.py
+    copy_templates=CopyTemplate(
+        primary_text="{customer_pains[0]}?\n\n{key_benefit}\n\n{product_name} ->",
+        headline="{headline}",
+        description="{product_description_short}",
+        cta_type="LEARN_MORE",
+        fallbacks={"headline": "{product_name}", "customer_pains[0]": "Your biggest problem"},
+    ),
+)
+
+PERSON_CENTRIC = AdTypeDefinition(
+    id="person_centric",
+    name="Person Centric",
+    strategy="product_unaware",
+    format="static",
+    aspect_ratios=["1:1"],
+    required_params=["product_name"],
+    optional_params=["persona_primary", "headline", "brand_colors"],
+    skip_condition=None,  # always generate (AI person image)
+    layers=[],  # rendered by social_templates/person_centric.py
+    copy_templates=CopyTemplate(
+        primary_text="{key_benefit}\n\nJoin {social_proof} people who already switched.",
+        headline="{headline}",
+        description="{product_description_short}",
+        cta_type="SIGN_UP",
+        fallbacks={"headline": "{product_name}", "social_proof": "thousands of"},
+    ),
+)
+
 
 # =====================================================================
 # 2 VIDEO TYPES (Remotion-rendered)
@@ -202,6 +240,8 @@ AD_TYPE_REGISTRY: dict[str, AdTypeDefinition] = {
     "review_static": REVIEW_STATIC,
     "review_static_competition": REVIEW_STATIC_COMPETITION,
     "service_hero": SERVICE_HERO,
+    "product_centric": PRODUCT_CENTRIC,
+    "person_centric": PERSON_CENTRIC,
     "branded_static_video": BRANDED_STATIC_VIDEO,
     "service_hero_video": SERVICE_HERO_VIDEO,
 }
