@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Menu, X, LayoutDashboard, LogOut, User } from 'lucide-react';
+import { Menu, X, LayoutDashboard, LogOut, User, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '../ui/Button';
+import { useTheme } from '../../context/ThemeContext';
 
 interface NavbarProps {
     onLogoClick?: () => void;
@@ -14,11 +15,12 @@ interface NavbarProps {
 
 export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick, onLogout }: NavbarProps) {
     const [mobileOpen, setMobileOpen] = useState(false);
+    const { theme, toggleTheme, isLandingPage } = useTheme();
 
     const isAuthenticated = !!userName;
 
     return (
-        <nav className="fixed top-0 left-0 right-0 z-50 bg-brand-dark/90 backdrop-blur-md border-b border-white/5" aria-label="Main navigation">
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 dark:bg-brand-dark/90 backdrop-blur-md border-b border-gray-200 dark:border-white/5" aria-label="Main navigation">
             <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
                 {/* Logo */}
                 <Link
@@ -29,13 +31,13 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                     <div className="w-8 h-8 bg-brand-lime flex items-center justify-center font-display font-bold text-xl text-brand-dark">
                         L
                     </div>
-                    <span className="font-display font-bold text-xl tracking-tight text-white">
+                    <span className="font-display font-bold text-xl tracking-tight text-gray-900 dark:text-white">
                         LAUNCHAD
                     </span>
                 </Link>
 
                 {/* Desktop links */}
-                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-400">
+                <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600 dark:text-gray-400">
                     <a href="#features" className="hover:text-brand-lime transition-colors">Features</a>
                     <a href="#pricing" className="hover:text-brand-lime transition-colors">Pricing</a>
                     {isAuthenticated && (
@@ -53,9 +55,20 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
 
                 {/* Desktop CTA */}
                 <div className="hidden md:flex items-center gap-4">
+                    {/* Theme toggle — only on landing page */}
+                    {isLandingPage && (
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 text-gray-500 dark:text-gray-400 hover:text-brand-lime transition-colors"
+                            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                        </button>
+                    )}
+
                     {isAuthenticated ? (
                         <>
-                            <span className="flex items-center gap-1.5 text-sm text-gray-400">
+                            <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
                                 <User className="w-4 h-4" />
                                 <span className="font-mono">{userName}</span>
                             </span>
@@ -73,7 +86,7 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                         <>
                             <button
                                 onClick={onSignInClick}
-                                className="text-sm font-medium text-white hover:text-brand-lime transition-colors"
+                                className="text-sm font-medium text-gray-900 dark:text-white hover:text-brand-lime transition-colors"
                             >
                                 Sign In
                             </button>
@@ -85,14 +98,25 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                 </div>
 
                 {/* Mobile hamburger */}
-                <button
-                    className="md:hidden p-2 text-white hover:text-brand-lime transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime"
-                    onClick={() => setMobileOpen(!mobileOpen)}
-                    aria-expanded={mobileOpen}
-                    aria-label="Toggle menu"
-                >
-                    {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-                </button>
+                <div className="md:hidden flex items-center gap-2">
+                    {isLandingPage && (
+                        <button
+                            onClick={toggleTheme}
+                            className="p-2 text-gray-500 dark:text-gray-400 hover:text-brand-lime transition-colors"
+                            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                        >
+                            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+                        </button>
+                    )}
+                    <button
+                        className="p-2 text-gray-900 dark:text-white hover:text-brand-lime transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-lime"
+                        onClick={() => setMobileOpen(!mobileOpen)}
+                        aria-expanded={mobileOpen}
+                        aria-label="Toggle menu"
+                    >
+                        {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+                    </button>
+                </div>
             </div>
 
             {/* Mobile menu */}
@@ -103,26 +127,26 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
                         transition={{ duration: 0.2 }}
-                        className="md:hidden overflow-hidden border-t border-white/5 bg-brand-dark/95 backdrop-blur-md"
+                        className="md:hidden overflow-hidden border-t border-gray-200 dark:border-white/5 bg-white/95 dark:bg-brand-dark/95 backdrop-blur-md"
                     >
                         <div className="px-6 py-4 flex flex-col gap-4">
-                            <a href="#features" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Features</a>
-                            <a href="#pricing" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Pricing</a>
+                            <a href="#features" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-lime transition-colors py-2">Features</a>
+                            <a href="#pricing" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-lime transition-colors py-2">Pricing</a>
                             {isAuthenticated && (
                                 <Link
                                     to="/dashboard"
                                     onClick={() => { setMobileOpen(false); onDashboardClick?.(); }}
-                                    className="flex items-center gap-1.5 text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2 text-left"
+                                    className="flex items-center gap-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-lime transition-colors py-2 text-left"
                                 >
                                     <LayoutDashboard className="w-4 h-4" />
                                     My Campaigns
                                 </Link>
                             )}
-                            <a href="#" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-400 hover:text-brand-lime transition-colors py-2">Docs</a>
-                            <div className="border-t border-white/5 pt-4 flex flex-col gap-3">
+                            <a href="#" onClick={() => setMobileOpen(false)} className="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-brand-lime transition-colors py-2">Docs</a>
+                            <div className="border-t border-gray-200 dark:border-white/5 pt-4 flex flex-col gap-3">
                                 {isAuthenticated ? (
                                     <>
-                                        <span className="flex items-center gap-1.5 text-sm text-gray-400 py-2">
+                                        <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 py-2">
                                             <User className="w-4 h-4" />
                                             <span className="font-mono">{userName}</span>
                                         </span>
@@ -140,7 +164,7 @@ export function Navbar({ onLogoClick, userName, onSignInClick, onDashboardClick,
                                     <>
                                         <button
                                             onClick={() => { setMobileOpen(false); onSignInClick?.(); }}
-                                            className="text-sm font-medium text-white hover:text-brand-lime transition-colors py-2 text-left"
+                                            className="text-sm font-medium text-gray-900 dark:text-white hover:text-brand-lime transition-colors py-2 text-left"
                                         >
                                             Sign In
                                         </button>

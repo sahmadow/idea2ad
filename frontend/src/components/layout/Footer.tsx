@@ -27,7 +27,7 @@ export function Footer({ onCta }: FooterProps) {
             </div>
 
             {/* Main footer */}
-            <div className="bg-brand-gray border-t border-white/10">
+            <div className="bg-gray-100 dark:bg-brand-gray border-t border-gray-200 dark:border-white/10">
                 <div className="max-w-7xl mx-auto px-6 pt-16 pb-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12">
                     {/* Brand */}
                     <div className="col-span-1 sm:col-span-2">
@@ -35,22 +35,22 @@ export function Footer({ onCta }: FooterProps) {
                             <div className="w-8 h-8 bg-brand-lime flex items-center justify-center font-display font-bold text-xl text-brand-dark">
                                 L
                             </div>
-                            <span className="font-display font-bold text-xl tracking-tight text-white">
+                            <span className="font-display font-bold text-xl tracking-tight text-gray-900 dark:text-white">
                                 LAUNCHAD
                             </span>
                         </div>
-                        <p className="text-white/60 max-w-sm mb-6 text-sm">
+                        <p className="text-gray-500 dark:text-white/60 max-w-sm mb-6 text-sm">
                             Turn any landing page into a high-converting Meta Ads campaign in 60 seconds.
                             Built by makers, for makers.
                         </p>
                         <div className="flex gap-3">
-                            <a href="#" className="p-2 bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-white/60 transition-colors" aria-label="Twitter">
+                            <a href="#" className="p-2 bg-gray-200 dark:bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-gray-500 dark:text-white/60 transition-colors" aria-label="Twitter">
                                 <Twitter className="w-5 h-5" />
                             </a>
-                            <a href="#" className="p-2 bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-white/60 transition-colors" aria-label="GitHub">
+                            <a href="#" className="p-2 bg-gray-200 dark:bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-gray-500 dark:text-white/60 transition-colors" aria-label="GitHub">
                                 <Github className="w-5 h-5" />
                             </a>
-                            <a href="#" className="p-2 bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-white/60 transition-colors" aria-label="LinkedIn">
+                            <a href="#" className="p-2 bg-gray-200 dark:bg-white/10 hover:bg-brand-lime hover:text-brand-dark text-gray-500 dark:text-white/60 transition-colors" aria-label="LinkedIn">
                                 <Linkedin className="w-5 h-5" />
                             </a>
                         </div>
@@ -58,8 +58,8 @@ export function Footer({ onCta }: FooterProps) {
 
                     {/* Product */}
                     <div>
-                        <h4 className="font-mono font-bold mb-6 text-white uppercase tracking-wider text-xs">Product</h4>
-                        <ul className="space-y-3 text-sm text-white/60">
+                        <h4 className="font-mono font-bold mb-6 text-gray-900 dark:text-white uppercase tracking-wider text-xs">Product</h4>
+                        <ul className="space-y-3 text-sm text-gray-500 dark:text-white/60">
                             <li><a href="#features" className="hover:text-brand-lime transition-colors">Features</a></li>
                             <li><a href="#pricing" className="hover:text-brand-lime transition-colors">Pricing</a></li>
                             <li><a href="#" className="hover:text-brand-lime transition-colors">Changelog</a></li>
@@ -69,8 +69,8 @@ export function Footer({ onCta }: FooterProps) {
 
                     {/* Company */}
                     <div>
-                        <h4 className="font-mono font-bold mb-6 text-white uppercase tracking-wider text-xs">Company</h4>
-                        <ul className="space-y-3 text-sm text-white/60">
+                        <h4 className="font-mono font-bold mb-6 text-gray-900 dark:text-white uppercase tracking-wider text-xs">Company</h4>
+                        <ul className="space-y-3 text-sm text-gray-500 dark:text-white/60">
                             <li><a href="#" className="hover:text-brand-lime transition-colors">About</a></li>
                             <li><a href="#" className="hover:text-brand-lime transition-colors">Blog</a></li>
                             <li><a href="#" className="hover:text-brand-lime transition-colors">Contact</a></li>
@@ -80,11 +80,11 @@ export function Footer({ onCta }: FooterProps) {
                 </div>
 
                 {/* Bottom */}
-                <div className="max-w-7xl mx-auto px-6 py-6 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-white/40">
-                    <div>© 2026 LaunchAd Inc.</div>
+                <div className="max-w-7xl mx-auto px-6 py-6 border-t border-gray-200 dark:border-white/5 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs text-gray-400 dark:text-white/40">
+                    <div>&copy; 2026 LaunchAd Inc.</div>
                     <div className="flex gap-6">
-                        <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-                        <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+                        <a href="#" className="hover:text-gray-900 dark:hover:text-white transition-colors">Privacy Policy</a>
+                        <a href="#" className="hover:text-gray-900 dark:hover:text-white transition-colors">Terms of Service</a>
                     </div>
                 </div>
             </div>

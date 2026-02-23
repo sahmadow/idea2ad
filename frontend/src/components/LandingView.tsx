@@ -92,7 +92,7 @@ export function LandingView({
   }, [displayedText, isTyping, currentExample, input, isFocused]);
 
   return (
-    <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-lime selection:text-brand-dark">
+    <div className="min-h-screen bg-white dark:bg-brand-dark text-gray-900 dark:text-white selection:bg-brand-lime selection:text-brand-dark">
       <Navbar
         onLogoClick={scrollToTop}
         userName={userName}
@@ -103,29 +103,29 @@ export function LandingView({
 
       {/* Hero */}
       <section className="relative pt-32 pb-20 overflow-hidden">
-        <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] pointer-events-none" />
+        <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] dark:opacity-[0.03] pointer-events-none" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-lime/5 blur-[120px] rounded-full pointer-events-none" />
 
         <div className="max-w-7xl mx-auto px-6 relative">
           <div className="max-w-3xl mx-auto text-center space-y-8 mb-24 relative z-10">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gray border border-white/10 text-xs font-mono text-brand-lime uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-gray-100 dark:bg-brand-gray border border-gray-200 dark:border-white/10 text-xs font-mono text-brand-lime uppercase tracking-wider">
               <span className="w-2 h-2 bg-brand-lime animate-pulse" />
               AI-Powered Ad Generation
             </div>
 
-            <h1 className="text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-display font-bold leading-[0.9] text-white text-balance">
+            <h1 className="text-3xl xs:text-4xl sm:text-5xl lg:text-6xl font-display font-bold leading-[0.9] text-gray-900 dark:text-white text-balance">
               SAY GOODBYE TO <span className="text-brand-lime">MANUAL</span> AD CREATION
             </h1>
 
-            <p className="text-lg sm:text-xl text-gray-400 max-w-xl mx-auto leading-relaxed">
-              Turn any landing page into a <span className="text-white font-medium">Meta Ads campaign</span> in 60 seconds.
+            <p className="text-lg sm:text-xl text-gray-600 dark:text-gray-400 max-w-xl mx-auto leading-relaxed">
+              Turn any landing page into a <span className="text-gray-900 dark:text-white font-medium">Meta Ads campaign</span> in 60 seconds.
             </p>
 
             {/* Single unified input */}
             <form onSubmit={onSubmit} className="max-w-2xl mx-auto w-full">
               <div className="relative group">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-lime/20 via-brand-lime/5 to-brand-lime/20 rounded-lg opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 blur-sm" />
-                <div className="relative flex items-center bg-brand-gray border border-white/10 rounded-lg group-focus-within:border-brand-lime/50 transition-colors">
+                <div className="relative flex items-center bg-gray-100 dark:bg-brand-gray border border-gray-200 dark:border-white/10 rounded-lg group-focus-within:border-brand-lime/50 transition-colors">
                   <div className="flex-1 relative">
                     <input
                       type="text"
@@ -134,11 +134,11 @@ export function LandingView({
                       onFocus={() => setIsFocused(true)}
                       onBlur={() => setIsFocused(false)}
                       aria-label="Product URL or description"
-                      className="w-full h-16 sm:h-[72px] bg-transparent px-6 sm:px-8 text-white focus:outline-none font-mono text-base sm:text-lg placeholder:text-gray-600 transition-colors"
+                      className="w-full h-16 sm:h-[72px] bg-transparent px-6 sm:px-8 text-gray-900 dark:text-white focus:outline-none font-mono text-base sm:text-lg placeholder:text-gray-400 dark:placeholder:text-gray-600 transition-colors"
                     />
                     {!input && (
                       <div className="absolute inset-0 flex items-center px-6 sm:px-8 pointer-events-none">
-                        <span className="font-mono text-base sm:text-lg text-gray-500">
+                        <span className="font-mono text-base sm:text-lg text-gray-400 dark:text-gray-500">
                           {displayedText}
                           <span className="inline-block w-[2px] h-5 bg-brand-lime/70 ml-0.5 animate-pulse align-middle" />
                         </span>
@@ -215,12 +215,12 @@ export function LandingView({
       </section>
 
       {/* Features */}
-      <section id="features" className="py-24 border-y border-white/5 bg-[#111]">
+      <section id="features" className="py-24 border-y border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-[#111]">
         <div className="max-w-7xl mx-auto px-6">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
             <div className="max-w-2xl">
               <h2 className="text-3xl sm:text-4xl font-display font-bold mb-4">ENGINEERED FOR <span className="text-brand-lime">GROWTH</span></h2>
-              <p className="text-gray-400 text-lg">Everything you need to scale your campaigns without the manual grunt work.</p>
+              <p className="text-gray-600 dark:text-gray-400 text-lg">Everything you need to scale your campaigns without the manual grunt work.</p>
             </div>
             <Button variant="outline">View All Features</Button>
           </div>
@@ -252,11 +252,11 @@ export function LandingView({
               <motion.div key={i} variants={slideUp}>
                 <Card className="group hover:border-brand-lime/50 transition-colors h-full">
                   <div className="p-8 h-full flex flex-col">
-                    <div className="w-12 h-12 bg-brand-gray border border-white/10 flex items-center justify-center mb-6 text-brand-lime group-hover:bg-brand-lime group-hover:text-brand-dark transition-colors">
+                    <div className="w-12 h-12 bg-gray-100 dark:bg-brand-gray border border-gray-200 dark:border-white/10 flex items-center justify-center mb-6 text-brand-lime group-hover:bg-brand-lime group-hover:text-brand-dark transition-colors">
                       <feature.icon className="w-6 h-6" />
                     </div>
                     <h3 className="text-xl font-bold mb-3 font-display tracking-wide">{feature.title}</h3>
-                    <p className="text-gray-400 leading-relaxed">{feature.desc}</p>
+                    <p className="text-gray-600 dark:text-gray-400 leading-relaxed">{feature.desc}</p>
                   </div>
                 </Card>
               </motion.div>
@@ -270,7 +270,7 @@ export function LandingView({
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-display font-bold mb-4">SIMPLE, TRANSPARENT PRICING</h2>
-            <p className="text-gray-400 text-lg">No hidden fees. Cancel anytime.</p>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">No hidden fees. Cancel anytime.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
@@ -283,12 +283,12 @@ export function LandingView({
                       <span className="text-4xl font-display font-bold text-brand-lime">$29</span>
                       <span className="text-gray-500">/one-time</span>
                     </div>
-                    <p className="text-sm text-gray-400 mt-2">Perfect for validating a new idea.</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">Perfect for validating a new idea.</p>
                   </div>
 
                   <ul className="space-y-4 mb-8">
                     {['Full Landing Page Analysis', '3 Ad Creative Variations', 'Ad Copy Generation', 'Export to JSON/TXT'].map((item) => (
-                      <li key={item} className="flex items-center gap-3 text-sm text-gray-300">
+                      <li key={item} className="flex items-center gap-3 text-sm text-gray-700 dark:text-gray-300">
                         <Check className="w-4 h-4 text-brand-lime shrink-0" />
                         {item}
                       </li>
@@ -301,7 +301,7 @@ export function LandingView({
             </motion.div>
 
             <motion.div whileHover={{ y: -4 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
-              <Card variant="highlighted" className="bg-brand-gray/30 relative h-full">
+              <Card variant="highlighted" className="bg-gray-50/30 dark:bg-brand-gray/30 relative h-full">
                 <div className="absolute top-0 right-0 bg-brand-lime text-brand-dark text-xs font-bold px-3 py-1 font-mono uppercase">
                   Best Value
                 </div>
@@ -309,15 +309,15 @@ export function LandingView({
                   <div className="mb-8">
                     <h3 className="text-xl font-bold mb-2">Pro Monthly</h3>
                     <div className="flex items-baseline gap-1">
-                      <span className="text-4xl font-display font-bold text-white">$129</span>
+                      <span className="text-4xl font-display font-bold text-gray-900 dark:text-white">$129</span>
                       <span className="text-gray-500">/month</span>
                     </div>
-                    <p className="text-sm text-gray-400 mt-2">For agencies and power users.</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">For agencies and power users.</p>
                   </div>
 
                   <ul className="space-y-4 mb-8">
                     {['Unlimited Campaigns', 'Direct Meta Integration', 'Priority Support', 'Advanced Analytics'].map((item) => (
-                      <li key={item} className="flex items-center gap-3 text-sm text-white">
+                      <li key={item} className="flex items-center gap-3 text-sm text-gray-900 dark:text-white">
                         <div className="w-4 h-4 bg-brand-lime flex items-center justify-center shrink-0">
                           <Check className="w-3 h-3 text-brand-dark" />
                         </div>

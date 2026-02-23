@@ -10,10 +10,10 @@ export function Card({ className, variant = 'default', showGrid = false, childre
     return (
         <div
             className={cn(
-                'relative bg-brand-dark border overflow-hidden transition-colors',
+                'relative bg-white dark:bg-brand-dark border overflow-hidden transition-colors',
                 {
-                    'border-white/10 hover:border-white/20': variant === 'default',
-                    'border-white/10 hover:border-white/20 shadow-lg shadow-black/20': variant === 'elevated',
+                    'border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20': variant === 'default',
+                    'border-gray-200 dark:border-white/10 hover:border-gray-300 dark:hover:border-white/20 shadow-lg shadow-gray-200/50 dark:shadow-black/20': variant === 'elevated',
                     'border-brand-lime/30 hover:border-brand-lime/50': variant === 'highlighted',
                 },
                 showGrid && 'before:content-[""] before:absolute before:inset-0 before:bg-grid-pattern before:opacity-[0.05] before:pointer-events-none',

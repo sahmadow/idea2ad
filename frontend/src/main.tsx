@@ -4,14 +4,17 @@ import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import './index.css'
 import { AppProvider } from './context/AppContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { AppRoutes } from './AppRoutes'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <AppProvider>
-        <AppRoutes />
-      </AppProvider>
+      <ThemeProvider>
+        <AppProvider>
+          <AppRoutes />
+        </AppProvider>
+      </ThemeProvider>
     </BrowserRouter>
     <Toaster
       theme="dark"
