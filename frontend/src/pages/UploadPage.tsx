@@ -64,7 +64,7 @@ export default function UploadPage() {
           <div className="text-center space-y-2">
             <h2 className="text-2xl font-display font-bold">Upload & Extras</h2>
             <p className="text-gray-400 text-sm font-mono">
-              Optional: add a product image and competitor URLs
+              Optional: add a product image for better creatives
             </p>
           </div>
 
