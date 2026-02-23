@@ -39,6 +39,9 @@ boto3
 # Monitoring
 sentry-sdk[fastapi]
 
+# MCP
+mcp[cli]>=1.0.0
+
 # Utils
 python-dotenv
 requests
