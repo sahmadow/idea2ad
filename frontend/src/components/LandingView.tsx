@@ -1,4 +1,4 @@
-import { type FormEvent } from 'react';
+import { type FormEvent, useState, useEffect } from 'react';
 import { ArrowRight, Check, Sparkles, Target, Zap, Layout } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Navbar } from './layout/Navbar';
@@ -31,6 +31,15 @@ const slideUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: 'easeOut' as const } },
 };
 
+const PLACEHOLDER_EXAMPLES = [
+  'https://yourproduct.com',
+  'An AI writing assistant for students',
+  'https://myshopify.store/products/serum',
+  'A fitness app that builds custom meal plans',
+  'https://acme.io/pricing',
+  'Eco-friendly pet food subscription box',
+];
+
 export function LandingView({
   input,
   onInputChange,
@@ -47,6 +56,40 @@ export function LandingView({
   };
 
   const isValid = !!input.trim();
+
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [displayedText, setDisplayedText] = useState('');
+  const [isTyping, setIsTyping] = useState(true);
+  const [isFocused, setIsFocused] = useState(false);
+
+  const currentExample = PLACEHOLDER_EXAMPLES[placeholderIndex];
+
+  useEffect(() => {
+    if (input || isFocused) return;
+
+    let timeout: ReturnType<typeof setTimeout>;
+
+    if (isTyping) {
+      if (displayedText.length < currentExample.length) {
+        timeout = setTimeout(() => {
+          setDisplayedText(currentExample.slice(0, displayedText.length + 1));
+        }, 40);
+      } else {
+        timeout = setTimeout(() => setIsTyping(false), 2000);
+      }
+    } else {
+      if (displayedText.length > 0) {
+        timeout = setTimeout(() => {
+          setDisplayedText(displayedText.slice(0, -1));
+        }, 25);
+      } else {
+        setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_EXAMPLES.length);
+        setIsTyping(true);
+      }
+    }
+
+    return () => clearTimeout(timeout);
+  }, [displayedText, isTyping, currentExample, input, isFocused]);
 
   return (
     <div className="min-h-screen bg-brand-dark text-white selection:bg-brand-lime selection:text-brand-dark">
@@ -79,26 +122,41 @@ export function LandingView({
             </p>
 
             {/* Single unified input */}
-            <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-4 max-w-lg mx-auto">
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => onInputChange(e.target.value)}
-                  placeholder="Enter your product URL or describe your idea..."
-                  aria-label="Product URL or description"
-                  className="w-full h-14 bg-brand-gray border border-white/10 px-6 text-white focus:outline-none focus:border-brand-lime focus:border-l-4 focus:border-l-brand-lime font-mono text-sm placeholder:text-gray-600 transition-colors"
-                />
+            <form onSubmit={onSubmit} className="max-w-2xl mx-auto w-full">
+              <div className="relative group">
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-brand-lime/20 via-brand-lime/5 to-brand-lime/20 rounded-lg opacity-0 group-focus-within:opacity-100 transition-opacity duration-300 blur-sm" />
+                <div className="relative flex items-center bg-brand-gray border border-white/10 rounded-lg group-focus-within:border-brand-lime/50 transition-colors">
+                  <div className="flex-1 relative">
+                    <input
+                      type="text"
+                      value={input}
+                      onChange={(e) => onInputChange(e.target.value)}
+                      onFocus={() => setIsFocused(true)}
+                      onBlur={() => setIsFocused(false)}
+                      aria-label="Product URL or description"
+                      className="w-full h-16 sm:h-[72px] bg-transparent px-6 sm:px-8 text-white focus:outline-none font-mono text-base sm:text-lg placeholder:text-gray-600 transition-colors"
+                    />
+                    {!input && (
+                      <div className="absolute inset-0 flex items-center px-6 sm:px-8 pointer-events-none">
+                        <span className="font-mono text-base sm:text-lg text-gray-500">
+                          {displayedText}
+                          <span className="inline-block w-[2px] h-5 bg-brand-lime/70 ml-0.5 animate-pulse align-middle" />
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="pr-3 sm:pr-4">
+                    <Button type="submit" size="lg" className="shrink-0 group/btn rounded-md" disabled={!isValid}>
+                      <span className="hidden sm:inline">Continue</span>
+                      <ArrowRight className="w-5 h-5 sm:ml-2 group-hover/btn:translate-x-1 transition-transform" />
+                    </Button>
+                  </div>
+                </div>
               </div>
-              <Button type="submit" size="lg" className="shrink-0 group" disabled={!isValid}>
-                Continue
-                <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" />
-              </Button>
+              <p className="text-xs text-gray-500 font-mono mt-4 text-center">
+                Paste a URL to analyze your landing page, or describe your product in your own words
+              </p>
             </form>
-
-            <p className="text-xs text-gray-500 font-mono">
-              Paste a URL to analyze your landing page, or describe your product in your own words
-            </p>
 
             {error && (
               <ErrorBanner message={error} onDismiss={onDismissError} className="max-w-lg mx-auto" />
