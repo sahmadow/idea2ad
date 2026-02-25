@@ -35,7 +35,7 @@ def _build_html(params: InstagramStoryParams) -> str:
     if params.avatar_url:
         avatar_html = f'<img src="{html.escape(params.avatar_url)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
     else:
-        avatar_html = f"""<svg viewBox="0 0 48 48" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+        avatar_html = """<svg viewBox="0 0 48 48" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="ig-grad" x1="0%" y1="100%" x2="100%" y2="0%">
                     <stop offset="0%" stop-color="#FEDA75"/>
@@ -64,7 +64,7 @@ def _build_html(params: InstagramStoryParams) -> str:
 
     reply_html = ""
     if params.show_reply_bar:
-        reply_html = f"""<div class="reply-bar">
+        reply_html = """<div class="reply-bar">
             <div class="reply-input">Send message</div>
             <div class="reply-icons">
                 <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#FFFFFF" stroke-width="1.5">

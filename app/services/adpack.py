@@ -138,7 +138,7 @@ def _build_creatives_from_draft(draft: CampaignDraft) -> List[AdCreative]:
     # Then, create additional creative variants from UNIQUE copy pairs only
     # Skip combos that duplicate existing creative text
     target_count = 10
-    existing_count = len(creatives)
+    len(creatives)
     seen_copy: set[tuple[str, str]] = {
         (c.primary_text, c.headline) for c in creatives
     }

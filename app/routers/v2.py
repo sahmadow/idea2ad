@@ -302,7 +302,7 @@ async def _extract_params_from_description(description: str) -> tuple[CreativePa
     raw_competitors = data.pop("competitors", [])
 
     # Build CreativeParameters from LLM output
-    from app.schemas.creative_params import BrandColors, PersonaDemographics, TargetPersona
+    from app.schemas.creative_params import PersonaDemographics, TargetPersona
 
     persona_primary = None
     if data.get("persona_primary"):

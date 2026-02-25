@@ -141,7 +141,7 @@ def _build_html(params: PersonCentricParams) -> str:
         person_html = f'<img class="person-image" src="data:image/png;base64,{b64}" alt="Person">'
     else:
         # Placeholder circle when no person image
-        person_html = f'<div class="person-placeholder"></div>'
+        person_html = '<div class="person-placeholder"></div>'
 
     # Subheadline
     sub_html = ""

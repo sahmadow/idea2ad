@@ -5,7 +5,6 @@ Takes a source image + text prompt, returns an edited image.
 Uses Gemini 2.0 Flash with image generation capabilities.
 """
 
-import base64
 import logging
 import os
 from pathlib import Path

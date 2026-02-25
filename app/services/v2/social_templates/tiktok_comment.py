@@ -38,7 +38,6 @@ def _build_html(params: TikTokCommentParams) -> str:
     card_bg = "#1E1E1E"
     text_primary = "#FFFFFF"
     text_secondary = "rgba(255,255,255,0.5)"
-    icon_color = "rgba(255,255,255,0.5)"
     like_color = "rgba(255,255,255,0.5)"
     creator_badge_bg = "rgba(254,44,85,0.15)"
     creator_badge_color = "#FE2C55"
@@ -53,7 +52,7 @@ def _build_html(params: TikTokCommentParams) -> str:
     if params.avatar_url:
         avatar_html = f'<img src="{html.escape(params.avatar_url)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
     else:
-        avatar_html = f"""<svg viewBox="0 0 48 48" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
+        avatar_html = """<svg viewBox="0 0 48 48" width="48" height="48" xmlns="http://www.w3.org/2000/svg">
             <circle cx="24" cy="24" r="24" fill="#333"/>
             <circle cx="24" cy="18" r="8" fill="#666"/>
             <ellipse cx="24" cy="38" rx="14" ry="12" fill="#666"/>
@@ -65,7 +64,7 @@ def _build_html(params: TikTokCommentParams) -> str:
 
     creator_html = ""
     if params.is_creator:
-        creator_html = f'<span class="creator-badge">Creator</span>'
+        creator_html = '<span class="creator-badge">Creator</span>'
 
     pinned_html = ""
     if params.pinned:

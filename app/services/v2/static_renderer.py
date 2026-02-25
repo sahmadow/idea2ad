@@ -10,8 +10,6 @@ Fallback path: Original Pillow layer-based rendering (legacy).
 Same StaticAdRenderer interface so v2.py router doesn't change.
 """
 
-import asyncio
-import base64
 import io
 import json
 import logging
@@ -336,7 +334,7 @@ def _render_text(canvas: Image.Image, draw: ImageDraw.ImageDraw, layer: LayerDef
     x, y, max_w, max_h = _get_position_bbox(layer.position, canvas.width, canvas.height)
     lines = _wrap_text(text, font, max_w)
     if style.get("uppercase"):
-        lines = [l.upper() for l in lines]
+        lines = [ln.upper() for ln in lines]
     line_spacing = int(font_size * 1.3)
     for i, line in enumerate(lines):
         line_y = y + i * line_spacing

@@ -7,7 +7,6 @@ Run: python -m app.services.v2.seed_templates.generate
 """
 
 import json
-import os
 from pathlib import Path
 
 # Canvas sizes per aspect ratio

@@ -47,10 +47,8 @@ def _build_html(params: RedditPostParams) -> str:
     border_color = "#343536" if dark else "#EDEFF1"
     text_primary = "#D7DADC" if dark else "#1C1C1C"
     text_secondary = "#818384" if dark else "#787C7E"
-    text_link = "#4FBCFF" if dark else "#0079D3"
     icon_color = "#818384" if dark else "#878A8C"
     vote_bar_bg = "#161617" if dark else "#F8F9FA"
-    hover_bg = "#2D2D2E" if dark else "#F6F7F8"
 
     # Escaped content
     username = html.escape(params.username)
@@ -64,7 +62,7 @@ def _build_html(params: RedditPostParams) -> str:
     if params.avatar_url:
         avatar_html = f'<img src="{html.escape(params.avatar_url)}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />'
     else:
-        avatar_html = f"""<svg viewBox="0 0 40 40" width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+        avatar_html = """<svg viewBox="0 0 40 40" width="40" height="40" xmlns="http://www.w3.org/2000/svg">
             <circle cx="20" cy="20" r="20" fill="#FF4500"/>
             <ellipse cx="20" cy="23" rx="12" ry="10" fill="#FFFFFF"/>
             <circle cx="20" cy="14" r="6" fill="#FFFFFF"/>

@@ -16,7 +16,7 @@ import logging
 from google import genai
 
 from app.schemas.creative_params import CreativeParameters
-from app.schemas.ad_types import AdTypeDefinition, CopyTemplate
+from app.schemas.ad_types import AdTypeDefinition
 
 logger = logging.getLogger(__name__)
 

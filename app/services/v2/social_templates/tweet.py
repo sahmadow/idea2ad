@@ -53,7 +53,7 @@ def _build_html(params: TweetParams) -> str:
 
     likes_str = _format_count(params.likes)
     retweets_str = _format_count(params.retweets)
-    replies_str = _format_count(params.replies)
+    _format_count(params.replies)
     views_str = _format_count(params.views)
 
     if params.avatar_url:
