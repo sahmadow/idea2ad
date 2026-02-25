@@ -15,7 +15,6 @@ import asyncio
 import json
 import logging
 import os
-import random
 import time
 import uuid
 from datetime import datetime, timezone
@@ -27,7 +26,7 @@ from pydantic import BaseModel
 from app.schemas.creative_params import CreativeParameters
 from app.schemas.ad_types import AdTypeDefinition
 from app.schemas.ad_pack import (
-    AdPack, GeneratedCreative, TargetingSpec,
+    AdPack, GeneratedCreative,
     PrepareRequest, PreparedCampaign, GenerateRequest,
     CompetitorInsight,
 )
@@ -44,18 +43,7 @@ from app.services.v2.copy_generator import (
     translate_params,
     _resolve_variable,
 )
-from app.services.v2.ad_type_registry import get_registry, get_ad_type
-from app.services.v2.social_template_bridges import (
-    bridge_branded_static,
-    bridge_reddit,
-    bridge_problem_statement,
-    bridge_review_static,
-    bridge_service_hero,
-    bridge_product_centric,
-    bridge_person_centric,
-    bridge_branded_static_video,
-    bridge_service_hero_video,
-)
+from app.services.v2.ad_type_registry import get_registry
 from app.services.v2.render_pipeline import (
     dispatch_render,
     render_static_creatives,

@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from app.schemas.creative_params import CreativeParameters
-from app.services.v2.ad_type_registry import get_registry, get_ad_type
+from app.services.v2.ad_type_registry import get_ad_type
 from app.services.v2.copy_generator import generate_copy_from_template, _resolve_variable
 from app.services.v2.static_renderer import (
     get_static_renderer,

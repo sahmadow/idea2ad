@@ -9,10 +9,9 @@ from app.services.v2.copy_generator import (
     HEADLINE_MAX,
 )
 from app.services.v2.ad_type_registry import (
-    PRODUCT_BENEFITS_STATIC,
+    BRANDED_STATIC,
     PROBLEM_STATEMENT_TEXT,
-    US_VS_THEM_PROBLEM,
-    ORGANIC_STATIC_SOLUTION,
+    REVIEW_STATIC,
 )
 
 
@@ -57,12 +56,11 @@ class TestResolveVariable:
 
 
 class TestCopyGeneration:
-    def test_product_benefits_copy(self, full_params):
-        copy = generate_copy_from_template(PRODUCT_BENEFITS_STATIC, full_params)
-        assert "CloudRest Pillow" in copy["primary_text"]
-        assert "Eliminates neck pain" in copy["primary_text"]
-        assert "Cooling gel" in copy["primary_text"]
-        assert copy["cta_type"] == "SHOP_NOW"
+    def test_branded_static_copy(self, full_params):
+        copy = generate_copy_from_template(BRANDED_STATIC, full_params)
+        # BRANDED_STATIC uses headline + product_description_short in primary_text
+        assert copy["cta_type"] == "LEARN_MORE"
+        assert copy["headline"] is not None
 
     def test_problem_statement_copy(self, full_params):
         copy = generate_copy_from_template(PROBLEM_STATEMENT_TEXT, full_params)
@@ -70,17 +68,16 @@ class TestCopyGeneration:
         assert "CloudRest Pillow" in copy["primary_text"]
         assert copy["cta_type"] == "LEARN_MORE"
 
-    def test_us_vs_them_problem_copy(self, full_params):
-        copy = generate_copy_from_template(US_VS_THEM_PROBLEM, full_params)
-        assert "Before" in copy["primary_text"]
-        assert "After" in copy["primary_text"]
-        assert "Neck pain" in copy["primary_text"]
-        assert "Deep uninterrupted sleep" in copy["primary_text"]
+    def test_review_static_copy(self, full_params):
+        full_params.social_proof = "12,847 5-star reviews"
+        copy = generate_copy_from_template(REVIEW_STATIC, full_params)
+        assert "CloudRest Pillow" in copy["primary_text"]
+        assert copy["cta_type"] == "LEARN_MORE"
 
     def test_headline_truncation(self, full_params):
         """Headlines longer than 40 chars should be truncated."""
         full_params.key_benefit = "This is an extremely long key benefit that definitely exceeds forty characters"
-        copy = generate_copy_from_template(PRODUCT_BENEFITS_STATIC, full_params)
+        copy = generate_copy_from_template(PROBLEM_STATEMENT_TEXT, full_params)
         assert len(copy["headline"]) <= HEADLINE_MAX
 
     def test_fallback_applied(self):

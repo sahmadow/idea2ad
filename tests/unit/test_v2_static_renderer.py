@@ -15,9 +15,7 @@ from app.services.v2.static_renderer import (
     _check_condition,
     _wrap_text,
     _load_font,
-    _create_gradient,
     _darken_overlay,
-    _add_shadow,
     _get_position_bbox,
     _render_background,
     _render_text,
@@ -146,21 +144,6 @@ class TestPositionBbox:
         assert w == 1000  # falls back to padded full width
 
 
-class TestGradient:
-    def test_creates_correct_size(self):
-        img = _create_gradient(100, 200, "#FF0000", "#0000FF")
-        assert img.size == (100, 200)
-
-    def test_top_is_color1(self):
-        img = _create_gradient(100, 200, "#FF0000", "#0000FF")
-        r, g, b = img.getpixel((50, 0))
-        assert r == 255 and b == 0
-
-    def test_bottom_is_color2(self):
-        img = _create_gradient(100, 200, "#FF0000", "#0000FF")
-        r, g, b = img.getpixel((50, 199))
-        assert r == 0 and b == 255
-
 
 class TestDarkenOverlay:
     def test_darkens_image(self):
@@ -170,13 +153,6 @@ class TestDarkenOverlay:
         # Should be significantly darker than white
         assert r < 200
 
-
-class TestAddShadow:
-    def test_shadow_increases_size(self):
-        img = Image.new("RGBA", (100, 100), (255, 0, 0, 255))
-        shadowed = _add_shadow(img)
-        assert shadowed.width == 120  # +20 for shadow
-        assert shadowed.height == 120
 
 
 # --- Layer renderer tests ---

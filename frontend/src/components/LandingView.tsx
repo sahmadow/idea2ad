@@ -83,8 +83,10 @@ export function LandingView({
           setDisplayedText(displayedText.slice(0, -1));
         }, 25);
       } else {
-        setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_EXAMPLES.length);
-        setIsTyping(true);
+        timeout = setTimeout(() => {
+          setPlaceholderIndex((i) => (i + 1) % PLACEHOLDER_EXAMPLES.length);
+          setIsTyping(true);
+        }, 0);
       }
     }
 
