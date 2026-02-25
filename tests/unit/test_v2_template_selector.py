@@ -24,27 +24,23 @@ class TestTemplateSelector:
         )
 
     def test_full_params_selects_all_types(self):
-        """With full data, all 11 types should be selected."""
+        """With full data, all available types should be selected."""
         params = self._full_params()
         selected = select_templates(params)
         ids = [t.id for t in selected]
 
-        # Product Aware (6)
-        assert "product_benefits_static" in ids
-        assert "review_static" in ids
-        assert "us_vs_them_solution" in ids
-        assert "organic_static_solution" in ids
-        assert "product_demo_video" in ids
-        assert "founder_video_solution" in ids
-
-        # Product Unaware (5)
+        assert "branded_static" in ids
+        assert "organic_static_reddit" in ids
         assert "problem_statement_text" in ids
-        assert "problem_statement_image" in ids
-        assert "organic_static_problem" in ids
-        assert "us_vs_them_problem" in ids
-        assert "founder_video_problem" in ids
+        assert "review_static" in ids
+        assert "review_static_competition" in ids
+        assert "service_hero" in ids
+        assert "product_centric" in ids
+        assert "person_centric" in ids
+        assert "branded_static_video" in ids
+        assert "service_hero_video" in ids
 
-        assert len(selected) == 11
+        assert len(selected) == 10
 
     def test_minimal_params(self):
         """With minimal data, only low-requirement types selected."""
@@ -57,14 +53,14 @@ class TestTemplateSelector:
         selected = select_templates(params)
         ids = [t.id for t in selected]
 
-        # Should still get organic + problem types
+        # Always-generate types should be present
         assert "problem_statement_text" in ids
-        assert "organic_static_problem" in ids
-        assert "founder_video_problem" in ids
+        assert "branded_static" in ids
+        assert "person_centric" in ids
 
-        # Should NOT get types needing hero_image_url or value_props >= 3
-        assert "product_benefits_static" not in ids
+        # Should NOT get types needing social_proof or hero_image_url
         assert "review_static" not in ids
+        assert "service_hero" not in ids
 
     def test_no_social_proof_skips_review(self):
         """review_static requires social_proof."""
@@ -75,26 +71,11 @@ class TestTemplateSelector:
         ids = [t.id for t in selected]
         assert "review_static" not in ids
 
-    def test_insufficient_product_images_skips_demo(self):
-        """product_demo_video requires 3+ product images."""
+    def test_no_images_skips_product_centric(self):
+        """product_centric requires product_images or hero_image_url."""
         params = self._full_params()
-        params.product_images = ["img1.jpg"]
+        params.product_images = []
+        params.hero_image_url = None
         selected = select_templates(params)
         ids = [t.id for t in selected]
-        assert "product_demo_video" not in ids
-
-    def test_no_scene_problem_skips_problem_image(self):
-        """problem_statement_image requires scene_problem."""
-        params = self._full_params()
-        params.scene_problem = None
-        selected = select_templates(params)
-        ids = [t.id for t in selected]
-        assert "problem_statement_image" not in ids
-
-    def test_no_desires_skips_before_after(self):
-        """us_vs_them_problem requires both pains and desires."""
-        params = self._full_params()
-        params.customer_desires = []
-        selected = select_templates(params)
-        ids = [t.id for t in selected]
-        assert "us_vs_them_problem" not in ids
+        assert "product_centric" not in ids
