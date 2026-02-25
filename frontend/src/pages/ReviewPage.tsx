@@ -49,16 +49,16 @@ export default function ReviewPage() {
 
   // Editable state initialized from prepared campaign
   const [language, setLanguage] = useState('en');
-  const [productSummary, setProductSummary] = useState('');
-  const [targetAudience, setTargetAudience] = useState('');
-  const [mainPainPoint, setMainPainPoint] = useState('');
-  const [messagingUnaware, setMessagingUnaware] = useState('');
-  const [messagingAware, setMessagingAware] = useState('');
-  const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>([]);
+  const [productSummary, setProductSummary] = useState(pc?.product_summary || '');
+  const [targetAudience, setTargetAudience] = useState(pc?.target_audience || '');
+  const [mainPainPoint, setMainPainPoint] = useState(pc?.main_pain_point || '');
+  const [messagingUnaware, setMessagingUnaware] = useState(pc?.messaging_unaware || '');
+  const [messagingAware, setMessagingAware] = useState(pc?.messaging_aware || '');
+  const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>(pc?.competitors?.map(c => ({ ...c })) || []);
   const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
-  // Sync editable fields when prepared campaign changes (React docs pattern)
-  const [prevPc, setPrevPc] = useState(pc);
+  // Sync editable fields when prepared campaign changes (e.g. re-analyze)
+  const [prevPc, setPrevPc] = useState<typeof pc>(null);
   if (pc && pc !== prevPc) {
     setPrevPc(pc);
     setLanguage('en');

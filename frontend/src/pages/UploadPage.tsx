@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Upload, X } from 'lucide-react';
@@ -13,20 +13,24 @@ export default function UploadPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Guard: must have input from step 1
-  if (!ctx.input.trim()) {
-    navigate('/', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (!ctx.input.trim()) {
+      navigate('/', { replace: true });
+    }
+  }, [ctx.input, navigate]);
 
   const handleAnalyze = async () => {
     await ctx.startAnalysis();
   };
 
   // Navigate to review when prepared campaign is ready
-  if (ctx.preparedCampaign && !ctx.isAnalyzing) {
-    navigate('/review', { replace: true });
-    return null;
-  }
+  useEffect(() => {
+    if (ctx.preparedCampaign && !ctx.isAnalyzing) {
+      navigate('/review', { replace: true });
+    }
+  }, [ctx.preparedCampaign, ctx.isAnalyzing, navigate]);
+
+  if (!ctx.input.trim()) return null;
 
   // Full-screen Orbit Scanner during analysis
   if (ctx.isAnalyzing) {
