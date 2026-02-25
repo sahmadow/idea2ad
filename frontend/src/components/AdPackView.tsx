@@ -14,6 +14,7 @@ import { Button } from './ui/Button';
 import { MetaAdPreview } from './ui/MetaAdPreview';
 import { updateAdPack } from '../api/adpack';
 import type { AdPack, AdCreative, AdStrategy } from '../types/adpack';
+import type { Ad } from '../api';
 
 interface AdPackViewProps {
   adPack: AdPack;
