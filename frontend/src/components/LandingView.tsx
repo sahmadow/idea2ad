@@ -102,7 +102,7 @@ export function LandingView({
       />
 
       {/* Beta banner */}
-      <div className="bg-brand-lime/10 border-b border-brand-lime/20">
+      <div className="mt-16 bg-brand-lime/10 border-b border-brand-lime/20">
         <div className="max-w-7xl mx-auto px-6 py-2 text-center text-sm font-mono text-brand-lime">
           <span className="inline-flex items-center gap-2">
             <span className="px-1.5 py-0.5 bg-brand-lime text-brand-dark text-[10px] font-bold uppercase tracking-wider">Beta</span>
@@ -112,7 +112,7 @@ export function LandingView({
       </div>
 
       {/* Hero */}
-      <section className="relative pt-32 pb-20 overflow-hidden">
+      <section className="relative pt-16 pb-20 overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] dark:opacity-[0.03] pointer-events-none" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-lime/5 blur-[120px] rounded-full pointer-events-none" />
 
