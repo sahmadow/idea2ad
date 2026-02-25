@@ -162,6 +162,40 @@ enum AdPackStatus {
   PUBLISHED
 }
 
+model Lead {
+  id                   String       @id @default(uuid())
+  email                String       @unique
+  consent_terms        Boolean      @default(false)
+  consent_marketing    Boolean      @default(false)
+  consent_timestamp    DateTime     @default(now())
+  consent_ip           String?
+  consent_user_agent   String?
+  consent_form_version String       @default("v1")
+  source_url           String?
+  created_at           DateTime     @default(now())
+  updated_at           DateTime     @updatedAt
+  deleted_at           DateTime?
+
+  consent_logs ConsentLog[]
+
+  @@index([email])
+}
+
+model ConsentLog {
+  id           String   @id @default(uuid())
+  lead_id      String
+  action       String   // granted, withdrawn, updated
+  consent_type String   // marketing, terms
+  timestamp    DateTime @default(now())
+  ip_address   String?
+  user_agent   String?
+  method       String   @default("web_form")
+
+  lead Lead @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  @@index([lead_id])
+}
+
 model AdTemplate {
   id            String   @id @default(uuid())
   ad_type_id    String   // e.g. "product_benefits_static"

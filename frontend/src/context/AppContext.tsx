@@ -110,6 +110,9 @@ interface AppContextValue {
     messaging_unaware?: string;
     messaging_aware?: string;
     competitors?: { name: string; weakness: string }[];
+    email?: string;
+    consent_terms?: boolean;
+    consent_marketing?: boolean;
   }) => Promise<void>;
   cancelGeneration: () => void;
   resetSession: () => void;
@@ -310,6 +313,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     messaging_unaware?: string;
     messaging_aware?: string;
     competitors?: { name: string; weakness: string }[];
+    email?: string;
+    consent_terms?: boolean;
+    consent_marketing?: boolean;
   }) => {
     if (!preparedCampaign) return;
 
@@ -329,6 +335,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         messaging_unaware: overrides.messaging_unaware,
         messaging_aware: overrides.messaging_aware,
         competitors: overrides.competitors,
+        email: overrides.email,
+        consent_terms: overrides.consent_terms,
+        consent_marketing: overrides.consent_marketing,
       });
 
       setAdPack(pack);

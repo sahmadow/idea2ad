@@ -316,6 +316,10 @@ interface GenerateParams {
   messaging_unaware?: string;
   messaging_aware?: string;
   competitors?: { name: string; weakness: string }[];
+  // Email gate (GDPR lead capture)
+  email?: string;
+  consent_terms?: boolean;
+  consent_marketing?: boolean;
 }
 
 export async function generateFromPrepared(

@@ -526,7 +526,7 @@ async def prepare_campaign(body: PrepareRequest):
 
 
 @router.post("/generate")
-async def generate_from_prepared(body: GenerateRequest):
+async def generate_from_prepared(body: GenerateRequest, request: Request):
     """
     Step 2 of unified flow: generate creatives using cached params + user overrides.
     Returns full AdPack with rendered creatives.
@@ -541,6 +541,10 @@ async def generate_from_prepared(body: GenerateRequest):
         _prepared_sessions.pop(body.session_id, None)
         raise HTTPException(status_code=410, detail="Session expired. Please re-analyze.")
 
+    # Store lead if email provided (GDPR-compliant, non-blocking)
+    if body.email:
+        asyncio.create_task(_store_lead(body, request))
+
     # Start as background job (same pattern as analyze/async)
     cleanup_old_jobs()
     job_id = create_job(session["params"].source_url or "description")
@@ -550,6 +554,67 @@ async def generate_from_prepared(body: GenerateRequest):
     _prepared_sessions.pop(body.session_id, None)
 
     return {"job_id": job_id, "status": "pending"}
+
+
+async def _store_lead(body: GenerateRequest, request: Request):
+    """Store lead + consent log in DB. Non-blocking — errors don't affect generation."""
+    try:
+        from app.db import db
+
+        ip = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or (
+            request.client.host if request.client else "unknown"
+        )
+        ua = request.headers.get("user-agent", "")[:500]
+
+        # Upsert: update consent if email already exists
+        lead = await db.lead.upsert(
+            where={"email": body.email},
+            data={
+                "create": {
+                    "email": body.email,
+                    "consent_terms": body.consent_terms,
+                    "consent_marketing": body.consent_marketing,
+                    "consent_ip": ip,
+                    "consent_user_agent": ua,
+                    "consent_form_version": "v1",
+                },
+                "update": {
+                    "consent_terms": body.consent_terms,
+                    "consent_marketing": body.consent_marketing,
+                    "consent_ip": ip,
+                    "consent_user_agent": ua,
+                },
+            },
+        )
+
+        # Append-only consent log entries
+        log_entries = []
+        if body.consent_terms:
+            log_entries.append({
+                "lead_id": lead.id,
+                "action": "granted",
+                "consent_type": "terms",
+                "ip_address": ip,
+                "user_agent": ua,
+                "method": "web_form",
+            })
+        if body.consent_marketing:
+            log_entries.append({
+                "lead_id": lead.id,
+                "action": "granted",
+                "consent_type": "marketing",
+                "ip_address": ip,
+                "user_agent": ua,
+                "method": "web_form",
+            })
+
+        for entry in log_entries:
+            await db.consentlog.create(data=entry)
+
+        logger.info(f"Lead stored: {body.email} (marketing={body.consent_marketing})")
+
+    except Exception as e:
+        logger.error(f"Failed to store lead: {e}", exc_info=True)
 
 
 async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):

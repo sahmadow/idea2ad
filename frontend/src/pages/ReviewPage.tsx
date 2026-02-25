@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2, Globe } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2, Globe, Mail, Check } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
 import { AnalysisLoadingBlueprint } from '../components/ui/AnalysisLoadingBlueprint';
@@ -57,6 +57,17 @@ export default function ReviewPage() {
   const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>(pc?.competitors?.map(c => ({ ...c })) || []);
   const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
+  // Email gate state (skip for authenticated users)
+  const isAuthenticated = ctx.auth.isAuthenticated;
+  const [email, setEmail] = useState(() => {
+    try { return localStorage.getItem('idea2ad_lead_email') || ''; } catch { return ''; }
+  });
+  const [consentTerms, setConsentTerms] = useState(false);
+  const [consentMarketing, setConsentMarketing] = useState(false);
+
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const canGenerate = isAuthenticated || (isValidEmail && consentTerms);
+
   // Sync editable fields when prepared campaign changes (e.g. re-analyze)
   const [prevPc, setPrevPc] = useState<typeof pc>(null);
   if (pc && pc !== prevPc) {
@@ -86,6 +97,11 @@ export default function ReviewPage() {
   if (!pc) return <Navigate to="/" replace />;
 
   const handleConfirm = async () => {
+    // Persist email for back-nav pre-fill
+    if (email) {
+      try { localStorage.setItem('idea2ad_lead_email', email); } catch { /* */ }
+    }
+
     await ctx.startGeneration({
       language,
       product_summary: productSummary,
@@ -94,6 +110,12 @@ export default function ReviewPage() {
       messaging_unaware: messagingUnaware,
       messaging_aware: messagingAware,
       competitors: competitors.length > 0 ? competitors : undefined,
+      // Email gate fields (skipped for authenticated users)
+      ...(!isAuthenticated && {
+        email,
+        consent_terms: consentTerms,
+        consent_marketing: consentMarketing,
+      }),
     });
   };
 
@@ -327,6 +349,77 @@ export default function ReviewPage() {
             )}
           </section>
 
+          {/* Email Gate (skip for authenticated users) */}
+          {!isAuthenticated && (
+            <section className="space-y-4 pt-6 border-t border-white/10">
+              <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
+                <Mail className="w-4 h-4 text-brand-lime" />
+                Your Email
+              </h3>
+
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors placeholder:text-gray-600"
+              />
+
+              {/* Terms of Service — required */}
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div
+                  className={`mt-0.5 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-colors ${
+                    consentTerms
+                      ? 'bg-brand-lime border-brand-lime'
+                      : 'border-white/20 group-hover:border-white/40'
+                  }`}
+                  onClick={() => setConsentTerms(!consentTerms)}
+                  role="checkbox"
+                  aria-checked={consentTerms}
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === ' ' && setConsentTerms(!consentTerms)}
+                >
+                  {consentTerms && <Check className="w-3.5 h-3.5 text-brand-dark" />}
+                </div>
+                <span className="text-xs font-mono text-gray-400 leading-relaxed">
+                  I agree to the{' '}
+                  <a href="/terms" target="_blank" className="text-brand-lime hover:underline">
+                    Terms of Service
+                  </a>{' '}
+                  and acknowledge the{' '}
+                  <a href="/privacy" target="_blank" className="text-brand-lime hover:underline">
+                    Privacy Policy
+                  </a>
+                  .{' '}
+                  <span className="text-gray-600">(Required)</span>
+                </span>
+              </label>
+
+              {/* Marketing consent — optional */}
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div
+                  className={`mt-0.5 w-5 h-5 border flex-shrink-0 flex items-center justify-center transition-colors ${
+                    consentMarketing
+                      ? 'bg-brand-lime border-brand-lime'
+                      : 'border-white/20 group-hover:border-white/40'
+                  }`}
+                  onClick={() => setConsentMarketing(!consentMarketing)}
+                  role="checkbox"
+                  aria-checked={consentMarketing}
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === ' ' && setConsentMarketing(!consentMarketing)}
+                >
+                  {consentMarketing && <Check className="w-3.5 h-3.5 text-brand-dark" />}
+                </div>
+                <span className="text-xs font-mono text-gray-400 leading-relaxed">
+                  I agree to receive emails from Journeylauncher LLC about product updates, new features,
+                  and offers. I can unsubscribe anytime.{' '}
+                  <span className="text-gray-600">(Optional)</span>
+                </span>
+              </label>
+            </section>
+          )}
+
           {/* Error */}
           {ctx.error && (
             <ErrorBanner message={ctx.error} onDismiss={() => ctx.setError(null)} />
@@ -339,7 +432,7 @@ export default function ReviewPage() {
               size="lg"
               className="w-full"
               onClick={handleConfirm}
-              disabled={ctx.isGenerating}
+              disabled={ctx.isGenerating || !canGenerate}
             >
               {ctx.isGenerating ? (
                 <>
@@ -350,6 +443,11 @@ export default function ReviewPage() {
                 'Confirm & Generate Ads'
               )}
             </Button>
+            {!isAuthenticated && !canGenerate && (
+              <p className="text-xs font-mono text-gray-600 text-center mt-2">
+                Enter your email and accept the Terms of Service to continue
+              </p>
+            )}
           </div>
 
         </motion.div>

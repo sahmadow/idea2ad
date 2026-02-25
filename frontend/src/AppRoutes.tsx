@@ -19,6 +19,8 @@ const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
 const FBAuthTest = lazy(() => import('./pages/FBAuthTest').then(m => ({ default: m.FBAuthTest })));
 const ImageEditorTest = lazy(() => import('./pages/ImageEditorTest').then(m => ({ default: m.ImageEditorTest })));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 
 const pageTransition = {
   initial: { opacity: 0, y: 20 },
@@ -73,6 +75,8 @@ export function AppRoutes() {
                   </AuthGuard>
                 }
               />
+              <Route path="/terms" element={<TermsPage />} />
+              <Route path="/privacy" element={<PrivacyPage />} />
               <Route path="/test/fb-auth" element={<FBAuthTest />} />
               <Route path="/test/image-editor" element={<ImageEditorTest />} />
               <Route path="*" element={<Navigate to="/" replace />} />

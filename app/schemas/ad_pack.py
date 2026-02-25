@@ -4,7 +4,7 @@ AdPack and related models — the output of the creative assembly pipeline.
 An AdPack is a complete set of ad creatives ready for preview and Meta API submission.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Literal
 from datetime import datetime
 
@@ -140,3 +140,8 @@ class GenerateRequest(BaseModel):
     messaging_unaware: str | None = None
     messaging_aware: str | None = None
     competitors: list[CompetitorInsight] | None = None
+
+    # Email collection (GDPR-compliant lead capture)
+    email: EmailStr | None = None
+    consent_terms: bool = False
+    consent_marketing: bool = False

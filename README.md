@@ -59,9 +59,9 @@ playwright install chromium
 # Frontend
 cd frontend && npm install && cd ..
 
-# Database
-npx prisma generate
-npx prisma db push
+# Database (use venv prisma, not global npx)
+PATH=".venv/bin:$PATH" .venv/bin/python -m prisma generate
+.venv/bin/python -m prisma db push
 ```
 
 2. **Configure environment:**
@@ -155,6 +155,10 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 - `POST /facebook/campaign` - Create ad campaign
 - `POST /facebook/disconnect` - Disconnect account
 
+### Legal Pages
+- `GET /terms` - Terms of Service (Journeylauncher LLC)
+- `GET /privacy` - Privacy Policy (GDPR-compliant)
+
 ### Health
 - `GET /health` - Health check
 
@@ -182,7 +186,7 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 │       └── types/      # TypeScript types
 ├── certs/              # SSL certificates (gitignored)
 ├── docs/               # Documentation
-├── prisma/             # Database schema
+├── prisma/             # Database schema (Lead, ConsentLog, User, Campaign, etc.)
 ├── scripts/            # Utility scripts
 └── tests/              # Backend tests
 ```
