@@ -67,12 +67,12 @@ jobs:
           playwright install chromium
 
       - name: Generate Prisma client
-        run: prisma generate
+        run: python -m prisma generate
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
 
       - name: Run database migrations
-        run: prisma db push --skip-generate
+        run: python -m prisma db push --skip-generate
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/test
 

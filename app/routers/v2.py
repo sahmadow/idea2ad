@@ -47,15 +47,12 @@ from app.services.v2.ad_type_registry import get_registry
 from app.services.v2.render_pipeline import (
     dispatch_render,
     render_static_creatives,
-    render_competition_blog,
     upload_to_s3,
-    upload_video_to_s3,
     build_targeting,
     add_manual_image_creative,
-    build_manual_copy,
     competition_copy_store,
 )
-from app.services.v2.ugc_avatar_renderer import render_ugc_avatar, UGCAvatarResult
+from app.services.v2.ugc_avatar_renderer import render_ugc_avatar
 
 logger = logging.getLogger(__name__)
 
