@@ -146,21 +146,8 @@ jobs:
   # deploy-staging: (removed; Railway handles this via git push trigger)
 
   # Deploy backend to Railway Production
-  deploy-backend:
-    runs-on: ubuntu-latest
-    needs: [docker-build]
-    if: github.ref == 'refs/heads/main'
-    environment: production
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        run: railway up --service idea2ad
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+  # Railway auto-deploys from the main branch via deployment trigger — no manual step needed
+  # deploy-backend: (removed; Railway handles this via git push trigger)
 
   # Deploy frontend to Vercel (optional - Vercel auto-deploys from GitHub)
   # deploy-frontend:
