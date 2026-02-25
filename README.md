@@ -203,7 +203,7 @@ Facebook requires HTTPS for OAuth redirect URIs. See `docs/FACEBOOK_OAUTH_SETUP.
 - Set `VITE_API_URL` to production backend URL
 
 ### Staging
-**Backend (Railway):** Auto-deploys on push to `staging`
+**Backend (Railway):** Auto-deploys on push to `staging` (deployment trigger: `staging` branch → staging environment)
 - URL: `https://idea2ad-staging-staging.up.railway.app`
 - API Docs: `https://idea2ad-staging-staging.up.railway.app/docs`
 - Health: `https://idea2ad-staging-staging.up.railway.app/health`

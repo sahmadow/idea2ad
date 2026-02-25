@@ -82,7 +82,7 @@ async def generate_ad_pack(
             scraped_data = await scrape_landing_page(url)
             if not scraped_data.get("full_text"):
                 return {"error": "Failed to scrape URL or empty content"}
-            params = await extract_creative_parameters(scraped_data, source_url=url)
+            params, _ = await extract_creative_parameters(scraped_data, source_url=url)
         else:
             # Import description extraction from v2 router
             from app.routers.v2 import _extract_params_from_description
@@ -199,7 +199,7 @@ async def analyze_product(
             scraped_data = await scrape_landing_page(url)
             if not scraped_data.get("full_text"):
                 return {"error": "Failed to scrape URL or empty content"}
-            params = await extract_creative_parameters(scraped_data, source_url=url)
+            params, _ = await extract_creative_parameters(scraped_data, source_url=url)
         else:
             from app.routers.v2 import _extract_params_from_description
             result = await _extract_params_from_description(description)
