@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
   ArrowLeft,
-  ArrowRight,
   Download,
   Sparkles,
   Grid3X3,
@@ -15,13 +14,11 @@ import { Button } from './ui/Button';
 import { MetaAdPreview } from './ui/MetaAdPreview';
 import { updateAdPack } from '../api/adpack';
 import type { AdPack, AdCreative, AdStrategy } from '../types/adpack';
-import type { Ad } from '../api';
 
 interface AdPackViewProps {
   adPack: AdPack;
   onAdPackChange: (pack: AdPack) => void;
   onBack: () => void;
-  onPublish?: (ad: Ad) => void;
 }
 
 type FilterStrategy = 'all' | AdStrategy;
@@ -179,7 +176,6 @@ function ExpandedCreativeView({
   creative,
   onClose,
   onSave,
-  onPublish,
   pageName,
   websiteUrl,
   logoUrl,
@@ -187,7 +183,6 @@ function ExpandedCreativeView({
   creative: AdCreative;
   onClose: () => void;
   onSave: (field: string, value: string) => void;
-  onPublish?: () => void;
   pageName: string;
   websiteUrl: string;
   logoUrl?: string;
@@ -268,11 +263,21 @@ function ExpandedCreativeView({
               </div>
             )}
 
-            {onPublish && (
+            {creative.image_url && (
               <div className="pt-4 border-t border-white/10">
-                <Button variant="primary" onClick={onPublish} className="w-full">
-                  Select for Publishing
-                  <ArrowRight className="w-4 h-4 ml-2" />
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = creative.image_url!;
+                    link.download = `${creative.ad_type_id || 'creative'}-${creative.id}.png`;
+                    link.target = '_blank';
+                    link.click();
+                  }}
+                  className="w-full"
+                >
+                  Download Creative
+                  <Download className="w-4 h-4 ml-2" />
                 </Button>
               </div>
             )}
@@ -283,7 +288,7 @@ function ExpandedCreativeView({
   );
 }
 
-export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPackViewProps) {
+export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) {
   const [filterStrategy, setFilterStrategy] = useState<FilterStrategy>('all');
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
 
@@ -327,18 +332,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
     link.download = `adpack-${adPack.id}-${new Date().toISOString().split('T')[0]}.json`;
     link.click();
     URL.revokeObjectURL(url);
-  };
-
-  const handlePublishCreative = (creative: AdCreative) => {
-    if (!onPublish) return;
-    const ad: Ad = {
-      id: parseInt(creative.id, 16) || 1,
-      imageUrl: creative.image_url,
-      primaryText: creative.primary_text,
-      headline: creative.headline,
-      description: creative.description,
-    };
-    onPublish(ad);
   };
 
   return (
@@ -482,14 +475,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
                 prev ? { ...prev, [field]: value } : null
               );
             }}
-            onPublish={
-              onPublish
-                ? () => {
-                    handlePublishCreative(expandedCreative);
-                    setExpandedCreative(null);
-                  }
-                : undefined
-            }
           />
         )}
       </AnimatePresence>

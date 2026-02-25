@@ -101,6 +101,16 @@ export function LandingView({
         onLogout={onLogout}
       />
 
+      {/* Beta banner */}
+      <div className="bg-brand-lime/10 border-b border-brand-lime/20">
+        <div className="max-w-7xl mx-auto px-6 py-2 text-center text-sm font-mono text-brand-lime">
+          <span className="inline-flex items-center gap-2">
+            <span className="px-1.5 py-0.5 bg-brand-lime text-brand-dark text-[10px] font-bold uppercase tracking-wider">Beta</span>
+            This platform is in active development — features may change and some flows are still being refined.
+          </span>
+        </div>
+      </div>
+
       {/* Hero */}
       <section className="relative pt-32 pb-20 overflow-hidden">
         <div className="absolute inset-0 bg-grid-pattern opacity-[0.03] dark:opacity-[0.03] pointer-events-none" />

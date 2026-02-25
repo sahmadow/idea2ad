@@ -110,7 +110,13 @@ Return a JSON object with EXACTLY these fields:
     "scene_solution": "string — visual description of the solved state",
     "scene_lifestyle": "string — aspirational lifestyle visual",
     "language": "string — ISO 639-1 code of the page content language (e.g. 'en', 'az', 'de', 'fr', 'es'). Detect from actual text content, not just HTML attributes.",
-    "target_countries": ["ISO 3166-1 alpha-2 country codes for the primary target market, inferred from language, currency, domain TLD, and content (e.g. ['AZ'] for .az domain with Azerbaijani content, ['US'] for English .com)"]
+    "target_countries": ["ISO 3166-1 alpha-2 country codes for the primary target market, inferred from language, currency, domain TLD, and content (e.g. ['AZ'] for .az domain with Azerbaijani content, ['US'] for English .com)"],
+    "product_summary": "string — 1-2 sentence product description for user review",
+    "target_audience": "string — ideal customer profile (concise)",
+    "main_pain_point": "string — core problem it solves or opportunity it creates",
+    "messaging_unaware": "string — ad messaging angle for users who don't know they have this problem",
+    "messaging_aware": "string — ad messaging angle for users actively comparing solutions",
+    "competitors": [{{"name": "string", "weakness": "string — main weakness from customer perspective"}}]
 }}
 
 RULES:
@@ -122,6 +128,10 @@ RULES:
 - If data is missing from the page, infer intelligently from context
 - For language: detect from actual page text content. Use html_lang as a hint if available, but verify against content
 - For target_countries: infer from domain TLD (.az→AZ, .de→DE, .co.uk→GB), currency, language, and content context
+- competitors: Think about "[product_name] alternatives" or "[product_name] vs". Top 3 competitors with their key weakness from negative customer feedback. Try hard — most products have alternatives. Empty array only for truly novel categories.
+- target_audience: describe ideal customer concisely
+- messaging_unaware: angle for people who don't realize they need this yet
+- messaging_aware: angle for people actively comparing solutions
 - Always return valid JSON
 """
 
@@ -129,13 +139,18 @@ RULES:
 async def extract_creative_parameters(
     scraped_data: dict,
     source_url: str | None = None,
-) -> CreativeParameters:
+) -> tuple[CreativeParameters, dict]:
     """
-    Main entry point: takes raw scraper output, returns CreativeParameters.
+    Main entry point: takes raw scraper output, returns CreativeParameters + review analysis.
 
     Combines:
     - Direct extraction from scraped_data (colors, fonts, images, text)
-    - LLM inference via Gemini (pains, desires, personas, scenes)
+    - LLM inference via Gemini (pains, desires, personas, scenes, review fields)
+
+    Returns:
+        tuple of (CreativeParameters, review_analysis dict with keys:
+            product_summary, target_audience, main_pain_point,
+            messaging_unaware, messaging_aware, competitors)
     """
     api_key = os.environ.get("GOOGLE_API_KEY")
     if not api_key:
@@ -145,7 +160,7 @@ async def extract_creative_parameters(
     direct_params = _extract_direct_params(scraped_data, source_url)
 
     # --- Step 2: Call Gemini for inferred fields ---
-    llm_params = await _extract_llm_params(scraped_data, api_key, source_url=source_url)
+    llm_params, review_analysis = await _extract_llm_params(scraped_data, api_key, source_url=source_url)
 
     # --- Step 3: Merge and build CreativeParameters ---
     params = _merge_params(direct_params, llm_params)
@@ -155,7 +170,7 @@ async def extract_creative_parameters(
         f"pains={len(params.customer_pains)}, desires={len(params.customer_desires)}, "
         f"value_props={len(params.value_props)}"
     )
-    return params
+    return params, review_analysis
 
 
 def _extract_direct_params(scraped_data: dict, source_url: str | None) -> dict:
@@ -195,7 +210,7 @@ def _extract_direct_params(scraped_data: dict, source_url: str | None) -> dict:
     }
 
 
-async def _extract_llm_params(scraped_data: dict, api_key: str, source_url: str | None = None) -> dict:
+async def _extract_llm_params(scraped_data: dict, api_key: str, source_url: str | None = None) -> tuple[dict, dict]:
     """Call Gemini to infer marketing parameters from scraped content."""
     client = genai.Client(api_key=api_key)
     styling = scraped_data.get("styling", {})
@@ -233,7 +248,17 @@ async def _extract_llm_params(scraped_data: dict, api_key: str, source_url: str 
             if not data.get("customer_pains") or len(data.get("customer_pains", [])) < 1:
                 raise ValueError("customer_pains is missing or empty")
 
-            return data
+            # Pop review fields before returning core params
+            review_analysis = {
+                "product_summary": data.pop("product_summary", ""),
+                "target_audience": data.pop("target_audience", ""),
+                "main_pain_point": data.pop("main_pain_point", ""),
+                "messaging_unaware": data.pop("messaging_unaware", ""),
+                "messaging_aware": data.pop("messaging_aware", ""),
+                "competitors": data.pop("competitors", []),
+            }
+
+            return data, review_analysis
 
         except Exception as e:
             last_error = e

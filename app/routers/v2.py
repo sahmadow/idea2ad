@@ -468,12 +468,11 @@ async def prepare_campaign(body: PrepareRequest):
             raise HTTPException(status_code=400, detail="Failed to scrape URL")
 
         try:
-            params = await extract_creative_parameters(scraped_data, source_url=body.url)
+            params, review_data = await extract_creative_parameters(scraped_data, source_url=body.url)
         except ExtractionError as e:
             raise HTTPException(status_code=422, detail=f"Extraction failed: {e}")
 
-        # Extract enhanced review fields (target audience, competitors, etc.)
-        review_data = await _extract_review_analysis(params, source_url=body.url)
+        # Review fields extracted in single Gemini call above
         product_summary = review_data.get("product_summary") or params.product_description_short or f"{params.product_name} — {params.key_benefit}"
         target_audience = review_data.get("target_audience", "")
         main_pain_point = review_data.get("main_pain_point", "")
@@ -704,7 +703,7 @@ async def analyze_v2(request: Request, body: AnalyzeRequest):
 
     # 2. Extract parameters
     try:
-        params = await extract_creative_parameters(scraped_data, source_url=body.url)
+        params, _ = await extract_creative_parameters(scraped_data, source_url=body.url)
     except ExtractionError as e:
         logger.error(f"Parameter extraction failed for {body.url}: {e}")
         raise HTTPException(status_code=422, detail=f"Parameter extraction failed: {e}")
@@ -849,7 +848,7 @@ async def _run_v2_job(
             raise ValueError("Failed to scrape URL or empty content")
 
         # 2. Extract parameters
-        params = await extract_creative_parameters(scraped_data, source_url=url)
+        params, _ = await extract_creative_parameters(scraped_data, source_url=url)
 
         # 2b. Translate params for non-English
         if params.language and params.language != "en":

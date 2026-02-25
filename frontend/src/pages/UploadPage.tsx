@@ -11,6 +11,7 @@ export default function UploadPage() {
   const ctx = useAppContext();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const wasAnalyzing = useRef(false);
 
   // Guard: must have input from step 1
   useEffect(() => {
@@ -23,9 +24,15 @@ export default function UploadPage() {
     await ctx.startAnalysis();
   };
 
-  // Navigate to review when prepared campaign is ready
+  // Track when analysis starts
   useEffect(() => {
-    if (ctx.preparedCampaign && !ctx.isAnalyzing) {
+    if (ctx.isAnalyzing) wasAnalyzing.current = true;
+  }, [ctx.isAnalyzing]);
+
+  // Navigate to review only when analysis just completed (not on back-nav)
+  useEffect(() => {
+    if (wasAnalyzing.current && !ctx.isAnalyzing && ctx.preparedCampaign) {
+      wasAnalyzing.current = false;
       navigate('/review', { replace: true });
     }
   }, [ctx.preparedCampaign, ctx.isAnalyzing, navigate]);
