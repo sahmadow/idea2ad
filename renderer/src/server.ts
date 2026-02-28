@@ -6,6 +6,7 @@
 import express from "express";
 import { renderCanvas, renderBatch, warmup } from "./renderer.js";
 import { optimizeImage } from "./optimizer.js";
+import { warmupBundle, renderVideo } from "./video-renderer.js";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3100", 10);
@@ -123,6 +124,49 @@ app.post("/render/batch", async (req, res) => {
   }
 });
 
+// --- Video render ---
+interface VideoRenderBody {
+  composition_id: string;
+  input_props: Record<string, unknown>;
+  codec?: "h264" | "h265";
+}
+
+app.post("/render/video", async (req, res) => {
+  const body = req.body as VideoRenderBody;
+
+  if (!body.composition_id) {
+    res.status(400).json({ error: "composition_id is required" });
+    return;
+  }
+  if (!body.input_props || typeof body.input_props !== "object") {
+    res.status(400).json({ error: "input_props object is required" });
+    return;
+  }
+
+  try {
+    const videoBuffer = await renderVideo({
+      compositionId: body.composition_id,
+      inputProps: body.input_props,
+      codec: body.codec,
+    });
+
+    res.json({
+      success: true,
+      video_base64: videoBuffer.toString("base64"),
+      size_bytes: videoBuffer.length,
+      composition_id: body.composition_id,
+      format: "mp4",
+    });
+  } catch (err) {
+    console.error("[render/video] Failed:", err);
+    res.status(500).json({
+      success: false,
+      error: "Video render failed",
+      detail: String(err),
+    });
+  }
+});
+
 // --- Start ---
 app.listen(PORT, async () => {
   console.log(`[renderer] Listening on port ${PORT}`);
@@ -132,4 +176,8 @@ app.listen(PORT, async () => {
   } catch (err) {
     console.error("[renderer] Warmup failed:", err);
   }
+  // Warmup Remotion bundle in background (non-blocking)
+  warmupBundle().catch((err) => {
+    console.error("[renderer] Remotion bundle warmup failed:", err);
+  });
 });

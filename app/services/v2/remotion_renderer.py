@@ -1,32 +1,43 @@
 """
-Remotion Renderer — async Python wrapper for server-side Remotion video rendering.
+Remotion Renderer — async HTTP client for video rendering via the renderer microservice.
 
-Calls `npx tsx remotion/src/render-api.ts` as a subprocess, passing props via
-a temp JSON file and reading the rendered MP4 bytes from a temp output path.
-
-Security: Uses create_subprocess_exec (not shell=True) to prevent injection.
-All arguments are passed as list elements, not interpolated into a shell string.
+Calls POST /render/video on the Node.js renderer, which bundles and renders
+Remotion compositions server-side. Returns MP4 bytes.
 """
 
-import asyncio
-import json
+import base64
 import logging
 import os
-import tempfile
-from pathlib import Path
+from typing import Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
-# Path to the remotion project root (relative to repo root)
-REMOTION_DIR = Path(__file__).resolve().parents[3] / "remotion"
-RENDER_SCRIPT = REMOTION_DIR / "src" / "render-api.ts"
+# Config from env (same vars as renderer_client.py)
+RENDERER_URL = os.environ.get("RENDERER_URL", "http://localhost:3100")
+RENDERER_API_KEY = os.environ.get("RENDERER_API_KEY", "")
+RENDER_TIMEOUT = 120.0  # seconds — video renders are slower than image renders
 
-# Max render time before we kill the subprocess
-RENDER_TIMEOUT_SECONDS = 120
+_client: Optional[httpx.AsyncClient] = None
 
 
 class RemotionRenderError(Exception):
     """Raised when Remotion rendering fails."""
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None:
+        headers = {}
+        if RENDERER_API_KEY:
+            headers["X-API-Key"] = RENDERER_API_KEY
+        _client = httpx.AsyncClient(
+            base_url=RENDERER_URL,
+            timeout=RENDER_TIMEOUT,
+            headers=headers,
+        )
+    return _client
 
 
 async def render_remotion_video(
@@ -34,7 +45,7 @@ async def render_remotion_video(
     props: dict,
 ) -> bytes:
     """
-    Render a Remotion composition to MP4 and return the video bytes.
+    Render a Remotion composition to MP4 via the renderer microservice.
 
     Args:
         composition_id: Remotion composition ID (e.g. "BrandedStatic", "ServiceHero")
@@ -44,74 +55,56 @@ async def render_remotion_video(
         MP4 file bytes
 
     Raises:
-        RemotionRenderError: on subprocess failure or timeout
+        RemotionRenderError: on HTTP or render failure
     """
-    props_file = None
-    output_file = None
+    client = _get_client()
+
+    logger.info(f"Requesting video render: '{composition_id}'")
 
     try:
-        # Write props to temp JSON file (avoids shell escaping issues)
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False
-        ) as f:
-            json.dump(props, f)
-            props_file = f.name
-
-        # Create temp output path for MP4
-        fd, output_file = tempfile.mkstemp(suffix=".mp4")
-        os.close(fd)
-
-        logger.info(
-            f"Rendering Remotion composition '{composition_id}' → {output_file}"
+        resp = await client.post(
+            "/render/video",
+            json={
+                "composition_id": composition_id,
+                "input_props": props,
+            },
         )
-
-        # Run Remotion CLI via create_subprocess_exec (no shell injection risk)
-        proc = await asyncio.create_subprocess_exec(
-            "npx", "tsx", str(RENDER_SCRIPT),
-            composition_id, props_file, output_file,
-            cwd=str(REMOTION_DIR),
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+        resp.raise_for_status()
+    except httpx.TimeoutException:
+        raise RemotionRenderError(
+            f"Video render timed out after {RENDER_TIMEOUT}s "
+            f"for composition '{composition_id}'"
         )
-
+    except httpx.HTTPStatusError as e:
+        detail = ""
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=RENDER_TIMEOUT_SECONDS
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise RemotionRenderError(
-                f"Remotion render timed out after {RENDER_TIMEOUT_SECONDS}s "
-                f"for composition '{composition_id}'"
-            )
-
-        if proc.returncode != 0:
-            stderr_text = stderr.decode("utf-8", errors="replace")[-2000:]
-            raise RemotionRenderError(
-                f"Remotion render failed (exit {proc.returncode}) "
-                f"for '{composition_id}': {stderr_text}"
-            )
-
-        # Read rendered MP4 bytes
-        mp4_path = Path(output_file)
-        if not mp4_path.exists() or mp4_path.stat().st_size == 0:
-            raise RemotionRenderError(
-                f"Remotion render produced no output for '{composition_id}'"
-            )
-
-        video_bytes = mp4_path.read_bytes()
-        logger.info(
-            f"Remotion render complete: '{composition_id}' "
-            f"({len(video_bytes)} bytes)"
+            detail = e.response.json().get("detail", "")
+        except Exception:
+            detail = e.response.text[:500]
+        raise RemotionRenderError(
+            f"Video render failed (HTTP {e.response.status_code}) "
+            f"for '{composition_id}': {detail}"
         )
-        return video_bytes
+    except httpx.ConnectError:
+        raise RemotionRenderError(
+            f"Cannot reach renderer at {RENDERER_URL} — is it running?"
+        )
 
-    finally:
-        # Cleanup temp files
-        for p in (props_file, output_file):
-            if p:
-                try:
-                    os.unlink(p)
-                except OSError:
-                    pass
+    data = resp.json()
+    if not data.get("success"):
+        raise RemotionRenderError(
+            f"Video render failed for '{composition_id}': "
+            f"{data.get('detail', 'unknown error')}"
+        )
+
+    video_base64 = data.get("video_base64")
+    if not video_base64:
+        raise RemotionRenderError(
+            f"Renderer returned no video data for '{composition_id}'"
+        )
+
+    video_bytes = base64.b64decode(video_base64)
+    logger.info(
+        f"Video render complete: '{composition_id}' ({len(video_bytes)} bytes)"
+    )
+    return video_bytes

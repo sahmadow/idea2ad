@@ -3,6 +3,7 @@ FROM node:20-slim
 # Install Chrome dependencies for Puppeteer
 RUN apt-get update && apt-get install -y \
     chromium \
+    ffmpeg \
     fonts-liberation \
     fonts-noto-color-emoji \
     libgbm1 \
@@ -29,4 +30,4 @@ RUN npx tsc
 
 EXPOSE 3100
 
-CMD ["node", "dist/server.js"]
+CMD ["node", "--max-old-space-size=2048", "dist/server.js"]
