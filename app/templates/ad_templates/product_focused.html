@@ -39,10 +39,10 @@
     font-size: 24px;
     font-weight: 400;
     font-style: italic;
-    color: {{ text_color }};
-    opacity: 0.75;
+    color: {{ muted_text_color or text_color }};
     margin-bottom: 20px;
     line-height: 1.3;
+    text-shadow: {{ text_shadow or 'none' }};
 }
 
 /* Main headline - BIGGER */
@@ -54,7 +54,7 @@
     margin-bottom: 16px;
     line-height: 1.05;
     letter-spacing: -1px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    text-shadow: {{ headline_text_shadow or '0 2px 8px rgba(0, 0, 0, 0.3)' }};
 }
 
 /* Subheadline - supporting text */
@@ -62,9 +62,9 @@
     font-family: '{{ font_family }}', sans-serif;
     font-size: 32px;
     font-weight: 500;
-    color: {{ text_color }};
-    opacity: 0.85;
+    color: {{ secondary_text_color or text_color }};
     line-height: 1.3;
+    text-shadow: {{ text_shadow or 'none' }};
 }
 
 /* CTA Button - FOCAL POINT */
@@ -82,11 +82,7 @@
     background: {{ accent_color }};
     {% endif %}
 
-    {% if button_styles.color %}
-    color: {{ button_styles.color }};
-    {% else %}
-    color: {{ primary_color }};
-    {% endif %}
+    color: {{ cta_text_color or primary_color }};
 
     /* Golden ratio padding */
     padding: 24px 62px;

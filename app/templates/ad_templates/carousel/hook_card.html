@@ -41,7 +41,7 @@
     text-align: center;
     line-height: 1.08;
     letter-spacing: -1px;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    text-shadow: {{ headline_text_shadow or '0 2px 8px rgba(0, 0, 0, 0.3)' }};
 }
 
 .product-image-wrapper {
@@ -64,8 +64,7 @@
     font-family: '{{ font_family }}', sans-serif;
     font-size: 20px;
     font-weight: 500;
-    color: {{ text_color }};
-    opacity: 0.5;
+    color: {{ muted_text_color or text_color }};
     display: flex;
     align-items: center;
     gap: 8px;

@@ -160,20 +160,42 @@ class TemplateRenderer:
         subheadline = self._extract_subheadline(brief.text_overlays)
         cta_text = self._extract_cta(brief.text_overlays)
 
+        # Compute contrast-safe colors
+        primary_color = primary_colors[0] if primary_colors else "#ffffff"
+        accent_color = secondary_colors[0] if secondary_colors else "#000000"
+        text_color = self._get_text_color(primary_color)
+
+        button_styles = brand_css.get("button_styles", {})
+        cta_bg = button_styles.get("backgroundColor") or accent_color
+        cta_text_fallback = button_styles.get("color") or primary_color
+        cta_text_color = self._get_cta_text_color(cta_bg, cta_text_fallback)
+
+        # Solution section text (problem_solution template)
+        solution_text_color = self._get_text_color(accent_color)
+
         # Build template context
         context = {
             # CSS injection
             "font_faces": brand_css.get("font_faces", []),
             "css_variables": brand_css.get("css_variables", {}),
-            # Colors
-            "primary_color": primary_colors[0] if primary_colors else "#ffffff",
-            "accent_color": secondary_colors[0] if secondary_colors else "#000000",
-            "text_color": self._get_text_color(primary_colors[0] if primary_colors else "#ffffff"),
+            # Colors — all contrast-checked
+            "primary_color": primary_color,
+            "accent_color": accent_color,
+            "text_color": text_color,
+            "secondary_text_color": self._get_secondary_text_color(primary_color, text_color),
+            "muted_text_color": self._get_muted_text_color(primary_color, text_color),
+            "cta_text_color": cta_text_color,
+            "solution_text_color": solution_text_color,
+            "solution_secondary_color": self._get_secondary_text_color(accent_color, solution_text_color),
+            "solution_muted_color": self._get_muted_text_color(accent_color, solution_text_color),
+            # Adaptive text shadows
+            "text_shadow": self._get_text_shadow(text_color),
+            "headline_text_shadow": self._get_headline_text_shadow(text_color),
             "gradient": gradient_css,
             # Typography
             "font_family": font_families[0] if font_families else "Inter",
             # Button styles
-            "button_styles": brand_css.get("button_styles", {}),
+            "button_styles": button_styles,
             # Design tokens
             "border_radius": design_tokens.get("border_radius", "8px") if design_tokens else "8px",
             # Content
@@ -230,21 +252,121 @@ class TemplateRenderer:
                 return overlay.get("content", "Learn More")
         return "Learn More"
 
-    def _get_text_color(self, bg_color: str) -> str:
-        """Return white or black text based on background luminance."""
+    # ── Contrast & color utilities ──────────────────────────────
+
+    def _hex_to_rgb(self, hex_color: str) -> tuple:
+        """Convert hex color to (r, g, b) tuple. Handles hex, rgb(), and fallback."""
+        import re
+
+        if not hex_color or not isinstance(hex_color, str):
+            return (128, 128, 128)
+
+        color = hex_color.strip()
+
+        # Handle rgb()/rgba()
+        m = re.match(r"rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)", color)
+        if m:
+            return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+
+        # Handle lab(), oklch(), hsl() etc. — can't easily convert, fallback
+        if not color.startswith("#"):
+            return (128, 128, 128)
+
+        hex_str = color.lstrip("#")
+        if len(hex_str) == 3:
+            hex_str = "".join([c * 2 for c in hex_str])
+        if len(hex_str) < 6:
+            return (128, 128, 128)
+
         try:
-            # Parse hex color
-            hex_color = bg_color.lstrip("#")
-            if len(hex_color) == 3:
-                hex_color = "".join([c * 2 for c in hex_color])
-            r = int(hex_color[0:2], 16)
-            g = int(hex_color[2:4], 16)
-            b = int(hex_color[4:6], 16)
-            # Calculate relative luminance
-            luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-            return "#000000" if luminance > 0.5 else "#ffffff"
+            return (int(hex_str[0:2], 16), int(hex_str[2:4], 16), int(hex_str[4:6], 16))
+        except ValueError:
+            return (128, 128, 128)
+
+    def _relative_luminance(self, r: int, g: int, b: int) -> float:
+        """WCAG 2.0 relative luminance (sRGB linearized)."""
+        def linearize(v):
+            v = v / 255.0
+            return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+        return 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+
+    def _contrast_ratio(self, color1: str, color2: str) -> float:
+        """WCAG contrast ratio between two hex colors."""
+        r1, g1, b1 = self._hex_to_rgb(color1)
+        r2, g2, b2 = self._hex_to_rgb(color2)
+        l1 = self._relative_luminance(r1, g1, b1)
+        l2 = self._relative_luminance(r2, g2, b2)
+        lighter, darker = max(l1, l2), min(l1, l2)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    def _blend_color(self, text_color: str, bg_color: str, factor: float) -> str:
+        """Blend text toward background by factor (0 = text, 1 = bg)."""
+        r1, g1, b1 = self._hex_to_rgb(text_color)
+        r2, g2, b2 = self._hex_to_rgb(bg_color)
+        r = int(r1 + (r2 - r1) * factor)
+        g = int(g1 + (g2 - g1) * factor)
+        b = int(b1 + (b2 - b1) * factor)
+        return f"#{r:02x}{g:02x}{b:02x}"
+
+    def _get_text_color(self, bg_color: str) -> str:
+        """Return white or black text – whichever has higher WCAG contrast."""
+        try:
+            white_cr = self._contrast_ratio(bg_color, "#ffffff")
+            black_cr = self._contrast_ratio(bg_color, "#000000")
+            return "#000000" if black_cr >= white_cr else "#ffffff"
         except Exception:
             return "#ffffff"
+
+    def _get_secondary_text_color(self, bg_color: str, text_color: str) -> str:
+        """Muted text (subheadlines) that keeps WCAG AA contrast (>= 4.5:1)."""
+        for factor in [0.25, 0.20, 0.15, 0.10, 0.05, 0.0]:
+            blended = self._blend_color(text_color, bg_color, factor)
+            if self._contrast_ratio(bg_color, blended) >= 4.5:
+                return blended
+        return text_color
+
+    def _get_muted_text_color(self, bg_color: str, text_color: str) -> str:
+        """Heavily muted text (pain points) that keeps >= 3:1 contrast (WCAG large text)."""
+        for factor in [0.40, 0.35, 0.30, 0.25, 0.20, 0.15, 0.0]:
+            blended = self._blend_color(text_color, bg_color, factor)
+            if self._contrast_ratio(bg_color, blended) >= 3.0:
+                return blended
+        return text_color
+
+    def _get_cta_text_color(self, button_bg: str, fallback_text: str) -> str:
+        """Ensure CTA text contrasts with button bg (>= 4.5:1)."""
+        try:
+            if self._contrast_ratio(button_bg, fallback_text) >= 4.5:
+                return fallback_text
+            return self._get_text_color(button_bg)
+        except Exception:
+            return "#ffffff"
+
+    def _get_text_shadow(self, text_color: str) -> str:
+        """Adaptive text-shadow: strong for light-on-dark, subtle for dark-on-light."""
+        try:
+            r, g, b = self._hex_to_rgb(text_color)
+            lum = self._relative_luminance(r, g, b)
+            if lum > 0.5:
+                # Light text (white) on dark bg – strong shadow for depth
+                return "0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4)"
+            # Dark text (black) on light bg – minimal shadow
+            return "0 1px 2px rgba(0, 0, 0, 0.06)"
+        except Exception:
+            return "0 2px 8px rgba(0, 0, 0, 0.3)"
+
+    def _get_headline_text_shadow(self, text_color: str) -> str:
+        """Stronger shadow for large headlines."""
+        try:
+            r, g, b = self._hex_to_rgb(text_color)
+            lum = self._relative_luminance(r, g, b)
+            if lum > 0.5:
+                # Light text on dark bg – strong headline shadow
+                return "0 3px 12px rgba(0, 0, 0, 0.6), 0 1px 4px rgba(0, 0, 0, 0.5)"
+            # Dark text on light bg – subtle headline shadow
+            return "0 1px 4px rgba(0, 0, 0, 0.1)"
+        except Exception:
+            return "0 2px 8px rgba(0, 0, 0, 0.3)"
 
     async def render_replica_creative(
         self,
@@ -270,16 +392,34 @@ class TemplateRenderer:
 
         logger.info(f"Rendering replica creative: type={template_type}, aspect={aspect_ratio}")
 
+        # Compute contrast-safe colors for replica
+        primary = replica_data.primary_color
+        accent = replica_data.accent_color
+        text_color = self._get_text_color(primary)
+
+        cta_styles = replica_data.hero.cta_styles or {}
+        cta_bg = cta_styles.get("backgroundColor") or accent
+        cta_text_fallback = cta_styles.get("color") or primary
+        cta_text_color = self._get_cta_text_color(cta_bg, cta_text_fallback)
+
         # Build base context from replica_data
         context = {
             # CSS injection
             "font_faces": replica_data.font_faces,
             "css_variables": replica_data.css_variables,
-            # Colors
-            "primary_color": replica_data.primary_color,
+            # Colors — contrast-checked
+            "primary_color": primary,
             "secondary_color": replica_data.secondary_color,
-            "accent_color": replica_data.accent_color,
-            "text_color": self._get_text_color(replica_data.primary_color),
+            "accent_color": accent,
+            "text_color": text_color,
+            "secondary_text_color": self._get_secondary_text_color(primary, text_color),
+            "muted_text_color": self._get_muted_text_color(primary, text_color),
+            "cta_text_color": cta_text_color,
+            "solution_text_color": self._get_text_color(accent),
+            "solution_secondary_color": self._get_secondary_text_color(accent, self._get_text_color(accent)),
+            "solution_muted_color": self._get_muted_text_color(accent, self._get_text_color(accent)),
+            "text_shadow": self._get_text_shadow(text_color),
+            "headline_text_shadow": self._get_headline_text_shadow(text_color),
             "gradient": None,
             # Typography
             "font_family": replica_data.font_family,
@@ -289,7 +429,7 @@ class TemplateRenderer:
             "border_radius": "12px",
             # CTA defaults from hero
             "cta_text": replica_data.hero.cta_text,
-            "cta_styles": replica_data.hero.cta_styles,
+            "cta_styles": cta_styles,
         }
 
         # Merge variation-specific data

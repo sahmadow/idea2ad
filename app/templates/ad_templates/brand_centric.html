@@ -57,7 +57,7 @@
     color: {{ text_color }};
     line-height: 1.05;
     letter-spacing: -1px;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+    text-shadow: {{ headline_text_shadow or '0 2px 8px rgba(0, 0, 0, 0.3)' }};
     margin-bottom: 24px;
 }
 
@@ -66,11 +66,11 @@
     font-family: '{{ font_family }}', sans-serif;
     font-size: 30px;
     font-weight: 500;
-    color: {{ text_color }};
-    opacity: 0.85;
+    color: {{ secondary_text_color or text_color }};
     line-height: 1.4;
     margin-bottom: 40px;
     max-width: 85%;
+    text-shadow: {{ text_shadow or 'none' }};
 }
 
 /* CTA Button */
@@ -81,11 +81,7 @@
     background: {{ accent_color }};
     {% endif %}
 
-    {% if button_styles.color %}
-    color: {{ button_styles.color }};
-    {% else %}
-    color: {{ primary_color }};
-    {% endif %}
+    color: {{ cta_text_color or primary_color }};
 
     padding: 26px 64px;
 

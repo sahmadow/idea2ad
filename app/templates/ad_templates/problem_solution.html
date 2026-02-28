@@ -49,11 +49,11 @@
     font-family: '{{ font_family }}', sans-serif;
     font-size: 16px;
     font-weight: 600;
-    color: {{ text_color }};
-    opacity: 0.5;
+    color: {{ muted_text_color or text_color }};
     text-transform: uppercase;
     letter-spacing: 3px;
     margin-bottom: 16px;
+    text-shadow: {{ text_shadow or 'none' }};
 }
 
 .problem-text {
@@ -61,10 +61,10 @@
     font-size: 36px;
     font-weight: 600;
     font-style: italic;
-    color: {{ text_color }};
+    color: {{ secondary_text_color or text_color }};
     line-height: 1.25;
     max-width: 90%;
-    opacity: 0.85;
+    text-shadow: {{ text_shadow or 'none' }};
 }
 
 /* Divider arrow */
@@ -104,15 +104,12 @@
     text-align: center;
 }
 
-/* Solution text color - ensure contrast */
-{% set solution_text = text_color if gradient else primary_color %}
-
+/* Solution text — contrast-checked against accent_color bg */
 .solution-label {
     font-family: '{{ font_family }}', sans-serif;
     font-size: 16px;
     font-weight: 600;
-    color: {{ solution_text }};
-    opacity: 0.7;
+    color: {{ solution_muted_color or solution_text_color or text_color }};
     text-transform: uppercase;
     letter-spacing: 3px;
     margin-bottom: 16px;
@@ -123,11 +120,12 @@
     font-family: '{{ font_family }}', sans-serif;
     font-size: 58px;
     font-weight: 800;
-    color: {{ solution_text }};
+    color: {{ solution_text_color or text_color }};
     line-height: 1.1;
     margin-bottom: 32px;
     max-width: 95%;
     letter-spacing: -1px;
+    text-shadow: {{ headline_text_shadow or '0 2px 8px rgba(0, 0, 0, 0.3)' }};
 }
 
 /* CTA - FOCAL POINT */
@@ -138,11 +136,7 @@
     background: {{ primary_color }};
     {% endif %}
 
-    {% if button_styles.color %}
-    color: {{ button_styles.color }};
-    {% else %}
-    color: {{ accent_color }};
-    {% endif %}
+    color: {{ cta_text_color or accent_color }};
 
     /* LARGE CTA */
     padding: 26px 64px;

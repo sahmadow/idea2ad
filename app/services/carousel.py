@@ -146,7 +146,7 @@ Example: ["speed", "money", "security"]"""
 
 
 def _get_text_color(bg_color: str) -> str:
-    """Return white or black text based on background luminance."""
+    """Return white or black text – whichever has higher WCAG contrast."""
     try:
         hex_color = bg_color.lstrip("#")
         if len(hex_color) == 3:
@@ -154,8 +154,17 @@ def _get_text_color(bg_color: str) -> str:
         r = int(hex_color[0:2], 16)
         g = int(hex_color[2:4], 16)
         b = int(hex_color[4:6], 16)
-        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-        return "#000000" if luminance > 0.5 else "#ffffff"
+
+        def _rel_lum(rv, gv, bv):
+            def lin(v):
+                v = v / 255.0
+                return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+            return 0.2126 * lin(rv) + 0.7152 * lin(gv) + 0.0722 * lin(bv)
+
+        bg_lum = _rel_lum(r, g, b)
+        white_cr = (1.0 + 0.05) / (bg_lum + 0.05)
+        black_cr = (bg_lum + 0.05) / (0.0 + 0.05)
+        return "#000000" if black_cr >= white_cr else "#ffffff"
     except Exception:
         return "#ffffff"
 
