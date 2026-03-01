@@ -1,6 +1,18 @@
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npx tsc
+
+# --- Production image ---
 FROM node:20-slim
 
-# Install Chrome dependencies for Puppeteer
+# Install Chrome dependencies for Puppeteer + ffmpeg for Remotion
 RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
@@ -13,20 +25,19 @@ RUN apt-get update && apt-get install -y \
     --no-install-recommends \
   && rm -rf /var/lib/apt/lists/*
 
-# Tell Puppeteer to use installed Chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 WORKDIR /app
 
-# Install dependencies
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy source and build
-COPY tsconfig.json ./
-COPY src/ ./src/
-RUN npx tsc
+# Copy compiled JS from builder
+COPY --from=builder /app/dist ./dist
+
+# Copy Remotion source (webpack bundles TSX at runtime, not tsc)
+COPY src/remotion ./src/remotion
 
 EXPOSE 3100
 
