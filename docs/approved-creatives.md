@@ -19,6 +19,7 @@ UGC avatar videos use **HeyGen**: AI avatar + TTS → MP4 via REST API.
 | 8   | UGC Avatar Video       | `ugc_avatar_video`       | Video  | HeyGen API → `ugc_avatar_renderer.py`         | All         | ~$400    | **OFF** |
 | 10  | Product Centric        | `product_centric`        | Static | `social_templates/product_centric.py`       | All           | ~$0      | Active |
 | 11  | Person Centric         | `person_centric`         | Static | `social_templates/person_centric.py` + Gemini image | All  | ~$2.00   | Active |
+| 12  | Ad Concept Replica     | `ad_concept_replica`     | Static | Vision LLM analysis + HTML gen + Playwright          | All  | TBD      | **OFF** |
 
 **Manual Upload (1 type):**
 
@@ -627,3 +628,42 @@ Headline + AI-generated person image + subheadline + CTA. Uses Gemini 2.5 Flash 
 - `app/services/v2/social_template_bridges.py` — `bridge_person_centric()`
 
 **Output:** PNG, ~200-500KB
+
+---
+
+## 12. Ad Concept Replica (OFF)
+
+**ID:** `ad_concept_replica`
+**Renderer:** Vision LLM analysis → HTML generation → Playwright screenshot
+**Aspect ratios:** 1:1 (1080x1080), 4:5 (1080x1350)
+**Business Type:** All
+**Status:** OFF — approach validated manually, not integrated into pipeline
+
+Takes a reference ad image from any brand and recreates its visual concept adapted for a target brand (scraped from URL). Produces 3 variations with different copy angles while preserving the reference ad's visual DNA.
+
+**See:** [docs/ad-concept-replica-approach.md](ad-concept-replica-approach.md) for full approach details.
+
+**Inputs:**
+| Param | Type | Required |
+|-------|------|----------|
+| `reference_image` | file (PNG/JPG) | Yes |
+| `target_url` | str (landing page URL) | Yes |
+| `num_variations` | int | No (default: 3) |
+| `aspect_ratio` | str | No (default: "1:1") |
+
+**Pipeline (manual today, automation TBD):**
+1. Analyze reference ad image → extract visual structure (layout, typography pattern, accent effects, color scheme)
+2. Scrape target URL → extract brand tokens (logo/favicon SVG, brand colors, font family, product description)
+3. Generate word pairs relevant to target brand's product
+4. Build N HTML variations: same visual structure, target brand tokens, varied copy
+5. Playwright screenshot at 2x DPR → PNG
+
+**Proof of concept:** Framer "Design/Publish" ad → adapted for LaunchAd with 3 variations:
+- V1: "Describe / Advertise" — streak effect
+- V2: "Paste / Publish" — comet trail effect
+- V3: "Brief / Launch" — rocket trail effect
+- Files: `scripts/output/launchad_v{1,2,3}_*.html` + `.png`
+
+**Cost estimate:** TBD — depends on whether vision analysis uses Gemini or manual extraction. HTML gen + Playwright render is ~$0.
+
+**Output:** PNG, ~80-150KB per variation
