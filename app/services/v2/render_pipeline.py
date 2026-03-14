@@ -407,8 +407,8 @@ def build_manual_copy(params: CreativeParameters, strategy: str) -> dict:
             primary += f" — {params.key_benefit}"
         headline = params.headline or params.product_name
     elif strategy == "benefit_highlight":
-        if params.value_propositions:
-            primary = f"{params.value_propositions[0]}. Try {params.product_name} today."
+        if params.value_props:
+            primary = f"{params.value_props[0]}. Try {params.product_name} today."
         elif params.key_benefit:
             primary = f"{params.key_benefit}. See why people love {params.product_name}."
         else:
