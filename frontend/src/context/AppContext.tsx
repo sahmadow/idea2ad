@@ -46,6 +46,8 @@ function getWithTTL(key: string, ttlMs: number): string | null {
   }
 }
 
+export type GenerationMode = 'replica' | 'scratch' | null;
+
 // --- Context shape ---
 interface AppContextValue {
   // Auth
@@ -59,6 +61,10 @@ interface AppContextValue {
   campaignsHook: ReturnType<typeof useCampaigns>;
   isSaving: boolean;
   handleSaveCampaign: () => Promise<void>;
+
+  // Generation mode
+  generationMode: GenerationMode;
+  setGenerationMode: (mode: GenerationMode) => void;
 
   // Unified input
   input: string;
@@ -147,6 +153,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Campaigns
   const campaignsHook = useCampaigns();
   const [isSaving, setIsSaving] = useState(false);
+
+  // Generation mode (ephemeral, no persistence)
+  const [generationMode, setGenerationMode] = useState<GenerationMode>(null);
 
   // Unified input (persisted without TTL)
   const [input, setInput] = useState(() => {
@@ -328,6 +337,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const pack = await generateFromPrepared({
         session_id: preparedCampaign.session_id,
+        generation_mode: generationMode,
         language: overrides.language,
         product_summary: overrides.product_summary,
         target_audience: overrides.target_audience,
@@ -361,6 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCompetitorData(null);
     setCompetitors([]);
     setPreparedCampaign(null);
+    setGenerationMode(null);
     clearProductImage();
     try {
       localStorage.removeItem(STORAGE_KEYS.RESULT);
@@ -413,6 +424,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     campaignsHook,
     isSaving,
     handleSaveCampaign,
+
+    generationMode, setGenerationMode,
 
     input, setInput,
     isInputUrl,

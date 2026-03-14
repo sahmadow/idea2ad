@@ -10,10 +10,19 @@ const certsExist = fs.existsSync(keyPath) && fs.existsSync(certPath)
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  server: certsExist ? {
-    https: {
-      key: fs.readFileSync(keyPath),
-      cert: fs.readFileSync(certPath),
+  server: {
+    ...(certsExist && {
+      https: {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath),
+      },
+    }),
+    proxy: {
+      '/api': {
+        target: 'https://idea2ad-production.up.railway.app',
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api/, ''),
+      },
     },
-  } : {},
+  },
 })

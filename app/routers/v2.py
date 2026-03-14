@@ -626,51 +626,61 @@ async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
         budget_cents = 1500
         duration = 3
 
-        # Template selection
-        selected = select_templates(params)
-        if not selected:
-            raise ValueError("No templates could be selected")
-
         # Apply user overrides from review page to params
         if body.product_summary:
             params.product_description_short = body.product_summary
         # Competitor info stored for potential use in competition copy
         competitor_data = None  # auto-detected competitors are informational only
 
-        # Copy generation
         creatives: list[GeneratedCreative] = []
-        needs_translation = params.language and params.language != "en"
-        for template in selected:
-            if template.id == "review_static_competition":
-                base_copy = await generate_competition_copy(template, params, competitor_data)
-            else:
-                base_copy = generate_copy_from_template(template, params)
-                if needs_translation:
-                    base_copy = await translate_copy(base_copy, params)
 
-            creative = GeneratedCreative(
-                id=str(uuid.uuid4())[:12],
-                ad_type_id=template.id,
-                strategy=template.strategy,
-                format=template.format,
-                aspect_ratio="1:1",
-                primary_text=base_copy["primary_text"],
-                headline=base_copy["headline"],
-                description=base_copy.get("description"),
-                cta_type=base_copy["cta_type"],
-                created_at=datetime.now(timezone.utc),
-            )
-            creatives.append(creative)
+        # Replica mode: only reference ad variations, skip standard creatives
+        is_replica = body.generation_mode == "replica" and image_url
 
-            if template.id == "review_static_competition":
-                competition_copy_store[creative.id] = dict(base_copy)
+        if not is_replica:
+            # Template selection
+            selected = select_templates(params)
+            if not selected:
+                raise ValueError("No templates could be selected")
 
-        # Render statics
-        creatives = await render_static_creatives(creatives, selected, params, scraped_data)
+            # Copy generation
+            needs_translation = params.language and params.language != "en"
+            for template in selected:
+                if template.id == "review_static_competition":
+                    base_copy = await generate_competition_copy(template, params, competitor_data)
+                else:
+                    base_copy = generate_copy_from_template(template, params)
+                    if needs_translation:
+                        base_copy = await translate_copy(base_copy, params)
+
+                creative = GeneratedCreative(
+                    id=str(uuid.uuid4())[:12],
+                    ad_type_id=template.id,
+                    strategy=template.strategy,
+                    format=template.format,
+                    aspect_ratio="1:1",
+                    primary_text=base_copy["primary_text"],
+                    headline=base_copy["headline"],
+                    description=base_copy.get("description"),
+                    cta_type=base_copy["cta_type"],
+                    created_at=datetime.now(timezone.utc),
+                )
+                creatives.append(creative)
+
+                if template.id == "review_static_competition":
+                    competition_copy_store[creative.id] = dict(base_copy)
+
+            # Render statics
+            creatives = await render_static_creatives(creatives, selected, params, scraped_data)
 
         # Add manual image creative if user uploaded
         if image_url:
-            await add_manual_image_creative(creatives, image_url, None, params)
+            variant_count = 3 if is_replica else 2
+            await add_manual_image_creative(
+                creatives, image_url, None, params,
+                variant_count=variant_count,
+                replica_mode=is_replica,
+            )
 
         # Assemble AdPack
         source = params.source_url or "description"

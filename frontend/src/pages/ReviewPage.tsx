@@ -145,13 +145,15 @@ export default function ReviewPage() {
       <div className="border-b border-white/5 px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <button
-            onClick={() => navigate('/upload')}
+            onClick={() => navigate(ctx.generationMode === 'scratch' ? '/choose' : '/upload')}
             className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors font-mono"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <div className="text-xs font-mono text-gray-500">Step 3 of 3</div>
+          <div className="text-xs font-mono text-gray-500">
+            {ctx.generationMode === 'replica' ? 'Step 4 of 4' : 'Step 3 of 3'}
+          </div>
         </div>
       </div>
 

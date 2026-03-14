@@ -261,11 +261,19 @@ async def add_manual_image_creative(
     image_url: str,
     edit_prompt: str | None,
     params: CreativeParameters,
+    variant_count: int = 2,
+    replica_mode: bool = False,
 ) -> None:
-    """Add manual_image_upload creative (#9) with optional Gemini edit."""
+    """Add manual_image_upload creative (#9) with optional Gemini edit.
+
+    When replica_mode=True, each variation gets a unique Gemini edit prompt
+    that adapts the reference ad to the user's brand.
+    """
     try:
+        import asyncio
         import httpx
         from app.services.s3 import get_s3_service
+        from app.services.v2.image_editor import edit_image
         from app.routers.quick import _validate_image_url
 
         _validate_image_url(image_url)
@@ -274,46 +282,118 @@ async def add_manual_image_creative(
             resp.raise_for_status()
             image_bytes = resp.content
 
-        if edit_prompt:
-            from app.services.v2.image_editor import edit_image
-            logger.info(f"Editing user image with prompt: {edit_prompt[:80]}")
-            image_bytes = await edit_image(image_bytes, edit_prompt)
-
-        from app.services.v2.social_templates.product_showcase import (
-            render_product_showcase, ProductShowcaseParams,
-        )
-
         s3 = get_s3_service()
 
-        temp_id = f"v2_manual_{uuid.uuid4().hex[:8]}"
-        temp_result = s3.upload_image(image_bytes, temp_id)
-        showcase_url = temp_result["url"] if temp_result.get("success") else image_url
+        strategies = ["product_aware", "product_unaware"]
+        if variant_count >= 3:
+            strategies.append("benefit_highlight")
+        strategies = strategies[:variant_count]
 
-        showcase_bytes = await render_product_showcase(
-            ProductShowcaseParams(product_image_url=showcase_url)
-        )
+        if replica_mode:
+            # Build brand context for edit prompts
+            brand = params.brand_name or params.product_name
+            colors = []
+            if params.brand_colors.primary:
+                colors.append(params.brand_colors.primary)
+            if params.brand_colors.accent:
+                colors.append(params.brand_colors.accent)
+            color_str = f" using brand colors {', '.join(colors)}" if colors else ""
 
-        render_id = f"v2_manual_showcase_{uuid.uuid4().hex[:8]}"
-        render_result = s3.upload_image(showcase_bytes, render_id)
-        asset_url = render_result["url"] if render_result.get("success") else None
+            variant_prompts = [
+                (
+                    f"Recreate this ad for the brand '{brand}'{color_str}. "
+                    f"Keep the exact same visual layout, composition, and style. "
+                    f"Replace all text with: headline '{params.headline or params.product_name}', "
+                    f"subtext '{params.key_benefit or params.product_description_short}'. "
+                    f"Adapt colors and branding to match '{brand}'."
+                ),
+                (
+                    f"Create a variation of this ad for '{brand}'{color_str}. "
+                    f"Maintain the same visual style and layout structure. "
+                    f"Use this messaging: '{params.subheadline or params.key_differentiator or params.product_description_short}'. "
+                    f"Make it feel like the same campaign but with a fresh angle."
+                ),
+                (
+                    f"Redesign this ad concept for '{brand}'{color_str}. "
+                    f"Keep the overall composition and visual approach. "
+                    f"Focus the message on: '{params.customer_pains[0] if params.customer_pains else params.key_benefit}'. "
+                    f"Use a bold, attention-grabbing tone. Adapt all branding to '{brand}'."
+                ),
+            ]
 
-        for strategy in ["product_aware", "product_unaware"]:
-            copy = build_manual_copy(params, strategy)
-            creatives.append(GeneratedCreative(
-                id=uuid.uuid4().hex[:12],
-                ad_type_id="manual_image_upload",
-                strategy=strategy,
-                format="static",
-                aspect_ratio="1:1",
-                asset_url=asset_url,
-                primary_text=copy["primary_text"],
-                headline=copy["headline"],
-                description=copy.get("description"),
-                cta_type=copy.get("cta_type", "LEARN_MORE"),
-                created_at=datetime.now(timezone.utc),
-            ))
+            # Run Gemini edits concurrently
+            async def _edit_and_upload(prompt: str, idx: int) -> str | None:
+                try:
+                    logger.info(f"[replica] Generating variation {idx + 1}: {prompt[:80]}...")
+                    edited = await edit_image(image_bytes, prompt)
+                    rid = f"v2_replica_{uuid.uuid4().hex[:8]}"
+                    result = s3.upload_image(edited, rid)
+                    return result["url"] if result.get("success") else None
+                except Exception as e:
+                    logger.error(f"[replica] Variation {idx + 1} failed: {e}", exc_info=True)
+                    return None
 
-        logger.info("Added manual_image_upload creatives (aware + unaware)")
+            asset_urls = await asyncio.gather(
+                *[_edit_and_upload(variant_prompts[i], i) for i in range(len(strategies))]
+            )
+
+            for i, strategy in enumerate(strategies):
+                copy = build_manual_copy(params, strategy)
+                creatives.append(GeneratedCreative(
+                    id=uuid.uuid4().hex[:12],
+                    ad_type_id="reference_replica",
+                    strategy=strategy,
+                    format="static",
+                    aspect_ratio="1:1",
+                    asset_url=asset_urls[i],
+                    primary_text=copy["primary_text"],
+                    headline=copy["headline"],
+                    description=copy.get("description"),
+                    cta_type=copy.get("cta_type", "LEARN_MORE"),
+                    created_at=datetime.now(timezone.utc),
+                ))
+
+            logger.info(f"Added {len(strategies)} reference_replica creatives")
+
+        else:
+            # Original flow: single showcase render, shared across variations
+            if edit_prompt:
+                logger.info(f"Editing user image with prompt: {edit_prompt[:80]}")
+                image_bytes = await edit_image(image_bytes, edit_prompt)
+
+            from app.services.v2.social_templates.product_showcase import (
+                render_product_showcase, ProductShowcaseParams,
+            )
+
+            temp_id = f"v2_manual_{uuid.uuid4().hex[:8]}"
+            temp_result = s3.upload_image(image_bytes, temp_id)
+            showcase_url = temp_result["url"] if temp_result.get("success") else image_url
+
+            showcase_bytes = await render_product_showcase(
+                ProductShowcaseParams(product_image_url=showcase_url)
+            )
+
+            render_id = f"v2_manual_showcase_{uuid.uuid4().hex[:8]}"
+            render_result = s3.upload_image(showcase_bytes, render_id)
+            asset_url = render_result["url"] if render_result.get("success") else None
+
+            for strategy in strategies:
+                copy = build_manual_copy(params, strategy)
+                creatives.append(GeneratedCreative(
+                    id=uuid.uuid4().hex[:12],
+                    ad_type_id="manual_image_upload",
+                    strategy=strategy,
+                    format="static",
+                    aspect_ratio="1:1",
+                    asset_url=asset_url,
+                    primary_text=copy["primary_text"],
+                    headline=copy["headline"],
+                    description=copy.get("description"),
+                    cta_type=copy.get("cta_type", "LEARN_MORE"),
+                    created_at=datetime.now(timezone.utc),
+                ))
+
+            logger.info(f"Added {len(strategies)} manual_image_upload creatives")
 
     except Exception as e:
         logger.error(f"Failed to add manual image creative: {e}", exc_info=True)
@@ -326,6 +406,14 @@ def build_manual_copy(params: CreativeParameters, strategy: str) -> dict:
         if params.key_benefit:
             primary += f" — {params.key_benefit}"
         headline = params.headline or params.product_name
+    elif strategy == "benefit_highlight":
+        if params.value_propositions:
+            primary = f"{params.value_propositions[0]}. Try {params.product_name} today."
+        elif params.key_benefit:
+            primary = f"{params.key_benefit}. See why people love {params.product_name}."
+        else:
+            primary = f"See why people love {params.product_name}."
+        headline = params.cta_text or f"Try {params.product_name}"
     else:
         if params.customer_pains:
             primary = f"Tired of {params.customer_pains[0].lower().rstrip('.')}? {params.product_name} can help."

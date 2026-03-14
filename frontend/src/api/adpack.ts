@@ -309,6 +309,7 @@ export async function prepareCampaign(params: PrepareParams): Promise<PreparedCa
 
 interface GenerateParams {
   session_id: string;
+  generation_mode?: 'replica' | 'scratch' | null;
   language: string;
   product_summary?: string;
   target_audience?: string;

@@ -130,6 +130,9 @@ class GenerateRequest(BaseModel):
     """Input for the generate step — session_id + user overrides from review page."""
     session_id: str
 
+    # Generation mode: 'replica' = reference-only variations, 'scratch' = full creative set
+    generation_mode: Literal["replica", "scratch"] | None = None
+
     # User-selected language (mandatory on frontend, overrides auto-detected)
     language: str | None = None  # ISO 639-1 code
 

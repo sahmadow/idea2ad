@@ -9,6 +9,7 @@ import { AuthGuard } from './components/AuthGuard';
 import LandingPage from './pages/LandingPage';
 
 // Lazy-loaded pages
+const ChoosePage = lazy(() => import('./pages/ChoosePage'));
 const UploadPage = lazy(() => import('./pages/UploadPage'));
 const ReviewPage = lazy(() => import('./pages/ReviewPage'));
 const AdPackPage = lazy(() => import('./pages/AdPackPage'));
@@ -53,6 +54,7 @@ export function AppRoutes() {
           <Suspense fallback={<ViewSkeleton />}>
             <Routes location={location}>
               <Route path="/" element={<LandingPage />} />
+              <Route path="/choose" element={<ChoosePage />} />
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/review" element={<ReviewPage />} />
               <Route path="/adpack" element={<AdPackPage />} />

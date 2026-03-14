@@ -17,7 +17,7 @@ export default function LandingPage() {
 
   // Navigate only after the terminal animation finishes
   const handleAnimationComplete = useCallback(() => {
-    navigate('/upload');
+    navigate('/choose');
   }, [navigate]);
 
   const handleDashboardClick = () => {
