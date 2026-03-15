@@ -675,7 +675,7 @@ async def _run_generate_job(job_id: str, body: GenerateRequest, session: dict):
 
         # Add manual image creative if user uploaded
         if image_url:
-            variant_count = 3 if is_replica else 2
+            variant_count = 4 if is_replica else 2
             await add_manual_image_creative(
                 creatives, image_url, None, params,
                 variant_count=variant_count,

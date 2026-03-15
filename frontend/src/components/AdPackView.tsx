@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import {
   ArrowLeft,
-  Download,
   Sparkles,
   Grid3X3,
   X,
   Check,
   Pencil,
+  Facebook,
+  Crown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -20,6 +21,7 @@ interface AdPackViewProps {
   adPack: AdPack;
   onAdPackChange: (pack: AdPack) => void;
   onBack: () => void;
+  onPublish: (selectedCreative: AdCreative) => void;
 }
 
 type FilterStrategy = 'all' | AdStrategy;
@@ -53,15 +55,18 @@ function CreativeCard({
   pageName,
   websiteUrl,
   logoUrl,
-  onExpand,
+  selected,
+  onEdit,
+  onSelect,
 }: {
   creative: AdCreative;
   pageName: string;
   websiteUrl: string;
   logoUrl?: string;
-  onExpand: () => void;
+  selected: boolean;
+  onEdit: () => void;
+  onSelect: () => void;
 }) {
-  // Convert AdCreative to Ad shape for MetaAdPreview
   const ad: Ad = {
     id: parseInt(creative.id, 16) || 1,
     imageUrl: creative.image_url,
@@ -72,6 +77,15 @@ function CreativeCard({
 
   return (
     <div className="relative group">
+      {/* Edit button — top right */}
+      <button
+        onClick={(e) => { e.stopPropagation(); onEdit(); }}
+        className="absolute top-9 right-2 z-10 p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-full shadow-lg transition-colors"
+        title="Edit copy"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+
       <div className="flex items-center gap-1.5">
         <StrategyBadge strategy={creative.strategy} />
         <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-gray-500/20 text-gray-400 border border-gray-500/30">
@@ -84,10 +98,47 @@ function CreativeCard({
           pageName={pageName}
           websiteUrl={websiteUrl}
           logoUrl={logoUrl}
-          onSelect={onExpand}
+          selected={selected}
+          onSelect={onSelect}
         />
       </div>
     </div>
+  );
+}
+
+function PremiumModal({ onClose }: { onClose: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-brand-dark border border-white/10 max-w-md w-full p-6 relative"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-white p-1">
+          <X className="w-5 h-5" />
+        </button>
+        <div className="text-center space-y-4">
+          <div className="w-12 h-12 mx-auto bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
+            <Crown className="w-6 h-6 text-amber-400" />
+          </div>
+          <h3 className="text-lg font-display font-bold text-white">Premium Access</h3>
+          <p className="text-sm text-gray-400 leading-relaxed">
+            To select more than 1 creative you need premium access. Premium allows you to select and generate up to 100 creatives every month.
+          </p>
+          <Button variant="primary" size="lg" className="w-full">
+            Purchase Now
+          </Button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -263,25 +314,6 @@ function ExpandedCreativeView({
                 </p>
               </div>
             )}
-
-            {creative.image_url && (
-              <div className="pt-4 border-t border-white/10">
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = creative.image_url!;
-                    link.download = `${creative.ad_type_id || 'creative'}-${creative.id}.png`;
-                    link.target = '_blank';
-                    link.click();
-                  }}
-                  className="w-full"
-                >
-                  Download Creative
-                  <Download className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            )}
           </div>
         </div>
       </motion.div>
@@ -289,9 +321,11 @@ function ExpandedCreativeView({
   );
 }
 
-export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) {
+export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPackViewProps) {
   const [filterStrategy, setFilterStrategy] = useState<FilterStrategy>('all');
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
+  const [selectedCreativeId, setSelectedCreativeId] = useState<string | null>(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   let pageName = 'Your Page';
   try {
@@ -324,17 +358,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
     [adPack.id, onAdPackChange]
   );
 
-  const handleExportJson = () => {
-    const dataStr = JSON.stringify(adPack, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `adpack-${adPack.id}-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="min-h-screen bg-brand-dark text-white py-12">
       <div className="max-w-7xl mx-auto px-6">
@@ -347,12 +370,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
             <ArrowLeft className="w-5 h-5" />
             <span className="font-mono text-sm">Back</span>
           </button>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleExportJson}>
-              <Download className="w-4 h-4 mr-2" />
-              Export
-            </Button>
-          </div>
         </div>
 
         {/* Title */}
@@ -373,10 +390,6 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
           <h1 className="text-3xl sm:text-4xl font-display font-bold mb-2">
             {adPack.campaign_structure.campaign_name}
           </h1>
-          <p className="text-gray-400">
-            {adPack.creatives.length} creatives &middot; ${adPack.budget_daily}/day &middot;{' '}
-            {adPack.duration_days} day{adPack.duration_days !== 1 ? 's' : ''}
-          </p>
         </div>
 
         {/* Creative Grid */}
@@ -384,7 +397,7 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
             <div>
               <h2 className="text-2xl font-display font-bold">Creatives</h2>
-              <p className="text-gray-400 text-sm mt-1">Click any creative to expand and edit</p>
+              <p className="text-gray-400 text-sm mt-1">Select a creative to publish</p>
             </div>
 
             {/* Strategy filter */}
@@ -436,7 +449,17 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
                   pageName={pageName}
                   websiteUrl={adPack.project_url}
                   logoUrl={adPack.brand_logo_url}
-                  onExpand={() => setExpandedCreative(creative)}
+                  selected={selectedCreativeId === creative.id}
+                  onEdit={() => setExpandedCreative(creative)}
+                  onSelect={() => {
+                    if (selectedCreativeId === creative.id) {
+                      setSelectedCreativeId(null);
+                    } else if (selectedCreativeId !== null) {
+                      setShowPremiumModal(true);
+                    } else {
+                      setSelectedCreativeId(creative.id);
+                    }
+                  }}
                 />
               </motion.div>
             ))}
@@ -450,13 +473,31 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
           )}
         </div>
 
-        {/* Bottom stats */}
-        <div className="mt-8 pt-8 border-t border-white/10 text-center text-sm text-gray-500">
-          <span className="font-mono">
-            {adPack.creatives.length} creatives &middot; {productAwareCount} product aware &middot;{' '}
-            {productUnawareCount} product unaware &middot; Total budget: $
-            {(adPack.budget_daily * adPack.duration_days).toFixed(2)}
-          </span>
+        {/* Publish CTA */}
+        <div className="mt-10 text-center">
+          {selectedCreativeId ? (
+            <button
+              onClick={() => {
+                const creative = adPack.creatives.find(c => c.id === selectedCreativeId);
+                if (creative) onPublish(creative);
+              }}
+              className="inline-flex items-center gap-2 px-12 py-3 bg-blue-600 hover:bg-blue-500 text-white font-display font-bold text-lg transition-colors"
+            >
+              <Facebook className="w-5 h-5" />
+              Publish to Meta
+            </button>
+          ) : (
+            <button
+              disabled
+              className="inline-flex items-center gap-2 px-12 py-3 bg-gray-700 text-gray-500 font-display font-bold text-lg cursor-not-allowed"
+            >
+              <Facebook className="w-5 h-5" />
+              Publish to Meta
+            </button>
+          )}
+          {!selectedCreativeId && (
+            <p className="text-xs font-mono text-gray-600 mt-2">Select a creative above to continue</p>
+          )}
         </div>
       </div>
 
@@ -471,12 +512,18 @@ export function AdPackView({ adPack, onAdPackChange, onBack }: AdPackViewProps) 
             onClose={() => setExpandedCreative(null)}
             onSave={(field, value) => {
               handleCreativeSave(expandedCreative.id, field, value);
-              // Update local expanded creative
               setExpandedCreative((prev) =>
                 prev ? { ...prev, [field]: value } : null
               );
             }}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Premium Upsell Modal */}
+      <AnimatePresence>
+        {showPremiumModal && (
+          <PremiumModal onClose={() => setShowPremiumModal(false)} />
         )}
       </AnimatePresence>
     </div>

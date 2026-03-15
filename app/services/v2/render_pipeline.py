@@ -287,6 +287,8 @@ async def add_manual_image_creative(
         strategies = ["product_aware", "product_unaware"]
         if variant_count >= 3:
             strategies.append("benefit_highlight")
+        if variant_count >= 4:
+            strategies.append("curiosity_hook")
         strategies = strategies[:variant_count]
 
         if replica_mode:
@@ -318,6 +320,13 @@ async def add_manual_image_creative(
                     f"Keep the overall composition and visual approach. "
                     f"Focus the message on: '{params.customer_pains[0] if params.customer_pains else params.key_benefit}'. "
                     f"Use a bold, attention-grabbing tone. Adapt all branding to '{brand}'."
+                ),
+                (
+                    f"Create a curiosity-driven version of this ad for '{brand}'{color_str}. "
+                    f"Use the same visual structure but make it intriguing and scroll-stopping. "
+                    f"Lead with a question or surprising statement about: "
+                    f"'{params.key_differentiator or params.key_benefit or params.product_description_short}'. "
+                    f"Keep branding consistent with '{brand}'."
                 ),
             ]
 

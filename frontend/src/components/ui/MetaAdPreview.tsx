@@ -144,7 +144,7 @@ export function MetaAdPreview({
       </div>
 
       {/* Image / Video */}
-      <div className="relative w-full aspect-square bg-brand-gray overflow-hidden">
+      <div className="relative w-full aspect-square bg-brand-gray overflow-hidden" onContextMenu={(e) => e.preventDefault()}>
         {ad.imageUrl && !imageError && isVideo ? (
           <video
             key={`${ad.imageUrl}-${retryCount}`}
@@ -173,10 +173,11 @@ export function MetaAdPreview({
             src={ad.imageUrl}
             alt={`Ad creative for ${ad.headline}`}
             loading="lazy"
+            draggable={false}
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
+              'absolute inset-0 w-full h-full object-cover transition-opacity duration-300 select-none pointer-events-none',
               imageLoaded ? 'opacity-100' : 'opacity-0'
             )}
           />

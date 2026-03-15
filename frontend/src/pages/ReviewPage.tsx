@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Pencil, Trash2, Globe, Mail, Check } from 'lucide-react';
+import { ArrowLeft, Loader2, Package, Users, AlertTriangle, Swords, Globe, Mail, Check } from 'lucide-react';
 import { Button } from '../components/ui/Button';
 import { ErrorBanner } from '../components/ui/ErrorBanner';
 import { AnalysisLoadingBlueprint } from '../components/ui/AnalysisLoadingBlueprint';
@@ -55,7 +55,6 @@ export default function ReviewPage() {
   const [messagingUnaware, setMessagingUnaware] = useState(pc?.messaging_unaware || '');
   const [messagingAware, setMessagingAware] = useState(pc?.messaging_aware || '');
   const [competitors, setCompetitors] = useState<{ name: string; weakness: string }[]>(pc?.competitors?.map(c => ({ ...c })) || []);
-  const [editingCompetitor, setEditingCompetitor] = useState<number | null>(null);
 
   // Email gate state (skip for authenticated users)
   const isAuthenticated = ctx.auth.isAuthenticated;
@@ -119,15 +118,6 @@ export default function ReviewPage() {
     });
   };
 
-  const handleDeleteCompetitor = (index: number) => {
-    setCompetitors(prev => prev.filter((_, i) => i !== index));
-    if (editingCompetitor === index) setEditingCompetitor(null);
-  };
-
-  const handleCompetitorChange = (index: number, field: 'name' | 'weakness', value: string) => {
-    setCompetitors(prev => prev.map((c, i) => i === index ? { ...c, [field]: value } : c));
-  };
-
   // Show Blueprint Builder loading screen when generating
   if (ctx.isGenerating) {
     return (
@@ -143,7 +133,7 @@ export default function ReviewPage() {
     <div className="min-h-screen bg-brand-dark text-white">
       {/* Header */}
       <div className="border-b border-white/5 px-6 py-4">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
             onClick={() => navigate(ctx.generationMode === 'scratch' ? '/choose' : '/upload')}
             className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors font-mono"
@@ -157,205 +147,133 @@ export default function ReviewPage() {
         </div>
       </div>
 
-      <div className="max-w-2xl mx-auto px-6 py-12 space-y-8">
+      <div className="max-w-4xl mx-auto px-6 py-6 space-y-4">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
 
-          {/* Brand Logo + Product Name */}
-          <div className="text-center space-y-4 mb-10">
+          {/* Title row: logo + product + title */}
+          <div className="flex items-center gap-4 mb-2">
             {pc.brand_logo_url ? (
-              <div className="flex justify-center">
-                <img
-                  src={pc.brand_logo_url}
-                  alt="Brand logo"
-                  className="max-h-16 max-w-[240px] w-auto h-auto object-contain"
-                />
-              </div>
+              <img
+                src={pc.brand_logo_url}
+                alt="Brand logo"
+                className="max-h-10 max-w-[100px] w-auto h-auto object-contain shrink-0"
+              />
             ) : (
-              <div className="w-16 h-16 mx-auto bg-brand-gray border border-white/10 flex items-center justify-center">
-                <Package className="w-8 h-8 text-gray-500" />
+              <div className="w-10 h-10 bg-brand-gray border border-white/10 flex items-center justify-center shrink-0">
+                <Package className="w-5 h-5 text-gray-500" />
               </div>
             )}
-            <h2 className="text-2xl font-display font-bold">{pc.product_name}</h2>
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-brand-gray border border-white/10 text-xs font-mono text-gray-400">
-              {pc.business_type}
+            <div className="min-w-0">
+              <h1 className="text-2xl font-display font-bold leading-tight">Your Messaging Strategy</h1>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-sm text-gray-400 font-mono truncate">{pc.product_name}</span>
+                <span className="text-[10px] font-mono text-gray-600">{pc.business_type}</span>
+              </div>
             </div>
           </div>
 
-          {/* Ad Language */}
-          <section className="space-y-3">
-            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
-              <Globe className="w-4 h-4 text-brand-lime" />
-              Ad Language
-            </label>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors appearance-none cursor-pointer"
-            >
-              {LANGUAGES.map((lang) => (
-                <option key={lang.code} value={lang.code}>
-                  {lang.name} ({lang.code.toUpperCase()})
-                </option>
-              ))}
-            </select>
-            <p className="text-xs font-mono text-gray-600">All ad copy will be generated in this language</p>
-          </section>
+          {/* Campaign strategy box */}
+          <div className="border border-white/10 bg-brand-gray/30 p-5 space-y-4">
 
-          {/* Product Summary */}
-          <section className="space-y-3 pt-6 border-t border-white/10">
-            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
-              <Package className="w-4 h-4 text-brand-lime" />
-              Product Summary
-            </label>
-            <textarea
-              value={productSummary}
-              onChange={(e) => setProductSummary(e.target.value)}
-              rows={3}
-              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
-            />
-          </section>
-
-          {/* Target Audience */}
-          <section className="space-y-3 pt-6 border-t border-white/10">
-            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
-              <Users className="w-4 h-4 text-brand-lime" />
-              Target Audience
-            </label>
-            <textarea
-              value={targetAudience}
-              onChange={(e) => setTargetAudience(e.target.value)}
-              rows={2}
-              placeholder="Who is this product for?"
-              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
-            />
-          </section>
-
-          {/* Main Pain Point */}
-          <section className="space-y-3 pt-6 border-t border-white/10">
-            <label className="text-sm font-mono text-gray-300 flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-brand-lime" />
-              Main Pain Point
-            </label>
-            <textarea
-              value={mainPainPoint}
-              onChange={(e) => setMainPainPoint(e.target.value)}
-              rows={2}
-              placeholder="What problem does it solve or opportunity does it create?"
-              className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
-            />
-          </section>
-
-          {/* Messaging */}
-          <section className="space-y-4 pt-6 border-t border-white/10">
-            <h3 className="text-sm font-mono text-gray-300">Messaging Strategy</h3>
-
-            <div className="space-y-3">
-              <label className="text-sm font-mono text-white flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
-                  Problem-Unaware Users
-                </span>
+            {/* Language selector */}
+            <section className="space-y-1">
+              <label className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                <Globe className="w-3 h-3 text-brand-lime" />
+                Ad Language
               </label>
-              <textarea
-                value={messagingUnaware}
-                onChange={(e) => setMessagingUnaware(e.target.value)}
-                rows={2}
-                placeholder="How to reach users who don't know they have this problem"
-                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-violet-400 transition-colors resize-none"
-              />
-            </div>
-
-            <div className="space-y-3">
-              <label className="text-sm font-mono text-white flex items-center gap-2">
-                <span className="px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  Problem-Aware Users
-                </span>
-              </label>
-              <textarea
-                value={messagingAware}
-                onChange={(e) => setMessagingAware(e.target.value)}
-                rows={2}
-                placeholder="How to reach users actively comparing solutions"
-                className="w-full bg-brand-gray border border-white/10 px-4 py-3 text-white text-sm font-mono focus:outline-none focus:border-emerald-400 transition-colors resize-none"
-              />
-            </div>
-          </section>
-
-          {/* Competitive Landscape */}
-          <section className="space-y-4 pt-6 border-t border-white/10">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
-                <Swords className="w-4 h-4 text-brand-lime" />
-                Competitive Landscape
-              </h3>
-              <span className="text-xs font-mono text-gray-600">{competitors.length}/3 detected</span>
-            </div>
-
-            {competitors.length === 0 ? (
-              <p className="text-xs font-mono text-gray-600 py-4 text-center">
-                No competitors auto-detected. This won't affect ad generation.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {competitors.map((comp, i) => (
-                  <div key={i} className="bg-brand-gray border border-white/10 p-4">
-                    {editingCompetitor === i ? (
-                      <div className="space-y-3">
-                        <input
-                          type="text"
-                          value={comp.name}
-                          onChange={(e) => handleCompetitorChange(i, 'name', e.target.value)}
-                          className="w-full h-9 bg-brand-dark border border-white/10 px-3 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors"
-                          placeholder="Competitor name"
-                        />
-                        <textarea
-                          value={comp.weakness}
-                          onChange={(e) => handleCompetitorChange(i, 'weakness', e.target.value)}
-                          rows={2}
-                          className="w-full bg-brand-dark border border-white/10 px-3 py-2 text-white text-sm font-mono focus:outline-none focus:border-brand-lime transition-colors resize-none"
-                          placeholder="Their weakness"
-                        />
-                        <button
-                          onClick={() => setEditingCompetitor(null)}
-                          className="text-xs font-mono text-brand-lime hover:underline"
-                        >
-                          Done
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-mono text-white font-medium">{comp.name}</p>
-                          <p className="text-xs font-mono text-gray-400 mt-1">{comp.weakness}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => setEditingCompetitor(i)}
-                            className="p-1.5 hover:bg-white/10 transition-colors"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5 text-gray-400" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteCompetitor(i)}
-                            className="p-1.5 hover:bg-red-500/20 transition-colors"
-                            title="Remove"
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="w-full max-w-xs bg-brand-gray border border-white/10 px-2.5 py-1.5 text-white text-xs font-mono focus:outline-none focus:border-brand-lime transition-colors appearance-none cursor-pointer"
+              >
+                {LANGUAGES.map((lang) => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.name} ({lang.code.toUpperCase()})
+                  </option>
                 ))}
-              </div>
-            )}
-          </section>
+              </select>
+            </section>
+
+            {/* Row 1: Product Summary + Target Audience */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                  <Package className="w-3 h-3 text-brand-lime" />
+                  Product Summary
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {productSummary || <span className="italic text-gray-600">Not provided</span>}
+                </div>
+              </section>
+
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                  <Users className="w-3 h-3 text-brand-lime" />
+                  Target Audience
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {targetAudience || <span className="italic text-gray-600">Not provided</span>}
+                </div>
+              </section>
+            </div>
+
+            {/* Row 2: Pain Point + Messaging */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-brand-lime" />
+                  Main Pain Point
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {mainPainPoint || <span className="italic text-gray-600">Not provided</span>}
+                </div>
+              </section>
+
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono text-gray-400 flex items-center gap-1">
+                  <Swords className="w-3 h-3 text-brand-lime" />
+                  Competitive Landscape
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {competitors.length > 0
+                    ? competitors.map(c => c.name).join(', ')
+                    : <span className="italic text-gray-600">No competitors detected</span>
+                  }
+                </div>
+              </section>
+            </div>
+
+            {/* Row 3: Messaging Strategy side by side */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                    Problem-Unaware
+                  </span>
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {messagingUnaware || <span className="italic text-gray-600">Not provided</span>}
+                </div>
+              </section>
+
+              <section className="space-y-1">
+                <label className="text-[11px] font-mono flex items-center gap-1">
+                  <span className="px-1.5 py-0.5 text-[9px] font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Problem-Aware
+                  </span>
+                </label>
+                <div className="w-full bg-brand-gray/50 border border-white/5 px-2.5 py-2 text-gray-500 text-xs font-mono min-h-[3.5rem]">
+                  {messagingAware || <span className="italic text-gray-600">Not provided</span>}
+                </div>
+              </section>
+            </div>
+          </div>
 
           {/* Email Gate (skip for authenticated users) */}
           {!isAuthenticated && (
-            <section className="space-y-4 pt-6 border-t border-white/10">
-              <h3 className="text-sm font-mono text-gray-300 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-brand-lime" />
+            <section className="space-y-3 pt-3 border-t border-white/10">
+              <h3 className="text-xs font-mono text-gray-300 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-brand-lime" />
                 Your Email
               </h3>
 
@@ -428,7 +346,7 @@ export default function ReviewPage() {
           )}
 
           {/* Confirm */}
-          <div className="pt-8">
+          <div className="pt-4">
             <Button
               variant="primary"
               size="lg"
