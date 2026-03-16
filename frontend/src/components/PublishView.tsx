@@ -135,14 +135,16 @@ export function PublishView({ campaignData, selectedAd, onBack, onSuccess }: Pub
         description: selectedAd.description,
       };
 
-      // If publishing all ads, include them
+      // If publishing all ads, include only those with images
       const adsToPublish = publishAllAds && hasMultipleAds
-        ? allAds.map(ad => ({
-            imageUrl: ad.imageUrl,
-            primaryText: ad.primaryText,
-            headline: ad.headline,
-            description: ad.description,
-          }))
+        ? allAds
+            .filter(ad => ad.imageUrl)
+            .map(ad => ({
+              imageUrl: ad.imageUrl,
+              primaryText: ad.primaryText,
+              headline: ad.headline,
+              description: ad.description,
+            }))
         : undefined;
 
       const result = await publishCampaign({

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Sparkles,
@@ -10,6 +10,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
 import { Button } from './ui/Button';
 import { MetaAdPreview } from './ui/MetaAdPreview';
@@ -326,6 +327,59 @@ export function AdPackView({ adPack, onAdPackChange, onBack, onPublish }: AdPack
   const [expandedCreative, setExpandedCreative] = useState<AdCreative | null>(null);
   const [selectedCreativeId, setSelectedCreativeId] = useState<string | null>(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Celebration confetti — fires once on mount
+  const confettiFired = useRef(false);
+  useEffect(() => {
+    if (confettiFired.current) return;
+    confettiFired.current = true;
+
+    const brandColors = ['#38BDF8', '#0EA5E9', '#ffffff', '#FFD700', '#FFC857'];
+    const defaults: confetti.Options = {
+      disableForReducedMotion: true,
+      zIndex: 9999,
+      colors: brandColors,
+      ticks: 120,
+      gravity: 0.9,
+      decay: 0.92,
+      scalar: 0.9,
+    };
+
+    // Left cannon
+    confetti({
+      ...defaults,
+      particleCount: 60,
+      spread: 55,
+      origin: { x: 0.15, y: 0.35 },
+      angle: 60,
+      startVelocity: 45,
+    });
+
+    // Right cannon
+    confetti({
+      ...defaults,
+      particleCount: 60,
+      spread: 55,
+      origin: { x: 0.85, y: 0.35 },
+      angle: 120,
+      startVelocity: 45,
+    });
+
+    // Delayed center shower for depth
+    const timer = setTimeout(() => {
+      confetti({
+        ...defaults,
+        particleCount: 40,
+        spread: 100,
+        origin: { x: 0.5, y: 0.2 },
+        startVelocity: 30,
+        scalar: 0.7,
+        ticks: 100,
+      });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   let pageName = 'Your Page';
   try {

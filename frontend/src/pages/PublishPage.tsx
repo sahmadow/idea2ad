@@ -64,8 +64,8 @@ export default function PublishPage() {
   const ctx = useAppContext();
   const navigate = useNavigate();
 
-  // Support both legacy result and new adPack flow
-  const campaignData = ctx.result || buildCampaignDataFromAdPack(ctx);
+  // Prefer adPack flow; fall back to legacy result
+  const campaignData = buildCampaignDataFromAdPack(ctx) || ctx.result;
 
   if (!campaignData || !ctx.selectedAd) return <Navigate to="/" replace />;
 

@@ -136,11 +136,15 @@ export function useFacebookAuth(): UseFacebookAuthReturn {
     const left = window.screenX + (window.outerWidth - width) / 2;
     const top = window.screenY + (window.outerHeight - height) / 2;
 
-    window.open(
+    const popup = window.open(
       getOAuthUrl(),
       'fb_oauth',
       `width=${width},height=${height},left=${left},top=${top},popup=1`
     );
+
+    if (!popup || popup.closed) {
+      setError('Popup was blocked by your browser. Please allow popups for this site and try again.');
+    }
   }, []);
 
   // Disconnect and clear session

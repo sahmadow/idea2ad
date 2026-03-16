@@ -813,7 +813,7 @@ async def facebook_callback(
                 <script>
                     const sessionId = '{session_id}';
                     const frontendUrl = '{frontend_url}';
-                    const redirectUrl = frontendUrl + '?fb_session=' + sessionId;
+                    const redirectUrl = frontendUrl + '/publish?fb_session=' + sessionId;
 
                     console.log('[OAuth Callback] Session ID:', sessionId.slice(0, 8) + '...');
                     console.log('[OAuth Callback] Redirect URL:', redirectUrl);
