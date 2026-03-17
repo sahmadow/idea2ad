@@ -2,7 +2,7 @@
  * AdPack types (Phase 5)
  */
 
-export type AdStrategy = 'product_aware' | 'product_unaware';
+export type AdStrategy = 'product_aware' | 'product_unaware' | 'benefit_highlight' | 'curiosity_hook';
 
 export interface AdCreative {
   id: string;

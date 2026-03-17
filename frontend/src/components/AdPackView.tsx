@@ -37,16 +37,18 @@ const fadeInUp = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.25 } },
 };
 
+const STRATEGY_STYLES: Record<AdStrategy, { className: string; label: string }> = {
+  product_aware: { className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', label: 'Product Aware' },
+  product_unaware: { className: 'bg-violet-500/20 text-violet-400 border-violet-500/30', label: 'Product Unaware' },
+  benefit_highlight: { className: 'bg-amber-500/20 text-amber-400 border-amber-500/30', label: 'Benefit' },
+  curiosity_hook: { className: 'bg-sky-500/20 text-sky-400 border-sky-500/30', label: 'Curiosity' },
+};
+
 function StrategyBadge({ strategy }: { strategy: AdStrategy }) {
+  const s = STRATEGY_STYLES[strategy] || STRATEGY_STYLES.product_unaware;
   return (
-    <span
-      className={
-        strategy === 'product_aware'
-          ? 'px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-          : 'px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30'
-      }
-    >
-      {strategy === 'product_aware' ? 'Product Aware' : 'Product Unaware'}
+    <span className={`px-2 py-0.5 text-[10px] font-mono uppercase tracking-wider border ${s.className}`}>
+      {s.label}
     </span>
   );
 }

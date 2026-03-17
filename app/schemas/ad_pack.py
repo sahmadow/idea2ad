@@ -13,7 +13,7 @@ class GeneratedCreative(BaseModel):
     """A single generated creative asset with copy and metadata."""
     id: str
     ad_type_id: str  # references AdTypeDefinition.id
-    strategy: Literal["product_aware", "product_unaware"]
+    strategy: Literal["product_aware", "product_unaware", "benefit_highlight", "curiosity_hook"]
     format: Literal["static", "video", "carousel"]
     aspect_ratio: str  # "1:1", "9:16", "1.91:1"
 
