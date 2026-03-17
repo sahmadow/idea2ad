@@ -14,32 +14,32 @@ interface DataChip {
 
 const DISCOVERY_SEQUENCE: { chip: DataChip; delay: number; status: string }[] = [
   {
-    chip: { id: 'brand', label: 'Brand', value: '#FF9900', color: 'border-orange-500/40 bg-orange-500/10' },
+    chip: { id: 'brand', label: 'Brand', value: 'Detected', color: 'border-orange-500/40 bg-orange-500/10' },
     delay: 2000,
     status: 'Scraping landing page...',
   },
   {
-    chip: { id: 'category', label: 'Category', value: 'Audiobooks', color: 'border-blue-500/40 bg-blue-500/10' },
+    chip: { id: 'category', label: 'Category', value: 'Identified', color: 'border-blue-500/40 bg-blue-500/10' },
     delay: 4000,
     status: 'Extracting product data...',
   },
   {
-    chip: { id: 'audience', label: 'Audience', value: 'Book lovers, 25-55', color: 'border-emerald-500/40 bg-emerald-500/10' },
+    chip: { id: 'audience', label: 'Audience', value: 'Profiled', color: 'border-emerald-500/40 bg-emerald-500/10' },
     delay: 6500,
     status: 'Profiling target audience...',
   },
   {
-    chip: { id: 'pain', label: 'Pain Point', value: 'No time to read', color: 'border-red-500/40 bg-red-500/10' },
+    chip: { id: 'pain', label: 'Pain Point', value: 'Found', color: 'border-red-500/40 bg-red-500/10' },
     delay: 8500,
     status: 'Analyzing customer pain points...',
   },
   {
-    chip: { id: 'competitor', label: 'Competitor', value: 'Spotify, Scribd', color: 'border-violet-500/40 bg-violet-500/10' },
+    chip: { id: 'competitor', label: 'Competitors', value: 'Mapped', color: 'border-violet-500/40 bg-violet-500/10' },
     delay: 10500,
     status: 'Detecting competitors...',
   },
   {
-    chip: { id: 'messaging', label: 'Messaging', value: 'Listen anywhere', color: 'border-brand-lime/40 bg-brand-lime/10' },
+    chip: { id: 'messaging', label: 'Messaging', value: 'Ready', color: 'border-brand-lime/40 bg-brand-lime/10' },
     delay: 12500,
     status: 'Crafting messaging strategy...',
   },
