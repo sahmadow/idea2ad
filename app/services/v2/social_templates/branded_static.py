@@ -46,8 +46,8 @@ def _build_html(params: BrandedStaticParams) -> str:
     btn_bg = params.btn_bg or accent
     text_color = params.text_color
 
-    # Description color: slightly muted from text
-    desc_color = "#94a3b8"
+    # Description color: muted version of text color
+    desc_color = "#64748b" if text_color.lower() in ("#1a202c", "#000000", "#111827") else "#94a3b8"
 
     # Brand section
     brand_html = ""

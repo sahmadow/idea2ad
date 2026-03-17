@@ -60,16 +60,42 @@ class GeneratedCopy(dict):
 
 
 def _smart_truncate(text: str, max_len: int) -> str:
-    """Truncate text at word boundary. Never cuts mid-word."""
+    """Truncate text at a meaningful boundary — sentence, clause, or phrase.
+
+    Priority: full sentence > clause boundary > word boundary.
+    Never leaves dangling connectors like 'that', 'into', 'and', 'with'.
+    """
     if len(text) <= max_len:
         return text
-    # Try to break at last space before limit
-    truncated = text[:max_len]
-    last_space = truncated.rfind(" ")
-    if last_space > max_len * 0.4:
-        return truncated[:last_space].rstrip(".,;:!?-")
-    # No good word break — just use the full truncated text without ellipsis
-    return truncated.rstrip(".,;:!?- ")
+
+    window = text[:max_len]
+
+    # 1. Try sentence boundary (. ! ?)
+    for sep in [". ", "! ", "? "]:
+        idx = window.rfind(sep)
+        if idx > max_len * 0.3:
+            return window[:idx + 1].strip()
+
+    # 2. Try clause boundary (, ; : — –)
+    for sep in [", ", "; ", ": ", " — ", " – "]:
+        idx = window.rfind(sep)
+        if idx > max_len * 0.3:
+            return window[:idx].strip()
+
+    # 3. Word boundary — but avoid dangling connectors
+    _dangling = {"that", "into", "and", "or", "with", "for", "the", "a", "an",
+                 "to", "of", "in", "on", "by", "from", "is", "are", "was", "were",
+                 "it", "its", "your", "our", "their", "which", "who", "but", "at"}
+    last_space = window.rfind(" ")
+    if last_space > max_len * 0.3:
+        candidate = window[:last_space].rstrip(".,;:!?- ")
+        # Check if last word is a dangling connector — drop it too
+        parts = candidate.rsplit(" ", 1)
+        if len(parts) == 2 and parts[1].lower() in _dangling:
+            candidate = parts[0].rstrip(".,;:!?- ")
+        return candidate
+
+    return window.rstrip(".,;:!?- ")
 
 
 def _clean_interpolated_text(text: str) -> str:

@@ -13,9 +13,37 @@ from app.services.v2.copy_generator import _smart_truncate
 
 logger = logging.getLogger(__name__)
 
-# Max chars for text rendered ON the creative image
-VISUAL_HEADLINE_MAX = 50
-VISUAL_DESCRIPTION_MAX = 90
+# Max chars for text rendered ON the creative image (must fit large font on 1080px canvas)
+VISUAL_HEADLINE_MAX = 40
+VISUAL_DESCRIPTION_MAX = 80
+
+
+def _hex_to_luminance(hex_color: str) -> float:
+    """Relative luminance per WCAG 2.0 (0=black, 1=white)."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return 0.5
+    try:
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+    except ValueError:
+        return 0.5
+    def _linearize(c: int) -> float:
+        s = c / 255.0
+        return s / 12.92 if s <= 0.04045 else ((s + 0.055) / 1.055) ** 2.4
+    return 0.2126 * _linearize(r) + 0.7152 * _linearize(g) + 0.0722 * _linearize(b)
+
+
+def _ensure_contrast(bg_hex: str, text_hex: str, min_ratio: float = 4.5) -> str:
+    """Return text_hex if contrast ratio vs bg is sufficient, else flip to white or dark."""
+    bg_l = _hex_to_luminance(bg_hex)
+    txt_l = _hex_to_luminance(text_hex)
+    lighter = max(bg_l, txt_l)
+    darker = min(bg_l, txt_l)
+    ratio = (lighter + 0.05) / (darker + 0.05)
+    if ratio >= min_ratio:
+        return text_hex
+    # Flip: dark text on light bg, white text on dark bg
+    return "#1a202c" if bg_l > 0.4 else "#ffffff"
 
 
 def bridge_branded_static(
@@ -37,10 +65,11 @@ def bridge_branded_static(
 
     bg_color = bgs[0] if bgs else "#0f172a"
     accent = accents[0] if accents else "#3b82f6"
-    text_color = "#ffffff"
-    bg_lower = bg_color.lower()
-    if bg_lower.startswith("#f") or bg_lower.startswith("#e") or bg_lower.startswith("#d") or bg_lower.startswith("#c") or bg_lower == "#ffffff":
-        text_color = texts[0] if texts else "#1a202c"
+    text_color = texts[0] if texts else "#ffffff"
+
+    # Ensure text is readable against bg
+    text_color = _ensure_contrast(bg_color, text_color)
+    accent = _ensure_contrast(bg_color, accent, min_ratio=3.0)
 
     # Gradient or solid
     gradients = design_tokens.get("gradients", [])
@@ -232,10 +261,8 @@ def bridge_product_centric(
 
     bg_color = bgs[0] if bgs else "#0f172a"
     accent = accents[0] if accents else "#3b82f6"
-    text_color = "#ffffff"
-    bg_lower = bg_color.lower()
-    if bg_lower.startswith("#f") or bg_lower.startswith("#e") or bg_lower.startswith("#d") or bg_lower.startswith("#c") or bg_lower == "#ffffff":
-        text_color = texts[0] if texts else "#1a202c"
+    text_color = texts[0] if texts else "#ffffff"
+    text_color = _ensure_contrast(bg_color, text_color)
 
     # Gradient or solid
     design_tokens = scraped_data.get("design_tokens", {})
@@ -335,10 +362,8 @@ def bridge_branded_static_video(
 
     bg_color = bgs[0] if bgs else "#0f172a"
     accent = accents[0] if accents else "#3b82f6"
-    text_color = "#ffffff"
-    bg_lower = bg_color.lower()
-    if bg_lower.startswith("#f") or bg_lower.startswith("#e") or bg_lower.startswith("#d") or bg_lower.startswith("#c") or bg_lower == "#ffffff":
-        text_color = texts[0] if texts else "#1a202c"
+    text_color = texts[0] if texts else "#ffffff"
+    text_color = _ensure_contrast(bg_color, text_color)
 
     headers = scraped_data.get("headers", [])
     headline = _smart_truncate(
