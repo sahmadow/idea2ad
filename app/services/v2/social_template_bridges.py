@@ -9,8 +9,13 @@ import logging
 import random
 
 from app.schemas.creative_params import CreativeParameters
+from app.services.v2.copy_generator import _smart_truncate
 
 logger = logging.getLogger(__name__)
+
+# Max chars for text rendered ON the creative image
+VISUAL_HEADLINE_MAX = 50
+VISUAL_DESCRIPTION_MAX = 90
 
 
 def bridge_branded_static(
@@ -58,6 +63,9 @@ def bridge_branded_static(
     # Description: scraped meta description (native language) or translated param
     description = scraped_data.get("description", "") or params.product_description_short or ""
     brand_name = params.brand_name or ""
+
+    headline = _smart_truncate(headline, VISUAL_HEADLINE_MAX)
+    description = _smart_truncate(description, VISUAL_DESCRIPTION_MAX)
 
     return BrandedStaticParams(
         headline=headline,
@@ -132,6 +140,8 @@ def bridge_problem_statement(params: CreativeParameters, copy: dict):
         if bc.lower() not in ("#ffffff", "#f7f7f7", "#fafafa", "#000000"):
             bg_color = bc
 
+    headline = _smart_truncate(headline, VISUAL_HEADLINE_MAX)
+
     return ProblemStatementParams(
         headline=headline,
         bg_color=bg_color,
@@ -190,6 +200,10 @@ def bridge_service_hero(params: CreativeParameters, copy: dict):
     subtext = params.subheadline or params.product_description_short or None
     scene_url = params.hero_image_url or ""
 
+    headline = _smart_truncate(headline, VISUAL_HEADLINE_MAX)
+    if subtext:
+        subtext = _smart_truncate(subtext, VISUAL_DESCRIPTION_MAX)
+
     return ServiceHeroParams(
         scene_image_url=scene_url,
         headline=headline,
@@ -247,10 +261,15 @@ def bridge_product_centric(
     css_assets = scraped_data.get("css_assets", {})
     btn = css_assets.get("button_styles", {})
 
+    headline = _smart_truncate(headline, VISUAL_HEADLINE_MAX)
+    subheadline = params.subheadline or params.product_description_short or None
+    if subheadline:
+        subheadline = _smart_truncate(subheadline, VISUAL_DESCRIPTION_MAX)
+
     return ProductCentricParams(
         headline=headline,
         pain_point=pain_point,
-        subheadline=params.subheadline or params.product_description_short or None,
+        subheadline=subheadline,
         cta_text=params.cta_text or "Get Started",
         product_image_url=product_image_url,
         logo_url=params.brand_logo_url,
@@ -268,8 +287,12 @@ def bridge_person_centric(params: CreativeParameters, copy: dict):
     """Map CreativeParameters + copy → PersonCentricParams."""
     from app.services.v2.social_templates.person_centric import PersonCentricParams
 
-    headline = copy.get("headline") or params.headline or params.product_name
+    headline = _smart_truncate(
+        copy.get("headline") or params.headline or params.product_name, VISUAL_HEADLINE_MAX
+    )
     subheadline = params.key_benefit or copy.get("description") or params.product_description_short or None
+    if subheadline:
+        subheadline = _smart_truncate(subheadline, VISUAL_DESCRIPTION_MAX)
 
     # Colors from brand_colors
     bg_color = "#0f172a"
@@ -318,9 +341,12 @@ def bridge_branded_static_video(
         text_color = texts[0] if texts else "#1a202c"
 
     headers = scraped_data.get("headers", [])
-    headline = headers[0] if headers else params.headline or params.product_name
-    # Scraped description (native lang) or translated param
-    description = scraped_data.get("description", "") or params.product_description_short or ""
+    headline = _smart_truncate(
+        headers[0] if headers else params.headline or params.product_name, VISUAL_HEADLINE_MAX
+    )
+    description = _smart_truncate(
+        scraped_data.get("description", "") or params.product_description_short or "", VISUAL_DESCRIPTION_MAX
+    )
     brand_name = params.brand_name or ""
 
     css_assets = scraped_data.get("css_assets", {})
@@ -345,14 +371,18 @@ def bridge_service_hero_video(
     copy: dict,
 ) -> dict:
     """Map CreativeParameters → Remotion ServiceHero props dict."""
-    # params.headline is scraped (native lang), params.key_benefit is translated
-    headline = params.headline or params.key_benefit or params.product_name
+    headline = _smart_truncate(
+        params.headline or params.key_benefit or params.product_name, VISUAL_HEADLINE_MAX
+    )
     scene_url = params.hero_image_url or ""
+    subtext = params.subheadline or params.product_description_short or None
+    if subtext:
+        subtext = _smart_truncate(subtext, VISUAL_DESCRIPTION_MAX)
 
     return {
         "sceneImageUrl": scene_url,
         "headline": headline,
-        "subtext": params.subheadline or params.product_description_short or None,
+        "subtext": subtext,
         "ctaText": params.cta_text,
         "brandName": params.brand_name or None,
         "accentColor": "#FFFFFF",

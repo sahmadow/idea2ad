@@ -59,6 +59,19 @@ class GeneratedCopy(dict):
     pass
 
 
+def _smart_truncate(text: str, max_len: int) -> str:
+    """Truncate text at word boundary. Never cuts mid-word."""
+    if len(text) <= max_len:
+        return text
+    # Try to break at last space before limit
+    truncated = text[:max_len]
+    last_space = truncated.rfind(" ")
+    if last_space > max_len * 0.4:
+        return truncated[:last_space].rstrip(".,;:!?-")
+    # No good word break — just use the full truncated text without ellipsis
+    return truncated.rstrip(".,;:!?- ")
+
+
 def _clean_interpolated_text(text: str) -> str:
     """
     Post-process interpolated copy to fix punctuation artifacts.
@@ -176,13 +189,11 @@ def generate_copy_from_template(
     if description:
         description = _clean_interpolated_text(description)
 
-    # Enforce constraints
-    if len(headline) > HEADLINE_MAX:
-        headline = headline[:HEADLINE_MAX - 1] + "…"
-    if description and len(description) > DESCRIPTION_MAX:
-        description = description[:DESCRIPTION_MAX - 1] + "…"
-    if len(primary_text) > PRIMARY_TEXT_MAX:
-        primary_text = primary_text[:PRIMARY_TEXT_MAX - 3] + "..."
+    # Enforce constraints — truncate at word boundary, never mid-word
+    headline = _smart_truncate(headline, HEADLINE_MAX)
+    if description:
+        description = _smart_truncate(description, DESCRIPTION_MAX)
+    primary_text = _smart_truncate(primary_text, PRIMARY_TEXT_MAX)
 
     return GeneratedCopy(
         primary_text=primary_text,
@@ -224,7 +235,8 @@ AD TYPE: {ad_type.name} ({ad_type.strategy})
 
 CONSTRAINTS:
 - Primary text: max {PRIMARY_TEXT_MAX} chars (optimal: {PRIMARY_TEXT_OPTIMAL})
-- Headline: max {HEADLINE_MAX} chars
+- Headline: max {HEADLINE_MAX} chars — use SHORT punchy phrases that fit, never cut mid-word
+- If a sentence is too long, rephrase it shorter — do NOT truncate
 - Keep the core message, vary delivery (casual vs urgent vs curiosity-driven)
 
 Return JSON array of objects with primary_text and headline fields."""
@@ -241,8 +253,8 @@ Return JSON array of objects with primary_text and headline fields."""
                 variants = []
                 for item in data[:num_variants]:
                     variants.append(GeneratedCopy(
-                        primary_text=str(item.get("primary_text", base_copy["primary_text"]))[:PRIMARY_TEXT_MAX],
-                        headline=str(item.get("headline", base_copy["headline"]))[:HEADLINE_MAX],
+                        primary_text=_smart_truncate(str(item.get("primary_text", base_copy["primary_text"])), PRIMARY_TEXT_MAX),
+                        headline=_smart_truncate(str(item.get("headline", base_copy["headline"])), HEADLINE_MAX),
                         description=base_copy.get("description"),
                         cta_type=base_copy["cta_type"],
                     ))
@@ -341,10 +353,10 @@ Return JSON object with fields: competition_testimonial, primary_text, headline,
             )
             data = json.loads(result.text)
             if isinstance(data, dict):
-                competition_testimonial = str(data.get("competition_testimonial", ""))[:150]
-                primary_text = str(data.get("primary_text", ""))[:PRIMARY_TEXT_MAX]
-                headline = str(data.get("headline", f"Try {product_name} instead"))[:HEADLINE_MAX]
-                competitor_complaint = str(data.get("competitor_complaint", ""))[:50]
+                competition_testimonial = _smart_truncate(str(data.get("competition_testimonial", "")), 150)
+                primary_text = _smart_truncate(str(data.get("primary_text", "")), PRIMARY_TEXT_MAX)
+                headline = _smart_truncate(str(data.get("headline", f"Try {product_name} instead")), HEADLINE_MAX)
+                competitor_complaint = _smart_truncate(str(data.get("competitor_complaint", "")), 50)
 
                 logger.info(f"Competition copy generated for {product_name}: complaint='{competitor_complaint}'")
 
@@ -494,9 +506,9 @@ Return JSON object with fields: primary_text, headline, description"""
             data = json.loads(result.text)
             if isinstance(data, dict) and data.get("primary_text"):
                 return GeneratedCopy(
-                    primary_text=str(data["primary_text"])[:PRIMARY_TEXT_MAX],
-                    headline=str(data.get("headline", copy["headline"]))[:HEADLINE_MAX],
-                    description=str(data["description"])[:DESCRIPTION_MAX] if data.get("description") else copy.get("description"),
+                    primary_text=_smart_truncate(str(data["primary_text"]), PRIMARY_TEXT_MAX),
+                    headline=_smart_truncate(str(data.get("headline", copy["headline"])), HEADLINE_MAX),
+                    description=_smart_truncate(str(data["description"]), DESCRIPTION_MAX) if data.get("description") else copy.get("description"),
                     cta_type=copy["cta_type"],
                 )
         except Exception as e:
