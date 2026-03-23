@@ -23,6 +23,7 @@ from app.services.v2.social_template_bridges import (
     bridge_service_hero,
     bridge_product_centric,
     bridge_person_centric,
+    bridge_ai_scene_overlay,
     bridge_branded_static_video,
     bridge_service_hero_video,
 )
@@ -77,6 +78,15 @@ async def dispatch_render(
         person_bytes = await generate_person_image(params)
         bridged.person_image_bytes = person_bytes
         return await render_person_centric(bridged)
+
+    if ad_type_id == "ai_scene_text_overlay":
+        from app.services.v2.social_templates.ai_scene_overlay import (
+            render_ai_scene_overlay, generate_scene_image,
+        )
+        bridged = bridge_ai_scene_overlay(params, scraped_data, copy)
+        scene_bytes = await generate_scene_image(params)
+        bridged.scene_image_bytes = scene_bytes
+        return await render_ai_scene_overlay(bridged)
 
     # Video types (Remotion-rendered)
     if ad_type_id == "branded_static_video":
@@ -300,6 +310,14 @@ async def add_manual_image_creative(
             if params.brand_colors.accent:
                 colors.append(params.brand_colors.accent)
             color_str = f" using brand colors {', '.join(colors)}" if colors else ""
+            cta = params.cta_text or "Get Started"
+
+            # RULE: exactly ONE CTA per image — instruct Gemini to replace, not duplicate
+            cta_rule = (
+                f"IMPORTANT: The image must contain exactly ONE call-to-action button "
+                f"with the text '{cta}'. Remove any other CTA buttons or call-to-action "
+                f"elements from the original image. Do not add extra buttons."
+            )
 
             variant_prompts = [
                 (
@@ -307,26 +325,30 @@ async def add_manual_image_creative(
                     f"Keep the exact same visual layout, composition, and style. "
                     f"Replace all text with: headline '{params.headline or params.product_name}', "
                     f"subtext '{params.key_benefit or params.product_description_short}'. "
-                    f"Adapt colors and branding to match '{brand}'."
+                    f"Adapt colors and branding to match '{brand}'. "
+                    f"{cta_rule}"
                 ),
                 (
                     f"Create a variation of this ad for '{brand}'{color_str}. "
                     f"Maintain the same visual style and layout structure. "
                     f"Use this messaging: '{params.subheadline or params.key_differentiator or params.product_description_short}'. "
-                    f"Make it feel like the same campaign but with a fresh angle."
+                    f"Make it feel like the same campaign but with a fresh angle. "
+                    f"{cta_rule}"
                 ),
                 (
                     f"Redesign this ad concept for '{brand}'{color_str}. "
                     f"Keep the overall composition and visual approach. "
                     f"Focus the message on: '{params.customer_pains[0] if params.customer_pains else params.key_benefit}'. "
-                    f"Use a bold, attention-grabbing tone. Adapt all branding to '{brand}'."
+                    f"Use a bold, attention-grabbing tone. Adapt all branding to '{brand}'. "
+                    f"{cta_rule}"
                 ),
                 (
                     f"Create a curiosity-driven version of this ad for '{brand}'{color_str}. "
                     f"Use the same visual structure but make it intriguing and scroll-stopping. "
                     f"Lead with a question or surprising statement about: "
                     f"'{params.key_differentiator or params.key_benefit or params.product_description_short}'. "
-                    f"Keep branding consistent with '{brand}'."
+                    f"Keep branding consistent with '{brand}'. "
+                    f"{cta_rule}"
                 ),
             ]
 

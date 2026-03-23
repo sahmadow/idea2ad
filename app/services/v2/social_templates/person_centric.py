@@ -87,12 +87,15 @@ async def generate_person_image(params) -> bytes | None:
             scene_context = f"using {product_name} in a natural setting"
 
         # Build prompt — person actively using the product
+        # RULE: no CTA/text in generated images — templates add CTA separately
         prompt = (
             f"Professional lifestyle photograph of a {persona_desc} "
             f"actively using {product_name} ({product_category}). "
             f"{scene_context}. "
             f"Clean composition, commercial photography, studio lighting, "
-            f"4K quality. Single person, no text overlays."
+            f"4K quality. Single person. "
+            f"IMPORTANT: Do not include any text, buttons, call-to-action elements, "
+            f"logos, or text overlays in the image. Pure photography only."
         )
 
         logger.info(f"Generating person image: {prompt[:120]}...")
