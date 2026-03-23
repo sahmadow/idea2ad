@@ -1,5 +1,5 @@
 """
-Ad Type Registry — 8 approved static + 2 video creative types for V2 pipeline.
+Ad Type Registry — 9 approved static + 2 video creative types for V2 pipeline.
 
 Static types dispatch to HTML+Playwright social template renderers.
 Video types dispatch to Remotion server-side rendering (MP4).
@@ -13,7 +13,7 @@ from app.schemas.ad_types import (
 
 
 # =====================================================================
-# 8 APPROVED STATIC TYPES
+# 9 APPROVED STATIC TYPES
 # =====================================================================
 
 BRANDED_STATIC = AdTypeDefinition(
@@ -185,6 +185,25 @@ PERSON_CENTRIC = AdTypeDefinition(
     ),
 )
 
+AI_SCENE_TEXT_OVERLAY = AdTypeDefinition(
+    id="ai_scene_text_overlay",
+    name="AI Scene Text Overlay",
+    strategy="product_aware",
+    format="static",
+    aspect_ratios=["1:1"],
+    required_params=["product_name"],
+    optional_params=["brand_colors", "key_benefit", "headline", "product_category"],
+    skip_condition=None,  # always generate (AI scene image)
+    layers=[],  # rendered by social_templates/ai_scene_overlay.py
+    copy_templates=CopyTemplate(
+        primary_text="{key_benefit}\n\nDiscover {product_name} →",
+        headline="{headline}",
+        description="{product_description_short}",
+        cta_type="LEARN_MORE",
+        fallbacks={"headline": "{product_name}", "key_benefit": "", "product_description_short": ""},
+    ),
+)
+
 
 # =====================================================================
 # 2 VIDEO TYPES (Remotion-rendered)
@@ -242,6 +261,7 @@ AD_TYPE_REGISTRY: dict[str, AdTypeDefinition] = {
     "service_hero": SERVICE_HERO,
     "product_centric": PRODUCT_CENTRIC,
     "person_centric": PERSON_CENTRIC,
+    "ai_scene_text_overlay": AI_SCENE_TEXT_OVERLAY,
     "branded_static_video": BRANDED_STATIC_VIDEO,
     "service_hero_video": SERVICE_HERO_VIDEO,
 }

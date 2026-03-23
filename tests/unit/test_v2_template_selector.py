@@ -37,10 +37,11 @@ class TestTemplateSelector:
         assert "service_hero" in ids
         assert "product_centric" in ids
         assert "person_centric" in ids
+        assert "ai_scene_text_overlay" in ids
         assert "branded_static_video" in ids
         assert "service_hero_video" in ids
 
-        assert len(selected) == 10
+        assert len(selected) == 11
 
     def test_minimal_params(self):
         """With minimal data, only low-requirement types selected."""

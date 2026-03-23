@@ -7,6 +7,7 @@ Selection logic:
 - service_hero: only if hero_image_url exists
 - product_centric: only if product images or hero image exist
 - person_centric: always (generates AI person image)
+- ai_scene_text_overlay: always (generates AI scene image)
 - branded_static_video: always (video counterpart of branded_static)
 - service_hero_video: only if hero_image_url exists
 """
@@ -43,6 +44,9 @@ def select_templates(params: CreativeParameters) -> list[AdTypeDefinition]:
 
     # Person centric: always (generates AI person image)
     _try_add(selected, "person_centric", params)
+
+    # AI scene text overlay: always (generates AI scene image)
+    _try_add(selected, "ai_scene_text_overlay", params)
 
     # Video types (Remotion-rendered)
     _try_add(selected, "branded_static_video", params)

@@ -344,6 +344,54 @@ def bridge_person_centric(params: CreativeParameters, copy: dict):
     )
 
 
+def bridge_ai_scene_overlay(
+    params: CreativeParameters,
+    scraped_data: dict,
+    copy: dict,
+):
+    """Map CreativeParameters + scraped data → AiSceneOverlayParams."""
+    from app.services.v2.social_templates.ai_scene_overlay import AiSceneOverlayParams
+
+    styling = scraped_data.get("styling", {})
+
+    # Colors — same pattern as bridge_branded_static
+    bgs = styling.get("backgrounds", [])
+    accents = styling.get("accents", [])
+
+    bg_color = bgs[0] if bgs else "#1a1a2e"
+    accent = accents[0] if accents else "#3b82f6"
+
+    # For overlay text we always use white — gradient ensures readability
+    text_color = "#ffffff"
+
+    # Fonts
+    fonts = styling.get("fonts", ["Inter"])
+    font_family = fonts[0] if fonts else "Inter"
+
+    # Headline: prefer scraped headers (native language), then copy, then params
+    headers = scraped_data.get("headers", [])
+    headline = headers[0] if headers else copy.get("headline") or params.headline or params.product_name
+    headline = _smart_truncate(headline, VISUAL_HEADLINE_MAX)
+
+    # Subheadline from key_benefit or product description
+    subheadline = params.key_benefit or params.product_description_short or copy.get("description") or None
+    if subheadline:
+        subheadline = _smart_truncate(subheadline, VISUAL_DESCRIPTION_MAX)
+
+    return AiSceneOverlayParams(
+        headline=headline,
+        subheadline=subheadline,
+        cta_text=params.cta_text or "Get Started",
+        scene_image_bytes=None,  # set later in dispatch after generation
+        logo_url=params.brand_logo_url,
+        bg_color=bg_color,
+        accent_color=accent,
+        text_color=text_color,
+        font_family=font_family,
+        overlay_opacity=0.65,
+    )
+
+
 # =====================================================================
 # VIDEO BRIDGES (Remotion props — plain dicts, not dataclasses)
 # =====================================================================
